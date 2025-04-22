@@ -6,6 +6,4 @@ This project contains two main modules:
 2. **E84** – Uses the **s12g** library.
 
 ## TODO
-- Add more detailed build instructions
-- Enhance sensor error handling
-- Implement telemetry integration
+- Add more detailed instructions
