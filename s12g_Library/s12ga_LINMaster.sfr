@@ -1,0 +1,33 @@
+	nolist
+;------------------------------------------------------------------------------
+;Module:	s12ga_LINMaster.sfr
+;
+;Copyright: 	(C) 2005-2014, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	01.12.2014
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12ga_LINMaster.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.05
+;
+;01.12.2014	Angepasst für TIREGUARD 4
+;
+;24.11.2005	Ursprungsfassung
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;/////////////////////////////////////////////////////////////////////////////
+					;
+LIN_BD:		equ	SCI0BD		;LIN Baudrate Register
+					;
+LIN_CR1:	equ	SCI0CR1		;LIN Control Register 1
+LIN_CR2:	equ	SCI0CR2		;LIN Control Register 2
+LIN_SR1:	equ	SCI0SR1		;LIN Status Register 1
+LIN_SR2:	equ	SCI0SR2		;LIN Status Register 2
+					;
+LIN_DR:		equ	SCI0DRL		;LIN Data Register
+					;
+;------------------------------------------------------------------------------
+	list
+	end

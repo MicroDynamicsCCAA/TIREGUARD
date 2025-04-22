@@ -1,0 +1,47 @@
+	nolist
+	title	"s12ga_SoftSPI.sfr  Copyright (C) 2009-2016, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_SoftSPI.sfr
+;
+;Copyright: 	(C) 2009-2016, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	28.09.2016
+;
+;Description:	Hardwarespezifische Definitionen für das Modul s12ga_SoftSPI.asm
+;
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  04.09
+;
+;Definitionen für BARGRAPH
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Bits
+;/////////////////////////////////////////////////////////////////////////////
+					;
+_MISO:		equ	bit4		;
+_MOSI:		equ	bit6		;
+_SCLK:		equ	bit7		;
+
+_CS:		equ	bit3		;
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;/////////////////////////////////////////////////////////////////////////////
+					;
+MISO_PORT:	equ	PTM		;
+MISO_DIR:	equ	DDRM		;
+MOSI_PORT:	equ	PTM		;
+MOSI_DIR:	equ	DDRM		;
+SCLK_PORT:	equ	PTM		;
+SCLK_DIR:	equ	DDRM		;
+					;
+CS_PORT:	equ	PTP		;
+CS_DIR:		equ	DDRP		;
+					;
+;ADDR8_PORT:	equ	PTP		;
+;ADDR8_DIR:	equ	DDRP		;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

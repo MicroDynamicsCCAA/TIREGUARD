@@ -1,0 +1,165 @@
+tg3Interrupts  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	title	"tg3Interrupts  Copyright (C) 2005-2006, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;TireGuard 3	Betriebsprogramm
+  985    5                      ;------------------------------------------------------------------------------
+  986    6                      ;Module:	tg3Interrupts.asm
+  987    7                      ;
+  988    8                      ;Copyright:	(C) 2005-2006, micro dynamics GmbH
+  989    9                      ;Author(s):	Michael Frank
+  990   10                      ;Update:	24.11.2006
+  991   11                      ;
+  992   12                      ;Description:	Interrupt Routinen
+  993   13                      ;------------------------------------------------------------------------------
+  994   14                      ;Revision History:	Original Version	11.05
+  995   15                      ;
+  996   16                      ;24.11.2006	Version 1.00
+  997   17                      ;08.11.2006	Anpassung an MC9S12C128
+  998   18                      ;------------------------------------------------------------------------------
+  999   19                      					;
+ 1000   20                      ;------------------------------------------------------------------------------
+ 1001   21                      ;Externals
+ 1002   22                      ;------------------------------------------------------------------------------
+ 1003   23                      					;
+ 1004   24                      	xref	SYS_START		;Code
+ 1005   25                      					;
+ 1006   26                      	xref	LOOP_CTR		;Data
+ 1007   27                      	xref	LOOP_FLAGS		;Data
+ 1008   28                      	xref.b	_LOOP_OV		;bitMask
+ 1009   29                      	xref.b	_LOOP_TIMEOUT		;bitMask
+ 1010   30                      	xref	TOS			;Data
+ 1011   31                      					;
+ 1012   32                      	xref.b	LOOP_CT			;Number
+ 1013   33                      	xref	TICK_REL		;Number
+ 1014   34                      					;
+ 1015   35                      ;------------------------------------------------------------------------------
+ 1016   36                      ;Publics
+ 1017   37                      ;------------------------------------------------------------------------------
+ 1018   38                      					;
+ 1019   39                      	xdef	DISABLE_INTERRUPTS	;Code
+ 1020   40                      					;
+ 1021   41                      	xdef	NO_CODE_TRAP		;Code
+ 1022   42                      	xdef	NO_INT			;Code
+ 1023   43                      	xdef	RESET_INT		;Code
+ 1024   44                      	xdef	TICKER_INT		;Code
+ 1025   45                      					;
+ 1026   46                      ;------------------------------------------------------------------------------
+ 1027   47                      ;Definition der Konstanten
+ 1028   48                      ;------------------------------------------------------------------------------
+ 1029   49                      					;
+ 1030   50                      .text:		section
+ 1031   51                      					;
+ 1032   52                      ;------------------------------------------------------------------------------
+ 1033   53                      ;NO_CODE_TRAP	Einsprung, wenn regulärer Programmablauf verlassen wurde und
+ 1034   54                      ;		der Prozessor auf einen der im gesamten Programm verteilt
+ 1035   55                      ;		eingebauten 'TRAP 0FFh'-Befehle trifft, die einen
+ 1036   56                      ;		'Unimplemented Instruction Trap'- Interrupt zu dieser Stelle
+ 1037   57                      ;		auslösen.
+ 1038   58                      ;------------------------------------------------------------------------------
+ 1039   59                      					;
+ 1040   60                      NO_CODE_TRAP:
+ 1041   61   000000 CFxx xx     	LDS	#TOS			;Stackpointer auf Anfangswert
+ 1042   62   000003 CExx xx     	LDX	#SYS_START		;
+ 1043   63   000006 34          	PSHX				;Programmstartadresse,
+ 1044   64   000007 CE00 00     	LDX	#0000h			;
+ 1045   65   00000A 34          	PSHX				;Y-Register,
+ 1046   66   00000B 34          	PSHX				;X-Register,
+ 1047   67   00000C CC00 00     	LDD	#0000h			;
+ 1048   68   00000F 3B          	PSHD				;B:A-Register
+ 1049   69   000010 37          	PSHB				;und Status auf Stack ablegen
+ 1050   70                      					;evtl. anliegenden Interrupt quittieren
+ 1051   71   000011 0B          	RTI				;und Kaltstart
+ 1052   72                      					;
+ 1053   73                      ;------------------------------------------------------------------------------
+ 1054   74                      ;RESET_INT	Einsprung nach POWERUP- oder WATCHDOG-RESET
+ 1055   75                      ;------------------------------------------------------------------------------
+ 1056   76                      					;
+ 1057   77                      RESET_INT:
+ 1058   78   000012 06xx xx     	JMP	SYS_START		;
+ 1059   79                      					;
+ 1060   80                      ;------------------------------------------------------------------------------
+ 1061   81                      ;NO_INT		Notbremse für ungültige Interrupts
+ 1062   82                      ;------------------------------------------------------------------------------
+ 1063   83                      					;
+ 1064   84                      NO_INT:
+tg3Interrupts  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1065   85   000015 0B          	RTI				;
+ 1066   86                      					;
+ 1067   87                      ;------------------------------------------------------------------------------
+ 1068   88                      ;DISABLE_INTERRUPTS sperrt alle nicht benutzten Interrupts.
+ 1069   89                      ;
+ 1070   90                      ;Eingangsparameter:	keine
+ 1071   91                      ;Ausgangsparameter:	keine
+ 1072   92                      ;veränderte Register:	CCR
+ 1073   93                      ;------------------------------------------------------------------------------
+ 1074   94                      					;
+ 1075   95                      DISABLE_INTERRUPTS:
+ 1076   96   000016 4D38 92     	BCLR	CRGINT,#10010010b	;nicht benutzte Interrupts sperren
+ 1077   97   000019 4D1E 40     	BCLR	IRQCR,#01000000b	;
+ 1078   98                      					;
+ 1079   99   00001C 4D4D 80     	BCLR	TSCR2,_TOI		;
+ 1080  100   00001F 4D4C 3F     	BCLR	TIE,#00111111b		;
+ 1081  101   000022 4D60 03     	BCLR	PACTL,#00000011b	;
+ 1082  102                      					;
+ 1083  103   000025 4D82 02     	BCLR	ATD0CTL2,#00000010b	;
+ 1084  104                      					;
+ 1085  105   000028 4DCA F3     	BCLR	SCI0CR1,#11110011b	;
+ 1086  106                      					;
+ 1087  107   00002B 4DD8 A0     	BCLR	SPI0CR1,#10100000b	;
+ 1088  108                      					;
+ 1089  109   00002E 1D01 03C0   	BCLR	FCNFG,#11000000b	;
+ 1090  110                      					;
+ 1091  111   000032 1D02 5EFF   	BCLR	PIEP,#11111111b		;
+ 1092  112   000036 1D02 6EC3   	BCLR	PIEJ,#11000011b		;
+ 1093  113   00003A 3D          	RTS				;
+ 1094  114                      					;
+ 1095  115                      ;------------------------------------------------------------------------------
+ 1096  116                      ;TICKER_INT		Modulus Up Counter Überlauf
+ 1097  117                      ;
+ 1098  118                      ;Priorität:		normal
+ 1099  119                      ;Interruptquelle:	TFLG1._C7F
+ 1100  120                      ;Auslöser:		Überlauf des Modulus Up Counters
+ 1101  121                      ;Initialisierung:	Module 'tg3Init'
+ 1102  122                      ;
+ 1103  123                      ;Eingangsparameter:	LOOP_CTR
+ 1104  124                      ;Ausgangsparameter:	LOOP_CTR
+ 1105  125                      ;			LOOP_FLAGS._LOOP_OV
+ 1106  126                      ;			LOOP_FLAGS._LOOP_TIMEOUT
+ 1107  127                      ;Laufzeit:		6..24 µs	@ 8 MHz
+ 1108  128                      ;------------------------------------------------------------------------------
+ 1109  129                      					;
+ 1110  130                      TICKER_INT:
+ 1111  131   00003B B6xx xx     	LDAA	LOOP_CTR		;wenn Programmzyklus beendet,
+ 1112  132   00003E 0420 0F     	DBNE	A,TICKER_INT2		;dann
+ 1113  133   000041 1Fxx xxxx   	BRCLR	LOOP_FLAGS,_LOOP_TIMEOUT,TICKER_INT1
+             000045 04         
+ 1114  134   000046 1Cxx xxxx   	BSET	LOOP_FLAGS,_LOOP_OV	;  wenn _LOOP_TIMEOUT gesetzt, dann _LOOP_OV setzen
+ 1115  135                      TICKER_INT1:
+ 1116  136   00004A 1Cxx xxxx   	BSET	LOOP_FLAGS,_LOOP_TIMEOUT;  _LOOP_TIMEOUT setzen
+ 1117  137   00004E 86xx        	LDAA	#LOOP_CT		;  LOOP_CTR auf Startwert
+ 1118  138                      TICKER_INT2:
+ 1119  139   000050 7Axx xx     	STAA	LOOP_CTR		;
+ 1120  140                      					;
+ 1121  141   000053 DC5E        	LDD	TC7			;
+ 1122  142   000055 C3xx xx     	ADDD	#TICK_REL		;Compare Register 7 für nächsten Tick aktualisieren
+ 1123  143   000058 5C5E        	STD	TC7			;
+ 1124  144   00005A 180B 8000   	MOVB	#_C7F,TFLG1		;Compare Channel 7 Interrupt-Flag rücksetzen
+             00005E 4E         
+ 1125  145   00005F 0B          	RTI				;
+ 1126  146                      					;
+ 1127  147   000060 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000064 FFFF       
+ 1128  148   000066 3F          	SWI				;
+ 1129  149                      					;
+ 1130  150                      ;------------------------------------------------------------------------------

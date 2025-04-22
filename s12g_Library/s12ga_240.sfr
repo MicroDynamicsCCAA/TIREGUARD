@@ -1,0 +1,1298 @@
+	plen 90	;passend für Schrifthöhe 8-Punkt im Listing
+	nolist
+	title	"s12ga_240.sfr  Copyright (C) 2014-2020, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_240.sfr
+;
+;Copyright: 	(C) 201-2020, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	17.02.2020
+;
+;Description:	Assembly Language Peripheral File for FreeScale	MC9S12ga240
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.14
+;
+;17.02.2020	Korrekturen in Port Integration Module (PIM) Map 5 of 6
+;27.11.2014
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;
+;MC9S12GA240 MEMORY MAP
+;
+;0000h - 03FFh 	1K Registers
+;0400h - 13FFh	4K Bytes D-Flash EEPROM
+;1400h - 3FFFh	11K Bytes RAM
+;4000h - 7FFFh	16K Bytes unpaged P-Flash EEPROM page 0x0Dh = 13
+;8000h - BFFFh	16K Bytes P-Flash EEPROM page window: 15*16k P-Flash EEPROM pages
+;C000h - FFFFh	16K Bytes unpaged Flash EEPROM page 0x0Fh = 15
+;FF00h - FFFFh	BDM (if active) for Special Single Chip.
+;
+;------------------------------------------------------------------------------
+;Base address of register blocks. Change these if you relocate register blocks.
+;------------------------------------------------------------------------------
+						;
+SFR_BASE:	equ	0000h			;MCU Special Function Registers
+GPR_BASE:	equ	2800h			;32 General Purpose Registers
+						;
+;------------------------------------------------------------------------------
+;
+;MC9S12GA240 DEVICE REGISTER MAP OVERVIEW
+
+;Addresses	Module						    Size/Bytes
+;
+;0000h - 0009h	Port Integration Module (PIM)				    10
+;000Ah - 000Bh	Memory Map Control (MMC)				     2
+;000Ch - 000Dh	Port Integration Module (PIM)				     2
+;000Eh - 000Fh	Reserved                              			     2
+;0010h - 0017h	Memory Map Control (MMC)				     8
+;0018h - 0019h	Reserved						     2
+;001Ah - 001Bh	Device ID register (PARTID)				     2
+;001Ch - 001Fh	Port Integration Module (PIM)				     4
+;0020h - 002Fh	Debug Module (DBG)					     8
+;0030h - 0033h	Reserved						     4
+;0034h - 003Fh	Clock and Power Management (CPMU)			    12
+;0040h - 006Fh  Timer Module <= 8-Channels (TIM)        		    48
+;0070h - 009Fh	Analog to Digital Converter <= 16-Channels (ADC)	    48
+;00A0h - 00C7h	Pulse-Width Modulator <= 8-Channels (PWM)		    40
+;00C8h - 00CFh	Serial Communications Interface (SCI0)			     8
+;00D0h - 00D7h	Serial Communications Interface (SCI1)			     8
+;00D8h - 00DFh	Serial Peripheral Interface (SPI0)			     8
+;00E0h - 00E7h	Reserved						     8
+;00E8h - 00EFh	Serial Communications Interface (SCI2)			     8
+;00F0h - 00F7h	Serial Peripheral Interface (SPI1)			     8
+;00F8h - 00FFh	Serial Peripheral Interface (SPI2)			     8
+;0100h - 0113h	Flash Module Control Registers (FTMRG)			    20
+;0114h - 011Fh	Reserved                      				    12
+;    0120h   	Interrupt Module (INT)					     1
+;0121h - 013Fh	Reserved                        			    31
+;0140h - 017Fh	Scalable Controller Area Network (CAN0)			    64
+;0180h - 023Fh	Reserved						   192
+;0240h - 025Fh	Port Integration Module (PIM)				    32
+;0260h - 0261h	Analog Comparator (ACMP)				     2
+;0262h - 0275h	Port Integration Module (PIM)				    20
+;    0276h   	Reference Voltage Attenuator (RVA)			     1
+;0277h - 027Fh	Port Integration Module (PIM)				     9
+;0280h - 02EFh	Reserved						   112
+;02F0h - 02FFh	Clock and Power Management (CPMU)			    16
+;0300h - 03BFh	Reserved						   192
+;03C0h - 03C7h  Digital to Analog Converter (DAC0)                           8
+;03C8h - 03CFh  Digital to Analog Converter (DAC1)                           8
+;03D0h - 03FFh	Reserved						    48
+;
+;------------------------------------------------------------------------------
+						;
+;==============================================================================
+; 1. MCU Special Function Register addresses locations
+;==============================================================================
+						;
+;------------------------------------------------------------------------------
+; 0000h	- 000Fh	    Port Integration Module (PIM) Map 1 of 6
+;------------------------------------------------------------------------------
+						;
+; Port AB
+PORTA:		equ	SFR_BASE + 0000h	;Port A	Data Register
+PORTB:		equ	SFR_BASE + 0001h	;Port B	Data Register
+;Non Standard 16-bit Register
+PORTAB:		equ	SFR_BASE + 0000h	;Port AB Data Register
+DDRA:		equ	SFR_BASE + 0002h	;Port A	Data Direction Register
+DDRB:		equ	SFR_BASE + 0003h	;Port B	Data Direction Register
+;Non Standard 16-bit Register
+DDRAB:		equ	SFR_BASE + 0002h	;Port AB Data Direction Register
+						;
+; Port CD
+PORTC:		equ	SFR_BASE + 0004h	;Port C	Data Register
+PORTD:		equ	SFR_BASE + 0005h	;Port D	Data Register
+;Non Standard 16-bit Register
+PORTCD:		equ	SFR_BASE + 0004h	;Port CD Data Register
+DDRC:		equ	SFR_BASE + 0006h	;Port C	Data Direction Register
+DDRD:		equ	SFR_BASE + 0007h	;Port D	Data Direction Register
+;Non Standard 16-bit Register
+DDRCD:		equ	SFR_BASE + 0006h	;Port CD Data Direction Register
+						;
+; Port E
+PORTE:		equ	SFR_BASE + 0008h	;Port E	Data Register
+DDRE:		equ	SFR_BASE + 0009h	;Port E	Data Direction Register
+						;
+;------------------------------------------------------------------------------
+; 000Ah - 000Bh	    Memory Map Control (MMC) Map 1 of 2
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x000A)
+;
+MODE:		equ	SFR_BASE + 000Bh	;Mode Register
+						;
+;------------------------------------------------------------------------------
+; 000Ch - 000Dh	    Port Integration Module (PIM) Map 2 of 6
+;------------------------------------------------------------------------------
+						;
+PUCR:		equ	SFR_BASE + 000Ch	;Pull Up Control Register
+;
+;#define Reserved	_P(0x000D)
+;
+;------------------------------------------------------------------------------
+; 000Eh - 000Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;
+;#define Reserved	_P(0x000E - 0x000F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0010h - 0017h	    Memory Map Control (MMC) Map 2 of 2
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0010)
+;
+DIRECT:		equ	SFR_BASE + 0011h	;Direct Page Register
+;
+;#define Reserved	_P(0x0012)
+;
+MMCCTL1:	equ	SFR_BASE + 0013h	;MMC Control Register 1
+;
+;#define Reserved	_P(0x0014)
+;
+PPAGE:		equ	SFR_BASE + 0015h	;Program Page Index Register
+;
+;#define Reserved	_P(0x0016 - 0x0017)
+;
+						;
+;------------------------------------------------------------------------------
+; 0018h - 0019h	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0018 - 0x0019)
+;
+						;
+;------------------------------------------------------------------------------
+; 001Ah - 001Bh	    Device ID Register (PARTID)
+;------------------------------------------------------------------------------
+						;
+PARTIDH:	equ	SFR_BASE + 001Ah	;Part ID High Byte
+PARTIDL:	equ	SFR_BASE + 001Bh	;Part ID Low Byte
+;Non Standard 16-bit Register
+PARTID:		equ	SFR_BASE + 001Ah	;Part ID
+						;
+;------------------------------------------------------------------------------
+; 001Ch - 001Fh     Port Integration Module (PIM) Map 3 of 6
+;------------------------------------------------------------------------------
+						;
+ECLKCTL:	equ	SFR_BASE + 001Ch	;ECLK Control Register
+;
+;#define Reserved	_P(0x001D)
+;
+IRQCR:		equ	SFR_BASE + 001Eh	;IRQ Control Register
+;
+;#define Reserved	_P(0x001F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0020h - 002Fh     Debug Module (DBG) Map
+;------------------------------------------------------------------------------
+						;
+DBGC1:		equ	SFR_BASE + 0020h	;Debug Control Register 1
+DBGSR:		equ	SFR_BASE + 0021h	;Debug Status Register
+DBGTCR:		equ	SFR_BASE + 0022h	;Debug Trace Control Register
+DBGC2:		equ	SFR_BASE + 0023h	;Debug Control Register 2
+
+DBGTBH:		equ	SFR_BASE + 0024h	;Debug Trace Buffer Register High Byte
+DBGTBL:		equ	SFR_BASE + 0025h	;Debug Trace Buffer Register Low Byte
+DBGCNT:		equ	SFR_BASE + 0026h	;Debug Count Register
+DBGSCRX:	equ	SFR_BASE + 0027h	;Debug State Control Register
+DBGMFR:		equ	SFR_BASE + 0027h	;Debug Match Flag Register
+DBGXCTL:	equ	SFR_BASE + 0028h	;Debug Comparator Control Register
+DBGXAH:		equ	SFR_BASE + 0029h	;Debug Comparator High Register
+DBGXAM:		equ	SFR_BASE + 002Ah	;Debug Comparator Mid Register
+DBGXAL:		equ	SFR_BASE + 002Bh	;Debug Comparator Low Register
+DBGADH:		equ	SFR_BASE + 002Ch	;Debug Comparator Data High Register
+DBGADL:		equ	SFR_BASE + 002Dh	;Debug Comparator Data Low Register
+DBGAD:		equ	SFR_BASE + 002Ch	;Debug Comparator Data Register
+DBGADHM:	equ	SFR_BASE + 002Eh	;Debug Comparator Data High Mask Register
+DBGADLM:	equ	SFR_BASE + 002Fh	;Debug Comparator Data Low Mask Register
+DBGADM:		equ	SFR_BASE + 002Eh	;Debug Comparator Data Mask Register
+						;
+;------------------------------------------------------------------------------
+; 0030h - 0033h	    Reserved Register Space
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0030 - 0x0033)
+;
+						;
+;------------------------------------------------------------------------------
+; 0034h - 003Fh	    Clock and Power Management (CPMU) Map 1 of 2
+;------------------------------------------------------------------------------
+						;
+SYNR:		equ	SFR_BASE + 0034h	;CPMU Systhesizer Register
+REFDIV:		equ	SFR_BASE + 0035h	;CPMU Reference Divider Register
+POSTDIV:	equ	SFR_BASE + 0036h	;CPMU Post Divider Register
+CPMUFLG:	equ	SFR_BASE + 0037h	;CPMU Flags Register
+CPMUINT:	equ	SFR_BASE + 0038h	;CPMU Interrupt Enable Register
+CPMUCLKS:	equ	SFR_BASE + 0039h	;CPMU Clock Select Register
+CPMUPLL:	equ	SFR_BASE + 003Ah	;CPMU PLL Control Register
+CPMURTI:	equ	SFR_BASE + 003Bh	;CPMU RTI Control Register
+CPMUCOP:	equ	SFR_BASE + 003Ch	;CPMU COP Control Register
+CPMUTEST0:	equ	SFR_BASE + 003Dh	;Reserved Register
+CPMUTEST1:	equ	SFR_BASE + 003Eh	;Reserved Register
+ARMCOP:		equ	SFR_BASE + 003Fh	;CPMU COP Timer Arm/Reset Register
+						;
+;------------------------------------------------------------------------------
+; 0040h - 006Fh	    Timer Module (TIM) Map
+;------------------------------------------------------------------------------
+						;
+TIOS:		equ	SFR_BASE + 0040h	;Timer Input Capture/Output Compare Select
+CFORC:		equ	SFR_BASE + 0041h	;Timer Compare Force Register
+OC7M:		equ	SFR_BASE + 0042h	;Output	Compare	7 Mask Register
+OC7D:		equ	SFR_BASE + 0043h	;Output	Compare	7 Data Register
+TCNT:		equ	SFR_BASE + 0044h	;Timer Count Register
+TCNTH:		equ	SFR_BASE + 0044h	;Timer Count Register High Byte
+TCNTL:		equ	SFR_BASE + 0045h	;Timer Count Register Low Byte
+TSCR1:		equ	SFR_BASE + 0046h	;Timer System Control Register 1
+TTOV:		equ	SFR_BASE + 0047h	;Timer Toggle Overflow Register
+TCTL1:		equ	SFR_BASE + 0048h	;Timer Control Register	1
+TCTL2:		equ	SFR_BASE + 0049h	;Timer Control Register	2
+TCTL3:		equ	SFR_BASE + 004Ah	;Timer Control Register	3
+TCTL4:		equ	SFR_BASE + 004Bh	;Timer Control Register	4
+TIE:		equ	SFR_BASE + 004Ch	;Timer Interrupt Enable	Register
+TSCR2:		equ	SFR_BASE + 004Dh	;Timer System Control Register 2
+TFLG1:		equ	SFR_BASE + 004Eh	;Main Timer Interrupt Flag 1
+TFLG2:		equ	SFR_BASE + 004Fh	;Main Timer Interrupt Flag 2
+
+TC0:		equ	SFR_BASE + 0050h	;Timer Input Capture/Output Compare Register 0
+TC1:		equ	SFR_BASE + 0052h	;Timer Input Capture/Output Compare Register 1
+TC2:		equ	SFR_BASE + 0054h	;Timer Input Capture/Output Compare Register 2
+TC3:		equ	SFR_BASE + 0056h	;Timer Input Capture/Output Compare Register 3
+TC4:		equ	SFR_BASE + 0058h	;Timer Input Capture/Output Compare Register 4
+TC5:		equ	SFR_BASE + 005Ah	;Timer Input Capture/Output Compare Register 5
+TC6:		equ	SFR_BASE + 005Ch	;Timer Input Capture/Output Compare Register 6
+TC7:		equ	SFR_BASE + 005Eh	;Timer Input Capture/Output Compare Register 7
+
+PACTL:		equ	SFR_BASE + 0060h	;16-bit	Pulse Accumulator A Control Register
+PAFLG:		equ	SFR_BASE + 0061h	;Pulse Accumulator A Flag Register
+
+PACNT:		equ	SFR_BASE + 0062h	;Pulse Accumulator Count Register
+;
+;#define Reserved	_P(0x0064 - 0x006B)
+;
+OCPD:		equ	SFR_BASE + 006Ch	;Output Compare Pin Disconnect Register
+;
+;#define Reserved	_P(0x006D)
+;
+PTPSR:		equ	SFR_BASE + 006Eh	;Precision Timer Preset Select Register
+;
+;#define Reserved	_P(0x006F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0070h - 009Fh	    Analog to Digital Converter 12-bit 16-Channels (ADC) Map
+;------------------------------------------------------------------------------
+						;
+ATD_BASE:	equ	SFR_BASE + 0070h	;Basisadresse von ATD
+						;
+ATD0CTL0:	equ	ATD_BASE + 0000h	;ATD0 Control Register 0
+ATD0CTL1:	equ	ATD_BASE + 0001h	;ADT0 Control Register 1
+ATD0CTL2:	equ	ATD_BASE + 0002h	;ATD0 Control Register 2
+ATD0CTL3:	equ	ATD_BASE + 0003h	;ATD0 Control Register 3
+ATD0CTL4:	equ	ATD_BASE + 0004h	;ATD0 Control Register 4
+ATD0CTL5:	equ	ATD_BASE + 0005h	;ATD0 Control Register 5
+ATD0STAT0:	equ	ATD_BASE + 0006h	;ATD0 Status Register 0
+;
+;#define Reserved	_P(0x0087)
+;
+ATD0CMPE:	equ	ATD_BASE + 0008h	;ATD0 Compare Enable Register
+ATD0CMPEH:	equ	ATD_BASE + 0008h	;ATD0 Compare Enable Register High Byte
+ATD0CMPEL:	equ	ATD_BASE + 0009h	;ATD0 Compare Enable Register Low Byrte
+ATD0STAT2:	equ	ATD_BASE + 000Ah	;ATD0 Status Register 2
+ATD0STAT2H:	equ	ATD_BASE + 000Ah	;ATD0 Status Register 2 High Byte
+ATD0STAT2L:	equ	ATD_BASE + 000Bh	;ATD0 Status Register 1 Low Byte
+ATD0DIEN:	equ	ATD_BASE + 000Ch	;ATD0 Data Input Enable Register
+ATD0DIENH:	equ	ATD_BASE + 000Ch	;ATD0 Data Input Enable Register High Byte
+ATD0DIENL:	equ	ATD_BASE + 000Dh	;ATD0 Data Input Enable Register Low Byte
+ATD0CMPHT:	equ	ATD_BASE + 000Eh	;ATD0 Compare Higher Than Register
+ATD0CMPHTH:	equ	ATD_BASE + 000Eh	;ATD0 Compare Higher Than Register High Byte
+ATD0CMPHTL:	equ	ATD_BASE + 000Fh	;ATD0 Compare Higher Than Register Low Byte
+						;
+ATD0DR0:	equ	ATD_BASE + 0010h	;ATD0.0	Conversion Result Register
+ATD0DR0H:	equ	ATD_BASE + 0010h	;ATD0.0	Conversion Result Register High	Byte
+ATD0DR0L:	equ	ATD_BASE + 0011h	;ATD0.0	Conversion Result Register Low Byte
+						;
+ATD0DR1:	equ	ATD_BASE + 0012h	;ATD0.1	Conversion Result Register
+ATD0DR1H:	equ	ATD_BASE + 0012h	;ATD0.1	Conversion Result Register High	Byte
+ATD0DR1L:	equ	ATD_BASE + 0013h	;ATD0.1	Conversion Result Register Low Byte
+						;
+ATD0DR2:	equ	ATD_BASE + 0014h	;ATD0.2	Conversion Result Register
+ATD0DR2H:	equ	ATD_BASE + 0014h	;ATD0.2	Conversion Result Register High	Byte
+ATD0DR2L:	equ	ATD_BASE + 0015h	;ATD0.2	Conversion Result Register Low Byte
+						;
+ATD0DR3:	equ	ATD_BASE + 0016h	;ATD0.3	Conversion Result Register
+ATD0DR3H:	equ	ATD_BASE + 0016h	;ATD0.3	Conversion Result Register High	Byte
+ATD0DR3L:	equ	ATD_BASE + 0017h	;ATD0.3	Conversion Result Register Low Byte
+						;
+ATD0DR4:	equ	ATD_BASE + 0018h	;ATD0.4	Conversion Result Register
+ATD0DR4H:	equ	ATD_BASE + 0018h	;ATD0.4	Conversion Result Register High	Byte
+ATD0DR4L:	equ	ATD_BASE + 0019h	;ATD0.4	Conversion Result Register Low Byte
+						;
+ATD0DR5:	equ	ATD_BASE + 001Ah	;ATD0.5	Conversion Result Register
+ATD0DR5H:	equ	ATD_BASE + 001Ah	;ATD0.5	Conversion Result Register High	Byte
+ATD0DR5L:	equ	ATD_BASE + 001Bh	;ATD0.5	Conversion Result Register Low Byte
+						;
+ATD0DR6:	equ	ATD_BASE + 001Ch	;ATD0.6	Conversion Result Register
+ATD0DR6H:	equ	ATD_BASE + 001Ch	;ATD0.6	Conversion Result Register High	Byte
+ATD0DR6L:	equ	ATD_BASE + 001Dh	;ATD0.6	Conversion Result Register Low Byte
+						;
+ATD0DR7:	equ	ATD_BASE + 001Eh	;ATD0.7	Conversion Result Register
+ATD0DR7H:	equ	ATD_BASE + 001Eh	;ATD0.7	Conversion Result Register High	Byte
+ATD0DR7L:	equ	ATD_BASE + 001Fh	;ATD0.7	Conversion Result Register Low Byte
+						;
+ATD0DR8:	equ	ATD_BASE + 0020h	;ATD0.8	Conversion Result Register
+ATD0DR8H:	equ	ATD_BASE + 0020h	;ATD0.8	Conversion Result Register High	Byte
+ATD0DR8L:	equ	ATD_BASE + 0021h	;ATD0.8	Conversion Result Register Low Byte
+						;
+ATD0DR9:	equ	ATD_BASE + 0022h	;ATD0.9	Conversion Result Register
+ATD0DR9H:	equ	ATD_BASE + 0022h	;ATD0.9	Conversion Result Register High	Byte
+ATD0DR9L:	equ	ATD_BASE + 0023h	;ATD0.9	Conversion Result Register Low Byte
+						;
+ATD0DR10:	equ	ATD_BASE + 0024h	;ATD0.10 Conversion Result Register
+ATD0DR10H:	equ	ATD_BASE + 0024h	;ATD0.10 Conversion Result Register High Byte
+ATD0DR10L:	equ	ATD_BASE + 0025h	;ATD0.10 Conversion Result Register Low Byte
+						;
+ATD0DR11:	equ	ATD_BASE + 0026h	;ATD0.11 Conversion Result Register
+ATD0DR11H:	equ	ATD_BASE + 0026h	;ATD0.11 Conversion Result Register High Byte
+ATD0DR11L:	equ	ATD_BASE + 0027h	;ATD0.11 Conversion Result Register Low Byte
+						;
+ATD0DR12:	equ	ATD_BASE + 0028h	;ATD0.12 Conversion Result Register
+ATD0DR12H:	equ	ATD_BASE + 0028h	;ATD0.12 Conversion Result Register High Byte
+ATD0DR12L:	equ	ATD_BASE + 0029h	;ATD0.12 Conversion Result Register Low Byte
+						;
+ATD0DR13:	equ	ATD_BASE + 002Ah	;ATD0.13 Conversion Result Register
+ATD0DR13H:	equ	ATD_BASE + 002Ah	;ATD0.13 Conversion Result Register High Byte
+ATD0DR13L:	equ	ATD_BASE + 002Bh	;ATD0.13 Conversion Result Register Low Byte
+						;
+ATD0DR14:	equ	ATD_BASE + 002Ch	;ATD0.14 Conversion Result Register
+ATD0DR14H:	equ	ATD_BASE + 002Ch	;ATD0.14 Conversion Result Register High Byte
+ATD0DR14L:	equ	ATD_BASE + 002Dh	;ATD0.14 Conversion Result Register Low Byte
+						;
+ATD0DR15:	equ	ATD_BASE + 002Eh	;ATD0.15 Conversion Result Register
+ATD0DR15H:	equ	ATD_BASE + 002Eh	;ATD0.15 Conversion Result Register High Byte
+ATD0DR15L:	equ	ATD_BASE + 002Fh	;ATD0.15 Conversion Result Register Low Byte
+						;
+;------------------------------------------------------------------------------
+; 00A0h - 00C7h	    Pulse-Width Modulator 8-Bit 8-Channels (PWM)
+;------------------------------------------------------------------------------
+						;
+PWM_BASE:	equ	SFR_BASE + 00A0h	;Basisadresse von PWM
+						;
+PWME:		equ	PWM_BASE + 0000h	;PWM Enable Register
+PWMPOL:		equ	PWM_BASE + 0001h	;PWM Polarity Register
+PWMCLK:		equ	PWM_BASE + 0002h	;PWM Clock Select Register
+PWMPRCLK:	equ	PWM_BASE + 0003h	;PWM Prescale Clock Select Register
+PWMCAE:		equ	PWM_BASE + 0004h	;PWM Center Align Enable Register
+PWMCTL:		equ	PWM_BASE + 0005h	;PWM Control Register
+PWMCLKAB:	equ	PWM_BASE + 0006h	;PWM Clock A/B Select Register
+;
+;#define Reserved	_P(0x00A7)
+;
+PWMSCLA:	equ	PWM_BASE + 0008h	;PWM Scale A Register
+PWMSCLB:	equ	PWM_BASE + 0009h	;PWM Scale B Register
+;
+;#define Reserved	_P(0x00AA - 0x00AB)
+;
+PWMCNT0:	equ	PWM_BASE + 000Ch	;PWM Channel 0 Counter Register
+PWMCNT1:	equ	PWM_BASE + 000Dh	;PWM Channel 1 Counter Register
+PWMCNT2:	equ	PWM_BASE + 000Eh	;PWM Channel 2 Counter Register
+PWMCNT3:	equ	PWM_BASE + 000Fh	;PWM Channel 3 Counter Register
+PWMCNT4:	equ	PWM_BASE + 0010h	;PWM Channel 4 Counter Register
+PWMCNT5:	equ	PWM_BASE + 0011h	;PWM Channel 5 Counter Register
+PWMCNT6:	equ	PWM_BASE + 0012h	;PWM Channel 6 Counter Register
+PWMCNT7:	equ	PWM_BASE + 0013h	;PWM Channel 7 Counter Register
+
+PWMPER0:	equ	PWM_BASE + 0014h	;PWM Channel 0 Period Register
+PWMPER1:	equ	PWM_BASE + 0015h	;PWM Channel 1 Period Register
+PWMPER2:	equ	PWM_BASE + 0016h	;PWM Channel 2 Period Register
+PWMPER3:	equ	PWM_BASE + 0017h	;PWM Channel 3 Period Register
+PWMPER4:	equ	PWM_BASE + 0018h	;PWM Channel 4 Period Register
+PWMPER5:	equ	PWM_BASE + 0019h	;PWM Channel 5 Period Register
+PWMPER6:	equ	PWM_BASE + 001Ah	;PWM Channel 6 Period Register
+PWMPER7:	equ	PWM_BASE + 001Bh	;PWM Channel 7 Period Register
+
+PWMDTY0:	equ	PWM_BASE + 001Ch	;PWM Channel 0 Duty Register
+PWMDTY1:	equ	PWM_BASE + 001Dh	;PWM Channel 1 Duty Register
+PWMDTY2:	equ	PWM_BASE + 001Eh	;PWM Channel 2 Duty Register
+PWMDTY3:	equ	PWM_BASE + 001Fh	;PWM Channel 3 Duty Register
+PWMDTY4:	equ	PWM_BASE + 0020h	;PWM Channel 4 Duty Register
+PWMDTY5:	equ	PWM_BASE + 0021h	;PWM Channel 5 Duty Register
+PWMDTY6:	equ	PWM_BASE + 0022h	;PWM Channel 6 Duty Register
+PWMDTY7:	equ	PWM_BASE + 0023h	;PWM Channel 7 Duty Register
+;
+;#define Reserved	_P(0x00C4 - 0x00C7)
+;
+						;
+;------------------------------------------------------------------------------
+; 00C8h - 00CFh	    Asynchronous Serial Interface (SCI0) Map
+;------------------------------------------------------------------------------
+						;
+SCI0_BASE:	equ	SFR_BASE + 00C8h	;Basisadresse von SCI0
+						;
+SCI0BDH:	equ	SCI0_BASE + 0000h	;SCI0 Baudrate Register	High Byte
+SCI0BDL:	equ	SCI0_BASE + 0001h	;SCI0 Baudrate Register	Low Byte
+;Non Standard 16-bit Register
+SCI0BD:		equ	SCI0_BASE + 0000h	;SCI0 Baudrate Registers
+
+SCI0CR1:	equ	SCI0_BASE + 0002h	;SCI0 Control Register 1
+
+SCI0ASR1:	equ	SCI0_BASE + 0000h	;SCI0 Alternative Status Register 1
+SCI0ACR1:	equ	SCI0_BASE + 0001h	;SCI0 Alternative Control Register 1
+SCI0ACR2:	equ	SCI0_BASE + 0000h	;SCI0 Alternative Control Register 2
+
+SCI0CR2:	equ	SCI0_BASE + 0003h	;SCI0 Status Register 2
+SCI0SR1:	equ	SCI0_BASE + 0004h	;SCI0 Status Register 1
+SCI0SR2:	equ	SCI0_BASE + 0005h	;SCI0 Status Register 2
+
+SCI0DRH:	equ	SCI0_BASE + 0006h	;SCI0 Data Register High Byte
+SCI0DRL:	equ	SCI0_BASE + 0007h	;SCI0 Data Register Low	Byte
+;Non Standard 16-bit Register
+SCI0DR:		equ	SCI0_BASE + 0006h	;SCI0 Data Registers
+						;
+;------------------------------------------------------------------------------
+; 00D0h - 00D7h	    Asynchronous Serial Interface (SCI1) Map
+;------------------------------------------------------------------------------
+						;
+SCI1_BASE:	equ	SFR_BASE + 00D0h	;Basisadresse von SCI1
+						;
+SCI1BDH:	equ	SCI1_BASE + 0000h	;SCI1 Baudrate Register	High Byte
+SCI1BDL:	equ	SCI1_BASE + 0001h	;SCI1 Baudrate Register	Low Byte
+;Non Standard 16-bit Register
+SCI1BD:		equ	SCI1_BASE + 0000h	;SCI1 Baudrate Registers
+
+SCI1CR1:	equ	SCI1_BASE + 0002h	;SCI1 Control Register 1
+
+SCI1ASR1:	equ	SCI1_BASE + 0000h	;SCI1 Alternative Status Register 1
+SCI1ACR1:	equ	SCI1_BASE + 0001h	;SCI1 Alternative Control Register 1
+SCI1ACR2:	equ	SCI1_BASE + 0000h	;SCI1 Alternative Control Register 2
+
+SCI1CR2:	equ	SCI1_BASE + 0003h	;SCI1 Status Register 2
+SCI1SR1:	equ	SCI1_BASE + 0004h	;SCI1 Status Register 1
+SCI1SR2:	equ	SCI1_BASE + 0005h	;SCI1 Status Register 2
+
+SCI1DRH:	equ	SCI1_BASE + 0006h	;SCI1 Data Register High Byte
+SCI1DRL:	equ	SCI1_BASE + 0007h	;SCI1 Data Register Low	Byte
+;Non Standard 16-bit Register
+SCI1DR:		equ	SCI1_BASE + 0006h	;SCI1 Data Registers
+						;
+;------------------------------------------------------------------------------
+; 00D8h - 00DFh	    Serial Peripheral Interface (SPI0) Map
+;------------------------------------------------------------------------------
+						;
+SPI0_BASE:	equ	SFR_BASE + 00D8h	;Basisadresse von SPI0
+
+SPI0CR1:	equ	SPI0_BASE + 0000h	;SPI0 Control Register 1
+SPI0CR2:	equ	SPI0_BASE + 0001h	;SPI0 Control Register 2
+SPI0BR:		equ	SPI0_BASE + 0002h	;SPI0 Baudrate Register
+SPI0SR:		equ	SPI0_BASE + 0003h	;SPI0 Status Register
+SPI0DRH:	equ	SPI0_BASE + 0004h	;SPI0 Data Register High Byte
+SPI0DRL:	equ	SPI0_BASE + 0005h	;SPI0 Data Register Low Byte
+;Non Standard 16-bit Register
+SPI0DR:		equ	SPI0_BASE + 0004h	;SPI0 Data Register
+;
+;#define Reserved	_P(0x00DE - 0x00DF)
+;
+						;
+;------------------------------------------------------------------------------
+; 00E0h - 00E7h	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x00E0 - 0x00E7)
+;
+						;
+;------------------------------------------------------------------------------
+; 00E8h - 00EFh	    Asynchronous Serial Interface (SCI2) Map
+;------------------------------------------------------------------------------
+						;
+SCI2_BASE:	equ	SFR_BASE + 00E8h	;Basisadresse von SCI2
+						;
+SCI2BDH:	equ	SCI2_BASE + 0000h	;SCI2 Baudrate Register	High Byte
+SCI2BDL:	equ	SCI2_BASE + 0001h	;SCI2 Baudrate Register	Low Byte
+;Non Standard 16-bit Register
+SCI2BD:		equ	SCI2_BASE + 0000h	;SCI2 Baudrate Registers
+
+SCI2CR1:	equ	SCI2_BASE + 0002h	;SCI2 Control Register 1
+
+SCI2ASR1:	equ	SCI2_BASE + 0000h	;SCI2 Alternative Status Register 1
+SCI2ACR1:	equ	SCI2_BASE + 0001h	;SCI2 Alternative Control Register 1
+SCI2ACR2:	equ	SCI2_BASE + 0000h	;SCI2 Alternative Control Register 2
+
+SCI2CR2:	equ	SCI2_BASE + 0003h	;SCI2 Status Register 2
+SCI2SR1:	equ	SCI2_BASE + 0004h	;SCI2 Status Register 1
+SCI2SR2:	equ	SCI2_BASE + 0005h	;SCI2 Status Register 2
+
+SCI2DRH:	equ	SCI2_BASE + 0006h	;SCI2 Data Register High Byte
+SCI2DRL:	equ	SCI2_BASE + 0007h	;SCI2 Data Register Low	Byte
+;Non Standard 16-bit Register
+SCI2DR:		equ	SCI2_BASE + 0006h	;SCI2 Data Registers
+						;
+;------------------------------------------------------------------------------
+; 00F0h - 00F7h	    Serial Peripheral Interface (SPI1) Map
+;------------------------------------------------------------------------------
+						;
+SPI1_BASE:	equ	SFR_BASE + 00D8h	;Basisadresse von SPI1
+
+SPI1CR1:	equ	SPI1_BASE + 0000h	;SPI1 Control Register 1
+SPI1CR2:	equ	SPI1_BASE + 0001h	;SPI1 Control Register 2
+SPI1BR:		equ	SPI1_BASE + 0002h	;SPI1 Baudrate Register
+SPI1SR:		equ	SPI1_BASE + 0003h	;SPI1 Status Register
+SPI1DRH:	equ	SPI1_BASE + 0004h	;SPI1 Data Register High Byte
+SPI1DRL:	equ	SPI1_BASE + 0005h	;SPI1 Data Register Low Byte
+;Non Standard 16-bit Register
+SPI1DR:		equ	SPI1_BASE + 0004h	;SPI1 Data Register
+;
+;#define Reserved	_P(0x00F6 - 0x00F7)
+;
+						;
+;------------------------------------------------------------------------------
+; 00F8h - 00FFh	    Serial Peripheral Interface (SPI2) Map
+;------------------------------------------------------------------------------
+						;
+SPI2_BASE:	equ	SFR_BASE + 00D8h	;Basisadresse von SPI2
+
+SPI2CR1:	equ	SPI2_BASE + 0000h	;SPI2 Control Register 1
+SPI2CR2:	equ	SPI2_BASE + 0001h	;SPI2 Control Register 2
+SPI2BR:		equ	SPI2_BASE + 0002h	;SPI2 Baudrate Register
+SPI2SR:		equ	SPI2_BASE + 0003h	;SPI2 Status Register
+SPI2DRH:	equ	SPI2_BASE + 0004h	;SPI2 Data Register High Byte
+SPI2DRL:	equ	SPI2_BASE + 0005h	;SPI2 Data Register Low Byte
+;Non Standard 16-bit Register
+SPI2DR:		equ	SPI2_BASE + 0004h	;SPI2 Data Register
+;
+;#define Reserved	_P(0x00FE - 0x00FF)
+;
+						;
+;------------------------------------------------------------------------------
+; 0100h - 0113h	    Flash Module Control Registers (FTMRG) Map
+;------------------------------------------------------------------------------
+						;
+FTMRG_BASE:	equ	SFR_BASE + 0100h	;Basisadresse von FTMRG
+						;
+FCLKDIV:	equ	FTMRG_BASE + 0000h	;Flash Clock Devider Register
+FSEC:		equ	FTMRG_BASE + 0001h	;Flash Security	Register
+FCCOBIX:	equ	FTMRG_BASE + 0002h	;Flash CCOB Index Register
+;
+;#define Reserved	_P(0x0103)
+;
+FCNFG:		equ	FTMRG_BASE + 0004h	;Flash Configuration Register
+FERCNFG:	equ	FTMRG_BASE + 0005h	;Flash Error Configuration Register
+FSTAT:		equ	FTMRG_BASE + 0006h	;Flash Status Register
+FERSTAT:	equ	FTMRG_BASE + 0007h	;Flash Error Status Register
+FPROT:		equ	FTMRG_BASE + 0008h	;P-Flash Protection Register
+EEPROT:		equ	FTMRG_BASE + 0009h	;EEE Protection Register
+
+FCCOBHI:	equ	FTMRG_BASE + 000Ah	;Flash Common Command Object Register High Byte
+FCCOBLO:	equ	FTMRG_BASE + 000Bh	;Flash Common Command Object Register Low Byte
+;Non Standard 16-bit Register
+FCCOB:		equ	FTMRG_BASE + 000Ah	;Flash Common Command Object Register
+;
+;#define Reserved	_P(0x010C - 0x010F)
+;
+FOPT:		equ	FTMRG_BASE + 0010h	;Flash Option Register
+;
+;#define Reserved	_P(0x0111 - 0x0113)
+;
+						;
+;------------------------------------------------------------------------------
+; 0114h - 011Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0114 - 0x011F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0120h		    Interrupt Module (INT) Map
+;------------------------------------------------------------------------------
+						;
+IVBR:		equ	SFR_BASE + 0120h	;Interrupt Vector Base Register
+
+;------------------------------------------------------------------------------
+; 0121h - 013Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0121 - 0x013F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0140h - 017Fh	    MSCAN (CAN0) Map
+;------------------------------------------------------------------------------
+						;
+CAN0_BASE:	equ	SFR_BASE + 0140h	;Basisadresse von MSCAN0
+						;
+CAN0CTL0:	equ	CAN0_BASE + 0000h	;MSCAN0	Control	Register 0
+CAN0CTL1:	equ	CAN0_BASE + 0001h	;MSCAN0	Control	Register 1
+CAN0BTR0:	equ	CAN0_BASE + 0002h	;MSCAN0	Bus Timing Register 0
+CAN0BTR1:	equ	CAN0_BASE + 0003h	;MSCAN0	Bus Timing Register 1
+CAN0RFLG:	equ	CAN0_BASE + 0004h	;MSCAN0	Receiver Flag Register
+CAN0RIER:	equ	CAN0_BASE + 0005h	;MSCAN0	Receiver Interrupt Enable Register
+CAN0TFLG:	equ	CAN0_BASE + 0006h	;MSCAN0	Transmitter Flag Register
+CAN0TIER:	equ	CAN0_BASE + 0007h	;MSCAN0	Transmitter Interrupt Enable Register
+CAN0TARQ:	equ	CAN0_BASE + 0008h	;MSCAN0	Transmitter Message Abort Request
+CAN0TAAK:	equ	CAN0_BASE + 0009h	;MSCAN0	Transmitter Message Abort Acknowledge
+CAN0TBSEL:	equ	CAN0_BASE + 000Ah	;MSCAN0	Transmit Buffer	Selection
+CAN0IDAC:	equ	CAN0_BASE + 000Bh	;MSCAN0	Identifier Acceptance Control Register
+;
+;#define Reserved	_P(0x014C - 0x014D)
+;
+CAN0RXERR:	equ	CAN0_BASE + 000Eh	;MSCAN0	Receive	Error Counter Register
+CAN0TXERR:	equ	CAN0_BASE + 000Fh	;MSCAN0	Transmit Error Counter Register
+						;
+CAN0IDAR0:	equ	CAN0_BASE + 0010h	;MSCAN0	Identifier Acceptance Register 0
+CAN0IDAR1:	equ	CAN0_BASE + 0011h	;MSCAN0	Identifier Acceptance Register 1
+CAN0IDAR2:	equ	CAN0_BASE + 0012h	;MSCAN0	Identifier Acceptance Register 2
+CAN0IDAR3:	equ	CAN0_BASE + 0013h	;MSCAN0	Identifier Acceptance Register 3
+						;
+CAN0IDMR0:	equ	CAN0_BASE + 0014h	;MSCAN0	Identifier Mask	Register 0
+CAN0IDMR1:	equ	CAN0_BASE + 0015h	;MSCAN0	Identifier Mask	Register 1
+CAN0IDMR2:	equ	CAN0_BASE + 0016h	;MSCAN0	Identifier Mask	Register 2
+CAN0IDMR3:	equ	CAN0_BASE + 0017h	;MSCAN0	Identifier Mask	Register 3
+						;
+CAN0IDAR4:	equ	CAN0_BASE + 0018h	;MSCAN0	Identifier Acceptance Register 4
+CAN0IDAR5:	equ	CAN0_BASE + 0019h	;MSCAN0	Identifier Acceptance Register 5
+CAN0IDAR6:	equ	CAN0_BASE + 001Ah	;MSCAN0	Identifier Acceptance Register 6
+CAN0IDAR7:	equ	CAN0_BASE + 001Bh	;MSCAN0	Identifier Acceptance Register 7
+						;
+CAN0IDMR4:	equ	CAN0_BASE + 001Ch	;MSCAN0	Identifier Mask	Register 4
+CAN0IDMR5:	equ	CAN0_BASE + 001Dh	;MSCAN0	Identifier Mask	Register 5
+CAN0IDMR6:	equ	CAN0_BASE + 001Eh	;MSCAN0	Identifier Mask	Register 6
+CAN0IDMR7:	equ	CAN0_BASE + 001Fh	;MSCAN0	Identifier Mask	Register 7
+						;
+CAN0RXFG:	equ	CAN0_BASE + 0020h	;MSCAN0	Receive	Buffer
+CAN0RXIDR0:	equ	CAN0_BASE + 0020h	;MSCAN0	Receive	Identifier Register 0
+CAN0RXIDR1:	equ	CAN0_BASE + 0021h	;MSCAN0	Receive	Identifier Register 1
+CAN0RXIDR2:	equ	CAN0_BASE + 0022h	;MSCAN0	Receive	Identifier Register 2
+CAN0RXIDR3:	equ	CAN0_BASE + 0023h	;MSCAN0	Receive	Identifier Register 3
+CAN0RXDSR0:	equ	CAN0_BASE + 0024h	;MSCAN0	Receive	Data Segment Register 0
+CAN0RXDSR1:	equ	CAN0_BASE + 0025h	;MSCAN0	Receive	Data Segment Register 1
+CAN0RXDSR2:	equ	CAN0_BASE + 0026h	;MSCAN0	Receive	Data Segment Register 2
+CAN0RXDSR3:	equ	CAN0_BASE + 0027h	;MSCAN0	Receive	Data Segment Register 3
+CAN0RXDSR4:	equ	CAN0_BASE + 0028h	;MSCAN0	Receive	Data Segment Register 4
+CAN0RXDSR5:	equ	CAN0_BASE + 0029h	;MSCAN0	Receive	Data Segment Register 5
+CAN0RXDSR6:	equ	CAN0_BASE + 002Ah	;MSCAN0	Receive	Data Segment Register 6
+CAN0RXDSR7:	equ	CAN0_BASE + 002Bh	;MSCAN0	Receive	Data Segment Register 7
+CAN0RXDLR:	equ	CAN0_BASE + 002Ch	;MSCAN0	Receive	Data Length Register
+;
+;#define Reserved	_P(0x016D)
+;
+CAN0RXTSRH:	equ	CAN0_BASE + 002Eh	;MSCAN0	Receive	Time Stamp Register High Byte
+CAN0RXTSRL:	equ	CAN0_BASE + 002Fh	;MSCAN0	Receive	Time Stamp Register Low	Byte
+						;
+CAN0TXFG:	equ	CAN0_BASE + 0030h	;MSCAN0	Transmit Buffer
+CAN0TXIDR0:	equ	CAN0_BASE + 0030h	;MSCAN0	Transmit Identifier Register 0
+CAN0TXIDR1:	equ	CAN0_BASE + 0031h	;MSCAN0	Transmit Identifier Register 1
+CAN0TXIDR2:	equ	CAN0_BASE + 0032h	;MSCAN0	Transmit Identifier Register 2
+CAN0TXIDR3:	equ	CAN0_BASE + 0033h	;MSCAN0	Transmit Identifier Register 3
+CAN0TXDSR0:	equ	CAN0_BASE + 0034h	;MSCAN0	Transmit Data Segment Register 0
+CAN0TXDSR1:	equ	CAN0_BASE + 0035h	;MSCAN0	Transmit Data Segment Register 1
+CAN0TXDSR2:	equ	CAN0_BASE + 0036h	;MSCAN0	Transmit Data Segment Register 2
+CAN0TXDSR3:	equ	CAN0_BASE + 0037h	;MSCAN0	Transmit Data Segment Register 3
+CAN0TXDSR4:	equ	CAN0_BASE + 0038h	;MSCAN0	Transmit Data Segment Register 4
+CAN0TXDSR5:	equ	CAN0_BASE + 0039h	;MSCAN0	Transmit Data Segment Register 5
+CAN0TXDSR6:	equ	CAN0_BASE + 003Ah	;MSCAN0	Transmit Data Segment Register 6
+CAN0TXDSR7:	equ	CAN0_BASE + 003Bh	;MSCAN0	Transmit Data Segment Register 7
+CAN0TXDLR:	equ	CAN0_BASE + 003Ch	;MSCAN0	Transmit Data Length Register
+CAN0TXBPR:	equ	CAN0_BASE + 003Dh	;MSCAN0	Transmit Buffer	Priority Register
+CAN0TXTSRH:	equ	CAN0_BASE + 003Eh	;MSCAN0	Transmit Time Stamp Register High Byte
+CAN0TXTSRL:	equ	CAN0_BASE + 003Fh	;MSCAN0	Transmit Time Stamp Register Low Byte
+						;
+;------------------------------------------------------------------------------
+; 0180h - 023Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0180 - 0x023F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0240h - 025Fh	    Port Integration Module (PIM) Map 4 of 6
+;------------------------------------------------------------------------------
+						;
+; Port T
+PTT:		equ	SFR_BASE + 0240h	;Port T	Data Register
+PTIT:		equ	SFR_BASE + 0241h	;Port T	Input Register
+DDRT:		equ	SFR_BASE + 0242h	;Port T	Data Direction Register
+;
+;#define Reserved	_P(0x0243)
+;
+PERT:		equ	SFR_BASE + 0244h	;Port T	Pull Device Enable Register
+PPST:		equ	SFR_BASE + 0245h	;Port T	Polarity Select	Register
+;
+;#define Reserved	_P(0x0246 - 0x0247)
+;
+						;
+; Port S
+PTS:		equ	SFR_BASE + 0248h	;Port S	Data Register
+PTIS:		equ	SFR_BASE + 0249h	;Port S	Input Register
+DDRS:		equ	SFR_BASE + 024Ah	;Port S	Data Direction Register
+;
+;#define Reserved	_P(0x024B)
+;
+PERS:		equ	SFR_BASE + 024Ch	;Port S	Pull Device Enable Register
+PPSS:		equ	SFR_BASE + 024Dh	;Port S	Polarity Select	Register
+WOMS:		equ	SFR_BASE + 024Eh	;Port S	Wired-Or Mode Register
+						;
+PRR0:		equ	SFR_BASE + 024Fh	;Pin Routing Register 0
+						;
+; Port M
+PTM:		equ	SFR_BASE + 0250h	;Port M	Data Register
+PTIM:		equ	SFR_BASE + 0251h	;Port M	Input Register
+DDRM:		equ	SFR_BASE + 0252h	;Port M	Data Direction Register
+;
+;#define Reserved	_P(0x0253)
+;
+PERM:		equ	SFR_BASE + 0254h	;Port M	Pull Device Enable Register
+PPSM:		equ	SFR_BASE + 0255h	;Port M	Polarity Select	Register
+WOMM:		equ	SFR_BASE + 0256h	;Port M	Wired-Or Mode Register
+PKGCR:		equ	SFR_BASE + 0257h	;Package Code Register
+						;
+; Port P
+PTP:		equ	SFR_BASE + 0258h	;Port P	Data Register
+PTIP:		equ	SFR_BASE + 0259h	;Port P	Input Register
+DDRP:		equ	SFR_BASE + 025Ah	;Port P	Data Direction Register
+;
+;#define Reserved	_P(0x025B)
+;
+PERP:		equ	SFR_BASE + 025Ch	;Port P	Pull Device Enable Register
+PPSP:		equ	SFR_BASE + 025Dh	;Port P	Polarity Select	Register
+PIEP:		equ	SFR_BASE + 025Eh	;Port P	Interrupt Enable Register
+PIFP:		equ	SFR_BASE + 025Fh	;Port P	Interrupt Flag Register
+						;
+;------------------------------------------------------------------------------
+; 0260h - 0261h     5V Analog Comparator (ACMP)
+;------------------------------------------------------------------------------
+						;
+ACMPC:		equ	SFR_BASE + 0260h	;ACMP Control Register
+ACMPS:		equ	SFR_BASE + 0261h	;ACMP Status Register
+						;
+;------------------------------------------------------------------------------
+; 0262h - 0275h	    Port Integration Module (PIM) Map 5 of 6
+;------------------------------------------------------------------------------
+						;
+; Port J
+PTJ:		equ	SFR_BASE + 0268h	;Port J	Data Register
+PTIJ:		equ	SFR_BASE + 0269h	;Port J	Input Register
+DDRJ:		equ	SFR_BASE + 026Ah	;Port J	Data Direction Register
+;
+;#define Reserved	_P(0x026B)
+;
+PERJ:		equ	SFR_BASE + 026Ch	;Port J	Pull Device Enable Register
+PPSJ:		equ	SFR_BASE + 026Dh	;Port J	Polarity Select	Register
+PIEJ:		equ	SFR_BASE + 026Eh	;Port J	Interrupt Enable Register
+PIFJ:		equ	SFR_BASE + 026Fh	;Port J	Interrupt Flag Register
+						;
+;Port AD
+PT0AD:		equ	SFR_BASE + 0270h	;Port AD Data Register High Byte
+PT1AD:		equ	SFR_BASE + 0271h	;Port AD Data Register Low Byte
+;Non Standard 16-bit Register
+PTAD:		equ	SFR_BASE + 0270h	;Port AD Data Register
+;
+;begin 17.02.2020
+PTI0AD:		equ	SFR_BASE + 0272h	;Port AD Input Register High Byte
+PTI1AD:		equ	SFR_BASE + 0273h	;Port AD Input Register Low Byte
+;Non Standard 16-bit Register
+PTIAD:		equ	SFR_BASE + 0272h	;Port AD Input Register
+DDR0AD:		equ	SFR_BASE + 0274h	;Port AD Data Direction Register High Byte
+DDR1AD:		equ	SFR_BASE + 0275h	;Port AD Data Direction Register Low Byte
+;Non Standard 16-bit Register
+DDRAD:		equ	SFR_BASE + 0274h	;Port AD Data Direction Register
+;end
+;
+						;
+;------------------------------------------------------------------------------
+; 0276h	    	    Reference Voltage Attenuator (RVA)
+;------------------------------------------------------------------------------
+						;
+RVACTL:		equ	SFR_BASE + 0276h	;RVA Control Register
+						;
+;------------------------------------------------------------------------------
+; 0277h - 027Fh	    Port Integration Module (PIM) Map 6 of 6
+;------------------------------------------------------------------------------
+						;
+PRR1:		equ	SFR_BASE + 0277h	;Pin Routing Register 1
+						;
+PER0AD:		equ	SFR_BASE + 0278h	;Port AD Pull Device Enable Register High Byte
+PER1AD:		equ	SFR_BASE + 0279h	;Port AD Pull Device Enable Register Low Byte
+;Non Standard 16-bit Register
+PERAD:		equ	SFR_BASE + 0278h	;Port AD Pull Device Enable Register
+PPS0AD:		equ	SFR_BASE + 027Ah	;Port AD Polarity Select Register High Byte
+PPS1AD:		equ	SFR_BASE + 027Bh	;Port AD Polarity Select Register Low Byte
+;Non Standard 16-bit Register
+PPSAD:		equ	SFR_BASE + 027Ah	;Port AD Polarity Select Register
+PIE0AD:		equ	SFR_BASE + 027Ch	;Port AD Interrupt Enable Register High Byte
+PIE1AD:		equ	SFR_BASE + 027Dh	;Port AD Interrupt Enable Register Low Byte
+;Non Standard 16-bit Register
+PIEAD:		equ	SFR_BASE + 027Ch	;Port AD Interrupt Enable Register
+PIF0AD:		equ	SFR_BASE + 027Eh	;Port AD Interrupt Flag Register High Byte
+PIF1AD:		equ	SFR_BASE + 027Fh	;Port AD Interrupt Flag Register Low Byte
+;Non Standard 16-bit Register
+PIFAD:		equ	SFR_BASE + 027Eh	;Port AD Interrupt Flag Enable Register
+						;
+;------------------------------------------------------------------------------
+; 0280h - 02EFh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0280 - 0x02EF)
+;
+						;
+;------------------------------------------------------------------------------
+; 02F0h - 02FFh	    Clock and Power Management (CPMU) Map 2 of 2
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x02F0)
+;
+CPMULVCTL:	equ	SFR_BASE + 02F1h	;Low Voltage Control Register
+CPMUAPICTL:	equ	SFR_BASE + 02F2h	;Autonomous Periodical Interrupt Control Register
+CPMUACLKTR:	equ	SFR_BASE + 02F3h	;Autonomous Clock Trimming Register
+CPMUAPIRH:	equ	SFR_BASE + 02F4h	;Autonomous Periodical Interrupt Rate Register High Byte
+CPMUAPIRL:	equ	SFR_BASE + 02F5h	;Autonomous Reriodical Interrupt Rate Register Low Byte
+;Non Standard 16-bit Register
+CPMUAPIR:	equ	SFR_BASE + 02F4h	;Autonomous Periodical Interrupt Rate Register
+;
+;#define Reserved	_P(0x02F6 - 0x02F7)
+;
+CPMUIRCTRIMH:	equ	SFR_BASE + 02F8h	;Interrupt Rate Trim Register High Byte
+CPMUIRCTRIML:	equ	SFR_BASE + 02F9h	;Interrupt Rate Trim Register Low Byte
+;Non Standard 16-bit Register
+CPMUIRCTRIM:	equ	SFR_BASE + 02F8h	;Interrupt Rate Trim Register
+						;
+CPMUOSC:	equ	SFR_BASE + 02FAh	;CPMU Oscillator Register
+CPMUPROT:	equ	SFR_BASE + 02FBh	;CPMU Protection Register
+;
+;#define Reserved	_P(0x02FC - 0x02FF)
+						;
+;------------------------------------------------------------------------------
+; 0300h - 03BFh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0300 - 0x03BF)
+;
+						;
+;------------------------------------------------------------------------------
+; 03C0h - 03C7h	    Digital to Analog Converter (DAC0)
+;------------------------------------------------------------------------------
+						;
+DAC0_BASE:	equ	SFR_BASE + 03C0h	;Basisadresse von DAC0
+						;
+DAC0CTL:	equ	DAC0_BASE + 0000h	;DAC0 Control Register
+;
+;#define Reserved	_P(0x03C1))
+;
+DAC0VOL:	equ	DAC0_BASE + 0002h	;DAC0 Analog Output Voltage Level Register
+;
+;#define Reserved	_P(0x03C3 - 0x3C7)
+;
+						;
+;------------------------------------------------------------------------------
+; 03C8h - 03CFh	    Digital to Analog Converter (DAC1)
+;------------------------------------------------------------------------------
+						;
+DAC1_BASE:	equ	SFR_BASE + 03C8h	;Basisadresse von DAC1
+						;
+DAC1CTL:	equ	DAC1_BASE + 0000h	;DAC1 Control Register
+;
+;#define Reserved	_P(0x03C9))
+;
+DAC1VOL:	equ	DAC1_BASE + 0002h	;DAC1 Analog Output Voltage Level Register
+;
+;#define Reserved	_P(0x03CB - 0x3CF)
+;
+						;
+;------------------------------------------------------------------------------
+; 03D0h - 03FFh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x03D0 - 0x03FF)
+;
+						;
+;==============================================================================
+; 2. MCU Special Function Register bit locations
+;==============================================================================
+						;
+bit0:		equ	01h
+bit1:		equ	02h
+bit2:		equ	04h
+bit3:		equ	08h
+bit4:		equ	10h
+bit5:		equ	20h
+bit6:		equ	40h
+bit7:		equ	80h
+						;
+;------------------------------------------------------------------------------
+; MMC bit declarations
+;
+; -MODE-
+_MODC:		equ	bit7
+
+; -MMCCTL1-
+_NVMRES:	equ	bit0
+						;
+;------------------------------------------------------------------------------
+; CPMU bit declarations
+;
+; -CPMUFLG-
+_UPOSC:		equ	bit0
+_OSCIF:		equ	bit1
+_ILAF:		equ	bit2
+_LOCK:		equ	bit3
+_LOCKIF:	equ	bit4
+_LVRF:		equ	bit5
+_PORF:		equ	bit6
+_RTIF:		equ	bit7
+
+; -CPMUINT-
+_OSCIE:		equ	bit1
+_LOCKIE:	equ	bit4
+_RTIE:		equ	bit7
+
+; -CPMUCLKS-
+_COPOSCSEL0:	equ	bit0
+_RTIOSCSEL:	equ	bit1
+_PCE:		equ	bit2
+_PRE:		equ	bit3
+_COPOSCSEL1:	equ	bit4
+_PSTP:		equ	bit6
+_PLLSEL:	equ	bit7
+
+; -CPMULVCTL-
+_LVIF:		equ	bit0
+_LVIE:		equ	bit1
+_LVDS:		equ	bit2
+
+; -CPMUAPICTL-
+_APIF:		equ	bit0
+_APIE:		equ	bit1
+_APIFE:		equ	bit2
+_APIEA:		equ	bit3
+_APIES:		equ	bit4
+_APICLK:	equ	bit7
+
+; -CPMUOSC-
+_OSCPINS_EN:	equ	bit5
+_OSCE:		equ	bit7
+
+; -CPMUPROT-
+_PROT:		equ	bit0
+						;
+;------------------------------------------------------------------------------
+; TIM bit declarations
+;
+; -TIOS-
+_IOS0:		equ	bit0
+_IOS1:		equ	bit1
+_IOS2:		equ	bit2
+_IOS3:		equ	bit3
+_IOS4:		equ	bit4
+_IOS5:		equ	bit5
+_IOS6:		equ	bit6
+_IOS7:		equ	bit7
+
+; -TCFORC-
+_FOC0:		equ	bit0
+_FOC1:		equ	bit1
+_FOC2:		equ	bit2
+_FOC3:		equ	bit3
+_FOC4:		equ	bit4
+_FOC5:		equ	bit5
+_FOC6:		equ	bit6
+_FOC7:		equ	bit7
+
+; -TSCR1-
+_PRNT:		equ	bit3
+_TFFCA:		equ	bit4
+_TSFRZ:		equ	bit5
+_TSWAI:		equ	bit6
+_TEN:		equ	bit7
+
+; -TSCR2-
+_TCRE:		equ	bit3
+_TOI:		equ	bit7
+
+; -TIE-
+_C0I:		equ	bit0
+_C1I:		equ	bit1
+_C2I:		equ	bit2
+_C3I:		equ	bit3
+_C4I:		equ	bit4
+_C5I:		equ	bit5
+_C6I:		equ	bit6
+_C7I:		equ	bit7
+
+; -TFLG1-
+_C0F:		equ	bit0
+_C1F:		equ	bit1
+_C2F:		equ	bit2
+_C3F:		equ	bit3
+_C4F:		equ	bit4
+_C5F:		equ	bit5
+_C6F:		equ	bit6
+_C7F:		equ	bit7
+
+; -TFLG2-
+_TOF:		equ	bit7
+
+; -PACTL-
+_PAI:		equ	bit0
+_PAOVI:		equ	bit1
+_PEDGE:		equ	bit4
+_PAMOD:		equ	bit5
+_PAEN:		equ	bit6
+
+; -PAFLG-
+_PAIF:		equ	bit0
+_PAOVF:		equ	bit1
+						;
+;------------------------------------------------------------------------------
+; ATDx bit declarations
+;
+; -ATDxCTL2-
+_ASCIF:		equ	bit0
+_ASCIE:		equ	bit1
+_ETRIGE:	equ	bit2
+_ETRIGP:	equ	bit3
+_ETRIGLE:	equ	bit4
+_AWAI:		equ	bit5
+_AFFC:		equ	bit6
+_ADPU:		equ	bit7
+
+; -ATDxCTL3-
+_FIFO:		equ	bit2
+
+; -ATDxCTL5-
+_MULT:		equ	bit4
+_SCAN:		equ	bit5
+_DSGN:		equ	bit6
+_DJM:		equ	bit7
+
+; -ATDxSTAT0-
+_FIFOR:		equ	bit4
+_ETORF:		equ	bit5
+_SCF:		equ	bit7
+
+;------------------------------------------------------------------------------
+; SCIx bit declarations
+;
+; -SCIxCR1-
+_PT:		equ	bit0
+_PE:		equ	bit1
+_ILT:		equ	bit2
+_WAKE:		equ	bit3
+_M:		equ	bit4
+_RSRC:		equ	bit5
+_SCISWAI:	equ	bit6
+_LOOPS:		equ	bit7
+
+; -SCIxCR2-
+_SBK:		equ	bit0
+_RWU:		equ	bit1
+_RE:		equ	bit2
+_TE:		equ	bit3
+_ILIE:		equ	bit4
+_RIE:		equ	bit5
+_TCIE:		equ	bit6
+_TIE:		equ	bit7
+
+; -SCIxSR1-
+_PF:		equ	bit0
+_FE:		equ	bit1
+_NF:		equ	bit2
+_OR:		equ	bit3
+_IDLE:		equ	bit4
+_RDRF:		equ	bit5
+_TC:		equ	bit6
+_TDRE:		equ	bit7
+
+; -SCIxSR2-
+_RAF:		equ	bit0
+_TXDIR:		equ	bit1
+_BK13:		equ	bit2
+_RXPOL:		equ	bit3
+_TXPOL:		equ	bit4
+_AMAP:		equ	bit7
+
+; -SCIDRH-
+_T8:		equ	bit6
+_R8:		equ	bit7
+						;
+;------------------------------------------------------------------------------
+; FTMRG240K bit declarations
+;
+; -FCLKDIV-
+_FDIVLCK:	equ	bit6
+_FDIVLD:	equ	bit7
+
+; -FCNFG-
+_FSFD:		equ	bit0
+_FDFD:		equ	bit1
+_IGNSF:		equ	bit4
+_CCIE:		equ	bit7
+
+; -FERCNFG-
+_SFDIE:		equ	bit0
+_DFDIE:		equ	bit1
+
+; -FSTAT-
+_MGSTAT0:	equ	bit0
+_MGSTAT1:	equ	bit1
+_RSVD:		equ	bit2
+_MGBUSY:	equ	bit3
+_FPVIOL:	equ	bit4
+_ACCERR:	equ	bit5
+_CCIF:		equ	bit7
+
+; -FPROT-
+_FPLDIS:	equ	bit2
+_FPHDIS:	equ	bit5
+_FPOPEN:	equ	bit7
+
+; -EEPROT-
+_DPOPEN:	equ	bit7
+						;
+;------------------------------------------------------------------------------
+; MSCANx bit declarations
+;
+; -CANxCTL0-
+_INITRQ:	equ	bit0
+_SLPRQ:		equ	bit1
+_WUPE:		equ	bit2
+_TIME:		equ	bit3
+_SYNCH:		equ	bit4
+_CSWAI:		equ	bit5
+_RXACT:		equ	bit6
+_RXFRM:		equ	bit7
+
+; -CANxCTL1-
+_INITAK:	equ	bit0
+_SLPAK:		equ	bit1
+_WUPM:		equ	bit2
+_LISTEN:	equ	bit4
+_LOOPB:		equ	bit5
+_CLKSRC:	equ	bit6
+_CANE:		equ	bit7
+
+; -CANxRFLG-
+_RXF:		equ	bit0
+_OVRIF:		equ	bit1
+_TSTAT0:	equ	bit2
+_TSTAT1:	equ	bit3
+_RSTAT0:	equ	bit4
+_RSTAT1:	equ	bit5
+_CSCIF:		equ	bit6
+_WUPIF:		equ	bit7
+
+; -CANxRIER-
+_RXFIE:		equ	bit0
+_OVRIE:		equ	bit1
+_TSTATE0:	equ	bit2
+_TSTATE1:	equ	bit3
+_RSTATE0:	equ	bit4
+_RSTATE1:	equ	bit5
+_CSCIE:		equ	bit6
+_WUPIE:		equ	bit7
+
+; -CANxTFLG-
+_TXE0:		equ	bit0
+_TXE1:		equ	bit1
+_TXE2:		equ	bit2
+
+; -CANxTIER-
+_TXEIE0:	equ	bit0
+_TXEIE1:	equ	bit1
+_TXEIE2:	equ	bit2
+
+; -CANxTARQ-
+_ABTRQ0:	equ	bit0
+_ABTRQ1:	equ	bit1
+_ABTRQ2:	equ	bit2
+
+; -CANxTAAK-
+_ABTAK0:	equ	bit0
+_ABTAK1:	equ	bit1
+_ABTAK2:	equ	bit2
+
+; -CANxTBSEL-
+_TX0:		equ	bit0
+_TX1:		equ	bit1
+_TX2:		equ	bit2
+						;
+;------------------------------------------------------------------------------
+; ACMP bit declarations
+;
+; -ACMPC-
+_ACE:		equ	bit0
+_ACDIEN:	equ	bit4
+_ACICE:		equ	bit5
+_ACOPE:		equ	bit6
+_ACIE:		equ	bit7
+
+; -ACMPC-
+_ACO:		equ	bit6
+_ACIF:		equ	bit7
+						;
+;------------------------------------------------------------------------------
+; RVA bit declarations
+;
+; -RVACTL-
+_RVAON:		equ	bit0
+						;
+;------------------------------------------------------------------------------
+; DACx bit declarations
+;
+; -DACxCTL-
+_DRIVE:		equ	bit6
+_FVR:		equ	bit7
+						;
+;==============================================================================
+; 3. 32 General Purpose Registers
+;==============================================================================
+						;
+R0:		equ	GPR_BASE + 0000h	;
+R1:		equ	GPR_BASE + 0001h	;
+R2:		equ	GPR_BASE + 0002h	;
+R3:		equ	GPR_BASE + 0003h	;
+R4:		equ	GPR_BASE + 0004h	;
+R5:		equ	GPR_BASE + 0005h	;
+R6:		equ	GPR_BASE + 0006h	;
+R7:		equ	GPR_BASE + 0007h	;
+R8:		equ	GPR_BASE + 0008h	;
+R9:		equ	GPR_BASE + 0009h	;
+R10:		equ	GPR_BASE + 000Ah	;
+R11:		equ	GPR_BASE + 000Bh	;
+R12:		equ	GPR_BASE + 000Ch	;
+R13:		equ	GPR_BASE + 000Dh	;
+R14:		equ	GPR_BASE + 000Eh	;
+R15:		equ	GPR_BASE + 000Fh	;
+R16:		equ	GPR_BASE + 0010h	;
+R17:		equ	GPR_BASE + 0011h	;
+R18:		equ	GPR_BASE + 0012h	;
+R19:		equ	GPR_BASE + 0013h	;
+R20:		equ	GPR_BASE + 0014h	;
+R21:		equ	GPR_BASE + 0015h	;
+R22:		equ	GPR_BASE + 0016h	;
+R23:		equ	GPR_BASE + 0017h	;
+R24:		equ	GPR_BASE + 0018h	;
+R25:		equ	GPR_BASE + 0019h	;
+R26:		equ	GPR_BASE + 001Ah	;
+R27:		equ	GPR_BASE + 001Bh	;
+R28:		equ	GPR_BASE + 001Ch	;
+R29:		equ	GPR_BASE + 001Dh	;
+R30:		equ	GPR_BASE + 001Eh	;
+R31:		equ	GPR_BASE + 001Fh	;
+						;
+;------------------------------------------------------------------------------
+	list
+	end

@@ -1,0 +1,105 @@
+/* TireGuard III Betriebsprogramm				*/
+/*------------------------------------------------------*/
+/* Copyright 	(C) 2005-2011, micro dynamics GmbH	*/
+/* Author(s)	Michael Frank				*/
+/* Update	January-20th-2011			*/
+/* Description	Location File for MC9S12C128 unpaged	*/
+/*------------------------------------------------------*/
+
+NAMES
+END
+
+SEGMENTS
+  FLASH_CODE_4000 = READ_ONLY 0x4006 TO 0x7FFF;
+  FLASH_CODE_8000 = READ_ONLY 0x8000 TO 0xBFFF;
+  FLASH_CODE_C000 = READ_ONLY 0xC000 TO 0xEFFF;
+  FLASH_DATA = READ_ONLY 0xF000 TO 0xFF0F;   /* must(!) start at 0xF000			    */
+  EEPROM_DATA = READ_WRITE 0x0800 TO 0x0FFF; /* 2K Bytes FLASH Data must(!) start at 0x0800 */
+  REGISTERS = READ_WRITE 0x1000 TO 0x101F;   /* 32 Global Registers must(!) start at 0x1000 */
+  RAM_DATA = READ_WRITE 0x1020 TO 0x17FF;    /* 2K Bytes Global Data			    */
+  LOCAL_DATA = READ_WRITE 0x1800 TO 0x1FFF;  /* 2K Bytes Local Data			    */
+END
+
+PLACEMENT
+  .init INTO FLASH_CODE_4000;
+  .text INTO FLASH_CODE_4000;
+  .text_C000 INTO FLASH_CODE_C000;
+  .rodata INTO FLASH_DATA;
+  .data INTO RAM_DATA;
+  .locals INTO LOCAL_DATA;
+  .regs INTO REGISTERS;			/* 32 General Purpose Registers */
+  .bss INTO EEPROM_DATA;
+END
+
+MAIN SYS_START
+STACKSIZE 0x0000
+
+VECTOR ADDRESS 0xFF80 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF82 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF84 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF86 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF88 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF8A NO_INT		/* Low Voltage Interrupt (LVI) */
+VECTOR ADDRESS 0xFF8C NO_INT		/* PWM Emergency Shutdown */
+VECTOR ADDRESS 0xFF8E NO_INT		/* Port P interrupt */
+
+VECTOR ADDRESS 0xFF90 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF92 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF94 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF96 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF98 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF9A NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF9C NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFF9E NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFA0 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFA2 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFA4 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFA6 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFA8 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFAA NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFAC NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFAE NO_INT		/* - reserved - */
+
+VECTOR ADDRESS 0xFFB0 CAN0_TX_INT	/* CAN0 transmit */
+VECTOR ADDRESS 0xFFB2 CAN0_RX_INT	/* CAN0 receive */
+VECTOR ADDRESS 0xFFB4 NO_INT		/* CAN0 errors */
+VECTOR ADDRESS 0xFFB6 NO_INT		/* CAN0 wake-up */
+VECTOR ADDRESS 0xFFB8 NO_INT		/* Flash */
+VECTOR ADDRESS 0xFFBA NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFBC NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFBE NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFC0 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFC2 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFC4 NO_INT		/* CRG Self Clock Mode */
+VECTOR ADDRESS 0xFFC6 NO_INT		/* CRG PLL lock */
+VECTOR ADDRESS 0xFFC8 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFCA NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFCC NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFCE NO_INT		/* Port J */
+VECTOR ADDRESS 0xFFD0 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFD2 NO_INT		/* ATD0 */
+VECTOR ADDRESS 0xFFD4 NO_INT		/* - reserved - */
+VECTOR ADDRESS 0xFFD6 LIN_INT		/* SCI0 */
+VECTOR ADDRESS 0xFFD8 NO_INT		/* SPI0 */
+VECTOR ADDRESS 0xFFDA NO_INT		/* Pulse accumulator input edge */
+VECTOR ADDRESS 0xFFDC NO_INT		/* Pulse accumulator A overflow */
+VECTOR ADDRESS 0xFFDE NO_INT		/* Standard Timer overflow */
+VECTOR ADDRESS 0xFFE0 TICKER_INT	/* Standard Timer channel 7 */
+VECTOR ADDRESS 0xFFE2 SCI_INT		/* Standard Timer channel 6 */
+VECTOR ADDRESS 0xFFE4 NO_INT		/* Standard Timer channel 5 */
+VECTOR ADDRESS 0xFFE6 NO_INT		/* Standard Timer channel 4 */
+VECTOR ADDRESS 0xFFE8 NO_INT		/* Standard Timer channel 3 */
+VECTOR ADDRESS 0xFFEA NO_INT		/* Standard Timer channel 2 */
+VECTOR ADDRESS 0xFFEC NO_INT		/* Standard Timer channel 1 */
+VECTOR ADDRESS 0xFFEE NO_INT		/* Standard Timer channel 0 */
+VECTOR ADDRESS 0xFFF0 NO_INT		/* Real Time Interrupt */
+VECTOR ADDRESS 0xFFF2 NO_INT		/* IRQ */
+VECTOR ADDRESS 0xFFF4 NO_INT		/* XIRQ */
+VECTOR ADDRESS 0xFFF6 NO_CODE_TRAP	/* SWI */
+VECTOR ADDRESS 0xFFF8 NO_CODE_TRAP	/* Unimplemented instruction trap */
+					/* */
+VECTOR ADDRESS 0xFFFA RESET_INT		/* COP failure reset */
+VECTOR ADDRESS 0xFFFC RESET_INT		/* Clock Monitor fail reset */
+VECTOR ADDRESS 0xFFFE RESET_INT		/* Reset */
+
+INIT SYS_START				/* initialisation entry point */

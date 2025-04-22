@@ -1,0 +1,471 @@
+	include	"s12c_128.sfr"
+	include	"s12c_Switches.sfr"
+	title	"s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12c_FTS.asm
+;
+;Copyright:	(C) 2006-2009, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	19.06.2009
+;
+;Description:	Funktionen für den Schreibzugriff auf den prozessorinternen
+;		FLASH-Speicher des Freescale MC9S12C128
+;		Die Funktionen weisen weitgehend gleiche Parameterkonventionen
+;		auf wie diejenigen der Module s12*_EETS.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.06
+;
+;19.06.2009	Korrektur in Funktion FTS_COPY
+;24.05.2009	Korrekturen in PROGRAM_SECTOR und SUBMIT_COMMAND
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;Externals
+;------------------------------------------------------------------------------
+					;
+	xref	BUS_CLK			;Number
+	xref.b	C_FTS_FCLKDIV		;Number
+					;
+;------------------------------------------------------------------------------
+;Publics
+;------------------------------------------------------------------------------
+					;
+	xdef	FTS_COPY		;Code
+	xdef	FTS_FLASH		;Code
+	xdef	FTS_RESET		;Code
+	xdef	FTS_WRITE8		;Code
+	xdef	FTS_WRITE16		;Code
+					;
+	xdef	E_FTS_BUSY		;Number
+	xdef	E_FTS_TIMEOUT		;Number
+	xdef	E_FTS_INVALID_ACCESS	;Number
+					;
+;------------------------------------------------------------------------------
+;Constants
+;------------------------------------------------------------------------------
+					;
+E_FTS_BUSY:		equ	-1
+E_FTS_TIMEOUT:		equ	-2
+E_FTS_INVALID_ACCESS:	equ	-3
+					;
+CMD_PROGRAM:		equ	20h
+CMD_SECTOR_ERASE:	equ	40h
+
+;------------------------------------------------------------------------------
+;C_SECTOR_SIZE gibt die Größe eines zusammenhängend zu löschenden Speicher-
+;sektors in Anzahl der Datenworte an.
+;Zur Anpassung an andere Sektorgrößen ist dieser Wert entsprechend zu ändern.
+;------------------------------------------------------------------------------
+					;
+C_SECTOR_SIZE:	equ	512		;1024 Bytes Sektorgröße
+					;
+SECTOR_MASK:    equ	(2 * C_SECTOR_SIZE) - 1
+I_BIT:		equ	bit4		;
+					;
+.text_C000:     section
+					;
+;==============================================================================
+;
+;Beginn des im RAM auszuführenden Programmcodes
+;
+;==============================================================================
+					;
+RAM_CODE:
+					;
+;------------------------------------------------------------------------------
+;PROGRAM_SECTOR aktualisiert einen Sektor im internen FLASH-Speicher.
+;
+;Eingangsparameter:	X		Zeiger auf Quelle, bleibt unverändert
+;			Y		Zeiger auf Ziel, bleibt unverändert
+;Ausgangsparameter:	A		0 	= ok
+;					<> 0	= Fehlercode
+;veränderte Register:	CCR, B, R[8..13]
+;------------------------------------------------------------------------------
+					;
+PROGRAM_SECTOR:
+	BRSET	FCLKDIV,_FDIVLD,PROGRAM_SECTOR1
+	MOVB	#C_FTS_FCLKDIV,FCLKDIV	;ggf. Taktvorteiler setzen
+					;
+PROGRAM_SECTOR1:
+	BSET	FSTAT,_PVIOL | _ACCERR	;Fehlerflags zurücksetzen
+	BRSET	FSTAT,_CBEIF | _CCIF,PROGRAM_SECTOR2
+	LDAA	#E_FTS_BUSY		;Fehler: Nicht bereit
+	LBRA	PROGRAM_SECTOR9		;
+					;
+PROGRAM_SECTOR2:
+	STX	R8			;
+	STY	R10			;
+					;
+	LDD	#0FFFFh			;
+	LDX	#C_SECTOR_SIZE		;
+PROGRAM_SECTOR2a:
+	CPD	2,Y+			;
+	BNE	PROGRAM_SECTOR3		;
+;
+;begin 24.05.2009
+	DBNE	X,PROGRAM_SECTOR2a	;
+;end
+;
+	LDY	R10			;
+	BEQ	PROGRAM_SECTOR4		;wenn Sektor <> 0FFFFh.0FFFFh... ...0FFFFh.0FFFFh,
+					;
+PROGRAM_SECTOR3:
+	LDY	R10
+	MOVW	#0815h,0,Y		;(Wert ohne Bedeutung)
+	LDAA	#CMD_SECTOR_ERASE	;dann
+	BSR	SUBMIT_COMMAND		;  Sektor löschen
+	BNE	PROGRAM_SECTOR9		;
+					;
+PROGRAM_SECTOR4:
+	LDX	R8			;
+	LDY	R10			;
+	LDD	#C_SECTOR_SIZE		;
+	STD	R12			;
+PROGRAM_SECTOR41:
+	LDD	2,X+			;wenn Datenwort = 0FFFFh,
+	CPD	#0FFFFh			;dann
+	BEQ	PROGRAM_SECTOR42	;  keine Programmierung erforderlich
+	STD	0,Y			;sonst
+	LDAA	#CMD_PROGRAM		;  Datenwort in den FLASH-Speicher schreiben
+	BSR	SUBMIT_COMMAND		;  Programmierung ausführen
+	BNE	PROGRAM_SECTOR9		;
+PROGRAM_SECTOR42:
+	LEAY	2,Y			;
+	LDD	R12			;
+	SUBD	#1			;
+	STD	R12			;
+	BNE	PROGRAM_SECTOR41	;
+					;
+PROGRAM_SECTOR8:
+	CLRA				;ok, mit A = 0 zurück
+					;
+PROGRAM_SECTOR9:
+	LDX	R8			;
+	LDY	R10			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;SUBMIT_COMMAND führt ein FLASH-Speicher-Kommando aus.
+;
+;Eingangsparameter:	A		Kommando
+;Ausgangsparameter:	A		0 	= ok
+;					<> 0	= Fehlercode
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+SUBMIT_COMMAND:
+
+ ifeq fDebug
+	MOVB	#55h,ARMCOP		;Watchdog-Timer neu starten
+	MOVB	#0AAh,ARMCOP		;muss(!) hier zu Fuß gemacht werden
+ endif
+
+	STAA	FCMD			;Kommando schreiben
+	BSET	FSTAT,_CBEIF		;und Kommandoausführung starten
+	LDD	#BUS_CLK		;Timeout auf Startwert : max 40 ms
+SUBMIT_COMMAND1:
+;
+;begin 24.05.2009
+	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+	NOP				;	 1
+	NOP				;	 1
+	DBNE	D,SUBMIT_COMMAND1	;	 3
+					;Summe	10 Zyklen : max 10 ms
+	LDD	#BUS_CLK		;
+SUBMIT_COMMAND11:
+	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+	NOP				;	 1
+	NOP				;	 1
+	DBNE	D,SUBMIT_COMMAND11	;	 3
+					;Summe	10 Zyklen : max 10 ms
+	LDD	#BUS_CLK		;
+SUBMIT_COMMAND12:
+	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+	NOP				;	 1
+	NOP				;	 1
+	DBNE	D,SUBMIT_COMMAND12	;	 3
+					;Summe	10 Zyklen : max 10 ms
+	LDD	#BUS_CLK		;
+SUBMIT_COMMAND13:
+	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+	NOP				;	 1
+	NOP				;	 1
+	DBNE	D,SUBMIT_COMMAND13	;	 3
+					;Summe	10 Zyklen : max 10 ms
+	LDAA	#E_FTS_TIMEOUT		;Fehler: Timeout
+;end
+;
+	BRA	SUBMIT_COMMAND9		;
+					;
+SUBMIT_COMMAND2:
+	BRCLR	FSTAT,_PVIOL | _ACCERR,SUBMIT_COMMAND8
+	LDAA	#E_FTS_INVALID_ACCESS	;Fehler: Unzulässiger Schreibzugriff
+	BRA	SUBMIT_COMMAND9		;
+					;
+SUBMIT_COMMAND8:
+	CLRA				;ok, mit A = 0 zurück
+					;
+SUBMIT_COMMAND9:
+	RTS				;
+					;
+RAM_CODE_CNT:	equ	(* - RAM_CODE)
+					;
+;==============================================================================
+;
+;Ende des im RAM auszuführenden Programmcodes
+;
+;==============================================================================
+					;
+;------------------------------------------------------------------------------
+;Variables
+;------------------------------------------------------------------------------
+					;
+.locals:	section
+					;
+BOV:
+FTS_FLAGS:	ds.b	1		;Flags
+_LOADED:	equ	bit0		;1, wenn EEPROM-Sektor in Sektorbuffer eingelesen ist
+;
+;
+;
+_LAST_I_BIT:	equ	bit4		;1, wenn I-bit = 1 war
+;
+;
+_DIRTY:		equ	bit7		;1, wenn Sektorbuffer gegenüber EEPROM-Sektor verändert wurde
+					;
+FTS_SECTOR_ADDR: ds.w	1		;Zeiger auf aktuellen Sektor im FLASH-Speicher,
+					;wenn _LOADED gesetzt
+FTS_SECTOR_BUF:	ds.w	C_SECTOR_SIZE	;Sektorbuffer
+					;
+FTS_CODE_BUF:	ds.b	RAM_CODE_CNT	;Codebuffer für Programmierfunktion
+					;
+TOV:
+					;
+.text:		section
+					;
+;------------------------------------------------------------------------------
+;Public: FTS_RESET fegt den FLASH-Sektorbuffer, schreibt einen
+;Rücksprungbefehl in den FLASH-Codebuffer und setzt die Statusflags zurück.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	keine
+;veränderte Register:	CCR, A, B, X, Y
+;------------------------------------------------------------------------------
+					;
+FTS_RESET:
+	LDY	#FTS_SECTOR_BUF		;
+	LDX	#C_SECTOR_SIZE		;
+	LDD	#0FFFFh			;
+FTS_RESET1:
+	STD	2,Y+			;Sektorbuffer fegen
+	DBNE	X,FTS_RESET1		;
+					;
+	LDY	#FTS_CODE_BUF		;
+	LDAA	#86h			;
+	STAA	1,Y+			;
+	LDAA	#E_FTS_INVALID_ACCESS	;"LDAA	#E_INVALID_ACCESS"
+	STAA	1,Y+			;
+	LDAA	#3Dh			;"RTS"
+	STAA	1,Y+			;Rücksprungbefehl in Codebuffer eintragen
+					;
+	MOVB	#0,FTS_FLAGS		;Flags rücksetzen
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: FTS_WRITE8 schreibt ein Byte in den internen FLASH-Sektorbuffer.
+;
+;Eingangsparameter:	R6/R7		Zieladresse
+;			R0		Datenbyte
+;Ausgangsparameter:	A		0 	= ok
+;					<> 0	= Fehlercode
+;veränderte Register:	CCR, B, X, Y, R[3..13]
+;------------------------------------------------------------------------------
+					;
+FTS_WRITE8:
+	MOVW	#R0,R4			;Zeiger auf Quelle in R4/R5
+	MOVB	#1,R3			;1 Byte
+	JSR	FTS_COPY		;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: FTS_WRITE16 schreibt ein Wort in den internen FLASH-Sektorbuffer.
+;
+;Eingangsparameter:	R6/R7		Zieladresse
+;			R0/R1		Datenwort
+;Ausgangsparameter:	A		0	= ok
+;					<> 0	= Fehlercode
+;veränderte Register:	CCR, B, X, Y, R[3..13]
+;------------------------------------------------------------------------------
+					;
+FTS_WRITE16:
+	MOVW	#R0,R4			;Zeiger auf Quelle in R4/R5
+	MOVB	#2,R3			;2 Bytes
+	JSR	FTS_COPY		;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: FTS_COPY schreibt n Bytes in den internen FLASH-Sektorbuffer.
+;
+;Eingangsparameter:     R4/R5		Quelladresse
+;			R6/R7		Zieladresse
+;			R3		Anzahl Bytes (0 == 256)
+;			FTS_SECTOR_ADDR
+;			FTS_SECTOR_BUF
+;			FTS_FLAGS._LOADED
+;			FTS_FLAGS._DIRTY
+;Ausgangsparameter:	A		0 	= ok
+;					<> 0	= Fehlercode
+;	wenn A = 0:	R4/R5		nächste Quelladresse
+;			R6/R7		nächste Zieladresse
+;			FTS_SECTOR_ADDR
+;			FTS_SECTOR_BUF
+;			FTS_FLAGS._LOADED
+;			FTS_FLAGS._DIRTY
+;veränderte Register:	CCR, B, X, Y, R[3..17]
+;------------------------------------------------------------------------------
+					;
+FTS_COPY:
+	LDD	R6			;Zieladresse aufbereiten
+	ANDB	#LOW (~SECTOR_MASK)	;
+	ANDA	#HIGH (~SECTOR_MASK)	;
+	STD	R14			;Sektor-Basisadresse in R14/R15
+	LDD	R6			;
+	ANDB	#LOW (SECTOR_MASK)	;
+	ANDA	#HIGH (SECTOR_MASK)	;
+	STD	R16			;Sektor-Offset in R16/R17
+					;
+FTS_COPY1:
+	BRSET	FTS_FLAGS,_LOADED,FTS_COPY3
+	LDX	R14			;wenn kein Sektor geladen
+	LDY	#FTS_SECTOR_BUF		;
+	LDD	#C_SECTOR_SIZE		;
+	STD	R12			;
+FTS_COPY2:
+	LDD	2,X+			;dann
+	STD	2,Y+			;  Sektor in Sektorbuffer laden
+	LDD	R12			;
+	SUBD	#1			;
+	STD	R12			;
+	BNE	FTS_COPY2		;
+	MOVW	R14,FTS_SECTOR_ADDR	;  Sektor-Basisadresse merken
+	BCLR	FTS_FLAGS,_DIRTY	;  _DIRTY-Flag rücksetzen
+	BSET	FTS_FLAGS,_LOADED	;  _LOADED-Flag setzen
+					;
+FTS_COPY3:
+	LDD	FTS_SECTOR_ADDR		;
+	CPD	R14			;wenn neuer Sektor <> alter Sektor
+	BEQ	FTS_COPY4		;und alter Sektor verändert,
+	BRCLR	FTS_FLAGS,_DIRTY,FTS_COPY4
+					;dann
+	JSR	FTS_FLASH		;  alten Sektor aktualisieren
+	BRA	FTS_COPY1		;
+					;
+FTS_COPY4:
+	LDX	R4			;Zeiger auf Quelle laden
+	LDY	R16			;Sektor-Offset
+	LEAY	FTS_SECTOR_BUF,Y	;Zeiger in Sektorbuffer
+	LDAA	1,X+			;Byte aus Quelle lesen
+	CMPA	0,Y			;wenn Quellbyte von Byte im Sektorbuffer verschieden
+	BEQ	FTS_COPY5		;dann
+	STAA	0,Y			;  Quellbyte in den Sektorbuffer schreiben
+	BSET	FTS_FLAGS,_DIRTY	;  _DIRTY-Flag setzen
+FTS_COPY5:
+	STX	R4			;
+	LDY	R6			;Zeiger verschieben
+	INY				;
+	STY	R6			;
+	LDY	R16			;
+	INY				;
+	STY	R16			;
+;
+;begin 19.06.2009
+	DEC	R3			;
+	CPY	#SECTOR_MASK		;wenn Sektor-Offset eine Sektor-Grenze erreicht hat,
+	BLS	FTS_COPY6		;dann
+	JSR	FTS_FLASH		;  letzten Sektor zurückschreiben
+	BNE	FTS_COPY9		;  nach Fehler abbrechen und mit Fehlercode zurück
+	LDAA	R3			;  wenn noch nicht alle Bytes geschrieben,
+	BEQ	FTS_COPY7		;  dann
+	LDD	R14			;    Sektor-Basisadresse zeigt auf nächsten Sektor
+	ADDD	#(2*C_SECTOR_SIZE)	;
+	STD	R14			;
+	LDD	#0			;    Sektor-Offset auf 0 setzen
+	STD	R16			;    nächsten Sektor in Sektorbuffer laden
+	LBRA	FTS_COPY1		;    und Schreiben dann fortsetzen
+					;
+FTS_COPY6:
+	LDAA	R3			;sonst weiter,
+	BNE	FTS_COPY4		;  bis alle Bytes in Sektorbuffer geschrieben
+					;
+FTS_COPY7:
+;end
+;
+	CLRA				;danach mit A = 0 zurück
+					;
+FTS_COPY9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: FTS_FLASH löscht einen FLASH-Speicher-Sektor und programmiert ihn
+;mit dem Inhalt des EEPROM-Buffers.
+;
+;Eingangsparameter:	FTS_SECTOR_ADDR
+;			FTS_SECTOR_BUF
+;			FTS_FLAGS._LOADED
+;			FTS_FLAGS._DIRTY
+;Ausgangsparameter:	A		0 	= ok
+;					<> 0	= Fehlercode
+;			FTS_SECTOR_ADDR
+;			FTS_SECTOR_BUF
+;			FTS_FLAGS._LOADED
+;			FTS_FLAGS._DIRTY
+;veränderte Register:	CCR, B, X, Y, R[8..13]
+;------------------------------------------------------------------------------
+					;
+FTS_FLASH:
+	BRCLR	FTS_FLAGS,_LOADED,FTS_FLASH8
+	BRCLR	FTS_FLAGS,_DIRTY,FTS_FLASH8
+					;wenn Sektorbuffer geladen und verändert
+					;dann
+	LDX	#RAM_CODE		;
+	LDY	#FTS_CODE_BUF		;
+	LDD	#RAM_CODE_CNT		;
+	STD	R12			;
+FTS_FLASH1:
+	LDAA	1,X+			;  Programmiercode ins RAM transferieren
+	STAA	1,Y+			;
+	LDD	R12			;
+	SUBD	#1			;
+	STD	R12			;
+	BNE	FTS_FLASH1		;
+	LDX	#FTS_SECTOR_BUF		;
+	LDY	FTS_SECTOR_ADDR		;
+	TFR	CCR,A			;
+	ANDA	#I_BIT			;  wenn I-bit gesetzt,
+	BEQ	FTS_FLASH2		;  dann
+	BSET	FTS_FLAGS,_LAST_I_BIT	;    _LAST_I_BIT setzen
+	BRA	FTS_FLASH3		;  sonst
+FTS_FLASH2:
+	BCLR	FTS_FLAGS,_LAST_I_BIT	;    _LAST_I_BIT rücksetzen
+FTS_FLASH3:
+	SEI				;  Interrupts sperren
+	JSR	FTS_CODE_BUF		;  Programmiercode im RAM ausführen
+	BRSET	FTS_FLAGS,_LAST_I_BIT,FTS_FLASH4
+					;  wenn _LAST_I_BIT nicht gesetzt,
+					;  dann
+	CLI				;    Interrupts freigeben
+FTS_FLASH4:
+	CMPA	#0			;  wenn Fehler passiert
+	BNE	FTS_FLASH9		;  dann
+					;    mit Fehlercode zurück
+FTS_FLASH8:
+	JSR	FTS_RESET		;Sektorbuffer fegen und Flags rücksetzen
+	CLRA				;ok, mit A = 0 zurück
+					;
+FTS_FLASH9:
+	RTS				;
+					;
+	dcb.b	6, 0FFh			;
+	SWI				;
+					;
+;------------------------------------------------------------------------------

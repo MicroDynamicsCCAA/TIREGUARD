@@ -1,0 +1,29 @@
+	nolist
+	title	"s12ga_COMLINE.sfr  Copyright (C) 2011-2014, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_COMLINE.sfr
+;
+;Copyright: 	(C) 2011-2014, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	27.11.2014
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12ga_COMLINE.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  01.11
+;
+;27.11.2014	Angepasst für TIREGUARD 4
+;------------------------------------------------------------------------------
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Assembly Condition Codes
+;//////////////////////////////////////////////////////////////////////////////
+					;
+_true:			equ	0FFh	;
+_false:			equ	0	;
+					;
+fE_CMD_CALLBACK:	equ	_false	;
+fV_CMD_CALLBACK:	equ	_false	;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

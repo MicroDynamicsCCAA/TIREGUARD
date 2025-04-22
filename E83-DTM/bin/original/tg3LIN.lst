@@ -1,0 +1,1495 @@
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title	"tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;TireGuard 3a	Betriebsprogramm
+ 1018    6                      ;------------------------------------------------------------------------------
+ 1019    7                      ;Module:	tg3LIN.asm
+ 1020    8                      ;
+ 1021    9                      ;Copyright: 	(C) 2005-2011, micro dynamics GmbH
+ 1022   10                      ;Author(s):	Michael Frank
+ 1023   11                      ;Update:	20.01.2011
+ 1024   12                      ;
+ 1025   13                      ;Description:	LIN Kommunikation mit Triggersendern und Empfangsantennen
+ 1026   14                      ;------------------------------------------------------------------------------
+ 1027   15                      ;Revision History:	Original Version  11.05
+ 1028   16                      ;
+ 1029   17                      ;20.01.2011	Version 2.50
+ 1030   18                      ;05.07.2008	Version 2.10
+ 1031   19                      ;		Autotransmission OFF, neue zusätzliche Schedule Table
+ 1032   20                      ;		wenn mehrere Telegramme im HF-Empfangsbuffer einer Antenne,
+ 1033   21                      ;		dann jetzt jedes Telegramm auswerten, nicht nur das letzte
+ 1034   22                      ;
+ 1035   23                      ;27.11.2007	Version 2.00
+ 1036   24                      ;		Ergänzungen für LIN-Empfangsmultiplexer
+ 1037   25                      ;
+ 1038   26                      ;24.11.2006	Version 1.00
+ 1039   27                      ;20.11.2006	Einbindung des Treibers MC33879
+ 1040   28                      ;		- Deklaration der Variablen PWS_STATE
+ 1041   29                      ;		- Änderung der Schedule Tabellen
+ 1042   30                      ;		- Änderungen in Funktion NEXT_FRAME
+ 1043   31                      ;08.11.2006	Anpassung an MC9S12C128
+ 1044   32                      ;
+ 1045   33                      ;09.02.2006
+ 1046   34                      ;10.12.2005
+ 1047   35                      ;------------------------------------------------------------------------------
+ 1048   36                      					;
+ 1049   37                      ;fSINGLE:	equ	*
+ 1050   38                      					;
+ 1051   39                      ;------------------------------------------------------------------------------
+ 1052   40                      ;Externals
+ 1053   41                      ;------------------------------------------------------------------------------
+ 1054   42                      					;
+ 1055   43          0000 0000    ifne fDebug
+ 1061   49                       endif
+ 1062   50                      					;
+ 1063   51                      	xref	LIN_READ		;Code
+ 1064   52                      	xref	LIN_REQUEST		;Code
+ 1065   53                      	xref	LIN_RESET		;Code
+ 1066   54                      	xref	LIN_STATUS		;Code
+ 1067   55                      	xref	LIN_WRITE		;Code
+ 1068   56                      	xref	PWS_UPDATE		;Code
+ 1069   57                      ;
+ 1070   58                      ;begin 27.11.2007
+ 1071   59                      	xref	MUX_UPDATE		;Code
+ 1072   60                      ;end
+ 1073   61                      ;
+ 1074   62                      
+ 1075   63                      ;
+ 1076   64                      ;begin 05.07.2008
+ 1077   65                      	xref	LIN_IDENTIFIER_TBL	;roData
+ 1078   66                      ;end
+ 1079   67                      ;
+ 1080   68                      					;
+ 1081   69                      	xref	BD_9600_REL		;Number
+ 1082   70                      					;
+ 1083   71                      ;------------------------------------------------------------------------------
+ 1084   72                      ;Publics
+ 1085   73                      ;------------------------------------------------------------------------------
+ 1086   74                      					;
+ 1087   75                      	xdef	LIN_START		;Code
+ 1088   76                      	xdef	LIN_RUN			;Code
+ 1089   77                      					;
+ 1090   78                      	xdef	LIN_ADC_BUF		;Data
+ 1091   79                      	xdef	LIN_ANT_FLAGS		;Data
+ 1092   80                      	xdef	LIN_CONFIG_BUF		;Data
+ 1093   81                      	xdef	LIN_RX_BUF		;Data
+ 1094   82                      	xdef	LIN_RX_POS		;Data
+ 1095   83                      ;
+ 1096   84                      ;begin 05.07.2008
+ 1097   85                      ;	xdef	LIN_TX_POS
+ 1098   86                      ;end
+ 1099   87                      ;
+ 1100   88                      	xdef	LIN_TIME_CTR		;Data
+ 1101   89                      					;
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1102   90                      ;------------------------------------------------------------------------------
+ 1103   91                      ;Constants
+ 1104   92                      ;------------------------------------------------------------------------------
+ 1105   93                      					;
+ 1106   94                      					;Zeitangaben in Einheiten der Programmzykluszeit (10 ms):
+ 1107   95          0000 0002   CLOCK_CT:	equ	2		;LIN-Takt
+ 1108   96          0000 01F4   ANTENNA_CT:	equ	500		;Antennenprüfungstakt = 5 Sekunden
+ 1109   97                      					;
+ 1110   98                      ;//////////////////////////////////////////////////////////////////////////////
+ 1111   99                      ;Hardware dependent constants
+ 1112  100                      ;//////////////////////////////////////////////////////////////////////////////
+ 1113  101                      					;Versorgungsspannungs-Bitmasken
+ 1114  102          0000 0010   _TX_FR:		equ	bit4		;
+ 1115  103          0000 0040   _TX_FL:		equ	bit6		;
+ 1116  104          0000 0001   _TX_RR:		equ	bit0		;
+ 1117  105          0000 0004   _TX_RL:		equ	bit2		;
+ 1118  106                      					;
+ 1119  107          0000 0008   _RX_FR:		equ	bit3		;
+ 1120  108          0000 0020   _RX_FL:		equ	bit5		;
+ 1121  109          0000 0080   _RX_RR:		equ	bit7		;
+ 1122  110          0000 0002   _RX_RL:		equ	bit1		;
+ 1123  111                      					;
+ 1124  112                      .roData:		section
+ 1125  113                      					;
+ 1126  114                      ;------------------------------------------------------------------------------
+ 1127  115                      ;Schedule Tables
+ 1128  116                      ;
+ 1129  117                      ;Jeder Frame-Eintrag umfasst fest 5 Bytes.
+ 1130  118                      ;Wenn ein internes Kommando vorliegt (Messager-ID = 80h) oder das
+ 1131  119                      ;Schreib-/Lese Flag (Command.7) gesetzt ist, ist zusätzlich die
+ 1132  120                      ;Anzahl Datenbytes (Command.[0..3]) zu berücksichtigen.
+ 1133  121                      ;
+ 1134  122                      ;Byte 0:	Message-ID      0..3Bh	Übertragung von Signalen
+ 1135  123                      ;				80h	internes Kommando
+ 1136  124                      ;Byte 1:	Command
+ 1137  125                      ;		bit[0..3]	1..8	Anzahl Datenbytes
+ 1138  126                      ;		bit[4..5]	0..3	RX-Multiplexer-Position
+ 1139  127                      ;		bit[6]			reserviert
+ 1140  128                      ;		bit[7]			Schreib-/Lese# Flag
+ 1141  129                      ;Byte 2:	Delay 			in Anzahl der LIN-Takte
+ 1142  130                      ;Bytes [3..4]	DataPointer		Zeiger auf DataField (Command.7 = 1)
+ 1143  131                      ;					Zeiger auf Empfangsbuffer (Command.7 = 0)
+ 1144  132                      ;Bytes [5..x]	DataField		Botschaft (Command.7 = 1)
+ 1145  133                      ;------------------------------------------------------------------------------
+ 1146  134                      					;
+ 1147  135                      ;------------------------------------------------------------------------------
+ 1148  136                      ;Spannung einschalten
+ 1149  137                      					;
+ 1150  138                      INITIALIZATION_TBL:
+ 1151  139                      					;
+ 1152  140                      INIT_TX1:
+ 1153  141                      B_INIT_OFF:
+ 1154  142   000000 8011 04     		dc.b	80h, 11h, 4	;Power-Off
+ 1155  143   000003 xxxx        		dc.w	PWS_STATE	;
+ 1156  144   000005 BF          		dc.b	LOW(~ _TX_FL)	;
+ 1157  145                      					;
+ 1158  146                      B_INIT_ON:
+ 1159  147   000006 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1160  148   000009 xxxx        		dc.w	PWS_STATE	;
+ 1161  149   00000B 40          		dc.b	_TX_FL		;
+ 1162  150                      					;
+ 1163  151   00000C 21B4 00     		dc.b	21h, 0B4h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1164  152   00000F xxxx        		dc.w	*+2		;
+ 1165  153   000011 0F01 00FE   		dc.b	0Fh,01h,00h,0FEh;Trigger 1
+ 1166  154                      					;
+ 1167  155   000015 02B2 00     		dc.b	02h, 0B2h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1168  156   000018 xxxx        		dc.w	*+2		;
+ 1169  157                      					;
+ 1170  158          0000 001A   oINIT_OFF_ID:	equ	(* - B_INIT_OFF); = 26
+ 1171  159          0000 0014   oINIT_ON_ID:	equ	(* - B_INIT_ON)	; = 20
+ 1172  160                      					;
+ 1173  161   00001A 0164        		dc.b	01h,64h		;
+ 1174  162                      					;
+ 1175  163   00001C 2434 00     		dc.b	24h, 34h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1176  164   00001F xxxx        		dc.w	TX1_CONF	;
+ 1177  165                      					;
+ 1178  166          0000 0021   INIT_ENTRY_SIZE: equ	(* - INIT_TX1)	; = 33
+ 1179  167                      					;
+ 1180  168   000021 8011 04     INIT_RX1:	dc.b	80h, 11h, 4	;Power-Off
+ 1181  169   000024 xxxx        		dc.w	PWS_STATE	;
+ 1182  170   000026 DF          		dc.b	LOW(~ _RX_FL)	;
+ 1183  171                      					;
+ 1184  172   000027 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1185  173   00002A xxxx        		dc.w	PWS_STATE	;
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1186  174   00002C 20          		dc.b	_RX_FL		;
+ 1187  175                      					;
+ 1188  176   00002D 21B4 00     		dc.b	21h, 0B4h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1189  177   000030 xxxx        		dc.w	*+2		;
+ 1190  178   000032 0F05 00FE   		dc.b	0Fh,05h,00h,0FEh;Empfänger 5
+ 1191  179                      					;
+ 1192  180   000036 02B2 00     		dc.b	02h, 0B2h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1193  181   000039 xxxx        		dc.w	*+2		;
+ 1194  182   00003B 0564        		dc.b	05h,64h		;
+ 1195  183                      					;
+ 1196  184   00003D 2434 00     		dc.b	24h, 34h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1197  185   000040 xxxx        		dc.w	RX1_CONF	;
+ 1198  186                      					;
+ 1199  187          0000 0000    ifdef fSINGLE
+ 1201  189                       endif
+ 1202  190                      					;
+ 1203  191   000042 8011 04     INIT_TX2:	dc.b	80h, 11h, 4	;Power-Off
+ 1204  192   000045 xxxx        		dc.w	PWS_STATE	;
+ 1205  193   000047 EF          		dc.b	LOW(~ _TX_FR)	;
+ 1206  194                      					;
+ 1207  195   000048 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1208  196   00004B xxxx        		dc.w	PWS_STATE	;
+ 1209  197   00004D 10          		dc.b	_TX_FR		;
+ 1210  198                      					;
+ 1211  199   00004E 2194 00     		dc.b	21h, 94h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1212  200   000051 xxxx        		dc.w	*+2		;
+ 1213  201   000053 0F02 00FE   		dc.b	0Fh,02h,00h,0FEh;Trigger 2
+ 1214  202                      					;
+ 1215  203   000057 0292 00     		dc.b	02h, 92h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1216  204   00005A xxxx        		dc.w	*+2		;
+ 1217  205   00005C 0264        		dc.b	02h,64h		;
+ 1218  206                      					;
+ 1219  207   00005E 2414 00     		dc.b	24h, 14h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1220  208   000061 xxxx        		dc.w	TX2_CONF	;
+ 1221  209                      					;
+ 1222  210   000063 8011 04     INIT_RX2:	dc.b	80h, 11h, 4	;Power-Off
+ 1223  211   000066 xxxx        		dc.w	PWS_STATE	;
+ 1224  212   000068 F7          		dc.b	LOW(~ _RX_FR)	;
+ 1225  213                      					;
+ 1226  214   000069 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1227  215   00006C xxxx        		dc.w	PWS_STATE	;
+ 1228  216   00006E 08          		dc.b	_RX_FR		;
+ 1229  217                      					;
+ 1230  218   00006F 2194 00     		dc.b	21h, 94h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1231  219   000072 xxxx        		dc.w	*+2		;
+ 1232  220   000074 0F06 00FE   		dc.b	0Fh,06h,00h,0FEh;Empfänger 6
+ 1233  221                      					;
+ 1234  222   000078 0292 00     		dc.b	02h, 92h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1235  223   00007B xxxx        		dc.w	*+2		;
+ 1236  224   00007D 0664        		dc.b	06h,64h		;
+ 1237  225                      					;
+ 1238  226   00007F 2414 00     		dc.b	24h, 14h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1239  227   000082 xxxx        		dc.w	RX1_CONF	;
+ 1240  228                      					;
+ 1241  229   000084 8011 04     INIT_TX3:	dc.b	80h, 11h, 4	;Power-Off
+ 1242  230   000087 xxxx        		dc.w	PWS_STATE	;
+ 1243  231   000089 FB          		dc.b	LOW(~ _TX_RL)	;
+ 1244  232                      					;
+ 1245  233   00008A 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1246  234   00008D xxxx        		dc.w	PWS_STATE	;
+ 1247  235   00008F 04          		dc.b	_TX_RL		;
+ 1248  236                      					;
+ 1249  237   000090 2184 00     		dc.b	21h, 84h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1250  238   000093 xxxx        		dc.w	*+2		;
+ 1251  239   000095 0F03 00FE   		dc.b	0Fh,03h,00h,0FEh;Trigger 3
+ 1252  240                      					;
+ 1253  241   000099 0282 00     		dc.b	02h, 82h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1254  242   00009C xxxx        		dc.w	*+2		;
+ 1255  243   00009E 0364        		dc.b	03h,64h		;
+ 1256  244                      					;
+ 1257  245   0000A0 2404 00     		dc.b	24h, 04h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1258  246   0000A3 xxxx        		dc.w	TX1_CONF	;
+ 1259  247                      					;
+ 1260  248   0000A5 8011 04     INIT_RX3:	dc.b	80h, 11h, 4	;Power-Off
+ 1261  249   0000A8 xxxx        		dc.w	PWS_STATE	;
+ 1262  250   0000AA FD          		dc.b	LOW(~ _RX_RL)	;
+ 1263  251                      					;
+ 1264  252   0000AB 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1265  253   0000AE xxxx        		dc.w	PWS_STATE	;
+ 1266  254   0000B0 02          		dc.b	_RX_RL		;
+ 1267  255                      					;
+ 1268  256   0000B1 2184 00     		dc.b	21h, 84h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1269  257   0000B4 xxxx        		dc.w	*+2		;
+ 1270  258   0000B6 0F07 00FE   		dc.b	0Fh,07h,00h,0FEh;Empfänger 7
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1271  259                      					;
+ 1272  260   0000BA 0282 00     		dc.b	02h, 82h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1273  261   0000BD xxxx        		dc.w	*+2		;
+ 1274  262   0000BF 0764        		dc.b	07h,64h		;
+ 1275  263                      					;
+ 1276  264   0000C1 2404 00     		dc.b	24h, 04h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1277  265   0000C4 xxxx        		dc.w	RX3_CONF	;
+ 1278  266                      					;
+ 1279  267   0000C6 8011 04     INIT_TX4:	dc.b	80h, 11h, 4	;Power-Off
+ 1280  268   0000C9 xxxx        		dc.w	PWS_STATE	;
+ 1281  269   0000CB FE          		dc.b	LOW(~ _TX_RR)	;
+ 1282  270                      					;
+ 1283  271   0000CC 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1284  272   0000CF xxxx        		dc.w	PWS_STATE	;
+ 1285  273   0000D1 01          		dc.b	_TX_RR		;
+ 1286  274                      					;
+ 1287  275   0000D2 21A4 00     		dc.b	21h, 0A4h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1288  276   0000D5 xxxx        		dc.w	*+2		;
+ 1289  277   0000D7 0F04 00FE   		dc.b	0Fh,04h,00h,0FEh;Trigger 4
+ 1290  278                      					;
+ 1291  279   0000DB 02A2 00     		dc.b	02h, 0A2h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1292  280   0000DE xxxx        		dc.w	*+2		;
+ 1293  281   0000E0 0464        		dc.b	04h,64h		;
+ 1294  282                      					;
+ 1295  283   0000E2 2424 00     		dc.b	24h, 24h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1296  284   0000E5 xxxx        		dc.w	TX4_CONF	;
+ 1297  285                      					;
+ 1298  286   0000E7 8011 04     INIT_RX4:	dc.b	80h, 11h, 4	;Power-Off
+ 1299  287   0000EA xxxx        		dc.w	PWS_STATE	;
+ 1300  288   0000EC 7F          		dc.b	LOW(~ _RX_RR)	;
+ 1301  289                      					;
+ 1302  290   0000ED 8041 02     		dc.b	80h, 41h, 2	;Power-On
+ 1303  291   0000F0 xxxx        		dc.w	PWS_STATE	;
+ 1304  292   0000F2 80          		dc.b	_RX_RR		;
+ 1305  293                      					;
+ 1306  294   0000F3 21A4 00     		dc.b	21h, 0A4h, 0	;Message-ID = 21h, 4 Bytes senden
+ 1307  295   0000F6 xxxx        		dc.w	*+2		;
+ 1308  296   0000F8 0F08 00FE   		dc.b	0Fh,08h,00h,0FEh;Empfänger 8
+ 1309  297                      					;
+ 1310  298   0000FC 02A2 00     		dc.b	02h, 0A2h, 0	;Message-ID = 02h, 2 Bytes senden
+ 1311  299   0000FF xxxx        		dc.w	*+2		;
+ 1312  300   000101 0864        		dc.b	08h,64h		;
+ 1313  301                      					;
+ 1314  302   000103 2424 00     		dc.b	24h, 24h, 0	;Message-ID = 24h, 4 Bytes empfangen
+ 1315  303   000106 xxxx        		dc.w	RX4_CONF	;
+ 1316  304                      					;
+ 1317  305          0000 0001    ifndef fSINGLE
+ 1318  306                      INITIALIZATION_END:
+ 1319  307                       endif
+ 1320  308                      					;
+ 1321  309                      ;------------------------------------------------------------------------------
+ 1322  310                      ;Diagnosewerte abfragen
+ 1323  311                      					;
+ 1324  312                      REQUEST_DIAG_TBL:
+ 1325  313                      					;
+ 1326  314   000108 02B2 00     REQ_DIAG_TX1:	dc.b	02h, 0B2h, 0
+ 1327  315   00010B xxxx        		dc.w	*+2
+ 1328  316   00010D 01A6        		dc.b	01h,0A6h	;Trigger 1
+ 1329  317                      
+ 1330  318   00010F 2634 00     		dc.b	26h, 34h, 0
+ 1331  319   000112 xxxx        		dc.w	TX1_DIAG
+ 1332  320                      					;
+ 1333  321   000114 02B2 00     REQ_DIAG_RX1:	dc.b	02h, 0B2h, 0
+ 1334  322   000117 xxxx        		dc.w	*+2
+ 1335  323   000119 05A6        		dc.b	05h,0A6h	;Empfänger 5
+ 1336  324                      
+ 1337  325   00011B 2634 00     		dc.b	26h, 34h, 0
+ 1338  326   00011E xxxx        		dc.w	RX1_DIAG
+ 1339  327                      					;
+ 1340  328          0000 0000    ifdef fSINGLE
+ 1342  330                       endif
+ 1343  331                      					;
+ 1344  332   000120 0292 00     REQ_DIAG_TX2:	dc.b	02h, 92h, 0
+ 1345  333   000123 xxxx        		dc.w	*+2
+ 1346  334   000125 02A6        		dc.b	02h,0A6h	;Trigger 2
+ 1347  335                      
+ 1348  336   000127 2614 00     		dc.b	26h, 14h, 0
+ 1349  337   00012A xxxx        		dc.w	TX2_DIAG
+ 1350  338                      					;
+ 1351  339   00012C 0292 00     REQ_DIAG_RX2:	dc.b	02h, 92h, 0
+ 1352  340   00012F xxxx        		dc.w	*+2
+ 1353  341   000131 06A6        		dc.b	06h,0A6h	;Empfänger 6
+ 1354  342                      
+ 1355  343   000133 2614 00     		dc.b	26h, 14h, 0
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1356  344   000136 xxxx        		dc.w	RX2_DIAG
+ 1357  345                      					;
+ 1358  346   000138 0282 00     REQ_DIAG_TX3:	dc.b	02h, 82h, 0
+ 1359  347   00013B xxxx        		dc.w	*+2
+ 1360  348   00013D 03A6        		dc.b	03h,0A6h	;Trigger 3
+ 1361  349                      
+ 1362  350   00013F 2604 00     		dc.b	26h, 04h, 0
+ 1363  351   000142 xxxx        		dc.w	TX3_DIAG
+ 1364  352                      					;
+ 1365  353   000144 0282 00     REQ_DIAG_RX3:	dc.b	02h, 82h, 0
+ 1366  354   000147 xxxx        		dc.w	*+2
+ 1367  355   000149 07A6        		dc.b	07h,0A6h	;Empfänger 7
+ 1368  356                      
+ 1369  357   00014B 2604 00     		dc.b	26h, 04h, 0
+ 1370  358   00014E xxxx        		dc.w	RX3_DIAG
+ 1371  359                      					;
+ 1372  360   000150 02A2 00     REQ_DIAG_TX4:	dc.b	02h, 0A2h, 0
+ 1373  361   000153 xxxx        		dc.w	*+2
+ 1374  362   000155 04A6        		dc.b	04h,0A6h	;Trigger 4
+ 1375  363                      
+ 1376  364   000157 2624 00     		dc.b	26h, 24h, 0
+ 1377  365   00015A xxxx        		dc.w	TX4_DIAG
+ 1378  366                      					;
+ 1379  367   00015C 02A2 00     REQ_DIAG_RX4:	dc.b	02h, 0A2h, 0
+ 1380  368   00015F xxxx        		dc.w	*+2
+ 1381  369   000161 08A6        		dc.b	08h,0A6h	;Empfänger 8
+ 1382  370                      
+ 1383  371   000163 2624 00     		dc.b	26h, 24h, 0
+ 1384  372   000166 xxxx        		dc.w	RX4_DIAG
+ 1385  373                      					;
+ 1386  374          0000 0001    ifndef fSINGLE
+ 1387  375                      REQUEST_DIAG_END:
+ 1388  376                       endif
+ 1389  377                      					;
+ 1390  378                      ;------------------------------------------------------------------------------
+ 1391  379                      ;Messdaten abfragen
+ 1392  380                      					;
+ 1393  381                      REQUEST_DATA_TBL:
+ 1394  382                      
+ 1395  383                      REQ_DATA_RX1:
+ 1396  384   000168 21B4 01     		dc.b	21h, 0B4h, 1	;Trigger 1 einschalten
+ 1397  385   00016B xxxx        		dc.w	*+2
+ 1398  386   00016D 0101 0043   		dc.b	01h,01h,00h,43h
+ 1399  387                      
+ 1400  388   000171 21B4 05     		dc.b	21h, 0B4h, 5	;Trigger 1 ausschalten
+ 1401  389   000174 xxxx        		dc.w	*+2
+ 1402  390   000176 0101 0040   		dc.b	01h,01h,00h,40h
+ 1403  391                      ;---
+ 1404  392                      
+ 1405  393                      B_READ_CMD:
+ 1406  394                      B_CMD:
+ 1407  395   00017A 02B2 00     		dc.b	02h, 0B2h, 0
+ 1408  396   00017D xxxx        		dc.w	*+2
+ 1409  397                      
+ 1410  398          0000 0005   CMD_SIZE:	equ	(* - B_CMD)	; = 5
+ 1411  399                      
+ 1412  400   00017F 0537        		dc.b	05h,037h	;Empfänger 5
+ 1413  401                      
+ 1414  402   000181 3738 00     		dc.b	37h, 38h, 0
+ 1415  403   000184 xxxx        		dc.w	RX_DATA0
+ 1416  404                      
+ 1417  405   000186 3838 00     		dc.b	38h, 38h, 0
+ 1418  406   000189 xxxx        		dc.w	RX_DATA1
+ 1419  407                      
+ 1420  408   00018B 3938 00     		dc.b	39h, 38h, 0
+ 1421  409   00018E xxxx        		dc.w	RX_DATA2
+ 1422  410                      
+ 1423  411          0000 0016   READ_CMD_SIZE:	equ	(* - B_READ_CMD); = 22
+ 1424  412                      					;
+ 1425  413          0000 0000    ifdef fSINGLE
+ 1427  415                       endif
+ 1428  416                      ;---
+ 1429  417   000190 0292 00     		dc.b	02h, 92h, 0
+ 1430  418   000193 xxxx        		dc.w	*+2
+ 1431  419                      
+ 1432  420   000195 0637        		dc.b	06h,037h	;Empfänger 6
+ 1433  421                      
+ 1434  422   000197 3718 00     		dc.b	37h, 18h, 0
+ 1435  423   00019A xxxx        		dc.w	RX_DATA0
+ 1436  424                      
+ 1437  425   00019C 3818 00     		dc.b	38h, 18h, 0
+ 1438  426   00019F xxxx        		dc.w	RX_DATA1
+ 1439  427                      
+ 1440  428   0001A1 3918 00     		dc.b	39h, 18h, 0
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1441  429   0001A4 xxxx        		dc.w	RX_DATA2
+ 1442  430                      ;---
+ 1443  431   0001A6 0282 00     		dc.b	02h, 82h, 0
+ 1444  432   0001A9 xxxx        		dc.w	*+2
+ 1445  433   0001AB 0737        		dc.b	07h,037h	;Empfänger 7
+ 1446  434                      
+ 1447  435   0001AD 3708 00     		dc.b	37h, 08h, 0
+ 1448  436   0001B0 xxxx        		dc.w	RX_DATA0
+ 1449  437                      
+ 1450  438   0001B2 3808 00     		dc.b	38h, 08h, 0
+ 1451  439   0001B5 xxxx        		dc.w	RX_DATA1
+ 1452  440                      
+ 1453  441   0001B7 3908 00     		dc.b	39h, 08h, 0
+ 1454  442   0001BA xxxx        		dc.w	RX_DATA2
+ 1455  443                      ;---
+ 1456  444   0001BC 02A2 00     		dc.b	02h, 0A2h, 0
+ 1457  445   0001BF xxxx        		dc.w	*+2
+ 1458  446   0001C1 0837        		dc.b	08h,037h	;Empfänger 8
+ 1459  447                      
+ 1460  448   0001C3 3728 00     		dc.b	37h, 28h, 0
+ 1461  449   0001C6 xxxx        		dc.w	RX_DATA0
+ 1462  450                      
+ 1463  451   0001C8 3828 00     		dc.b	38h, 28h, 0
+ 1464  452   0001CB xxxx        		dc.w	RX_DATA1
+ 1465  453                      
+ 1466  454   0001CD 3928 00     		dc.b	39h, 28h, 0
+ 1467  455   0001D0 xxxx        		dc.w	RX_DATA2
+ 1468  456                      					;
+ 1469  457                      REQ_DATA_RX2:
+ 1470  458   0001D2 2194 01     		dc.b	21h, 94h, 1	;Trigger 2 einschalten
+ 1471  459   0001D5 xxxx        		dc.w	*+2
+ 1472  460   0001D7 0202 0043   		dc.b	02h,02h,00h,43h
+ 1473  461                      
+ 1474  462   0001DB 2194 05     		dc.b	21h, 94h, 5	;Trigger 2 ausschalten
+ 1475  463   0001DE xxxx        		dc.w	*+2
+ 1476  464   0001E0 0202 0040   		dc.b	02h,02h,00h,40h
+ 1477  465                      ;---
+ 1478  466   0001E4 02B2 00     		dc.b	02h, 0B2h, 0
+ 1479  467   0001E7 xxxx        		dc.w	*+2
+ 1480  468   0001E9 0537        		dc.b	05h,037h	;Empfänger 5
+ 1481  469                      
+ 1482  470   0001EB 3738 00     		dc.b	37h, 38h, 0
+ 1483  471   0001EE xxxx        		dc.w	RX_DATA0
+ 1484  472                      
+ 1485  473   0001F0 3838 00     		dc.b	38h, 38h, 0
+ 1486  474   0001F3 xxxx        		dc.w	RX_DATA1
+ 1487  475                      
+ 1488  476   0001F5 3938 00     		dc.b	39h, 38h, 0
+ 1489  477   0001F8 xxxx        		dc.w	RX_DATA2
+ 1490  478                      ;---
+ 1491  479   0001FA 0292 00     		dc.b	02h, 92h, 0
+ 1492  480   0001FD xxxx        		dc.w	*+2
+ 1493  481   0001FF 0637        		dc.b	06h,037h	;Empfänger 6
+ 1494  482                      
+ 1495  483   000201 3718 00     		dc.b	37h, 18h, 0
+ 1496  484   000204 xxxx        		dc.w	RX_DATA0
+ 1497  485                      
+ 1498  486   000206 3818 00     		dc.b	38h, 18h, 0
+ 1499  487   000209 xxxx        		dc.w	RX_DATA1
+ 1500  488                      
+ 1501  489   00020B 3918 00     		dc.b	39h, 18h, 0
+ 1502  490   00020E xxxx        		dc.w	RX_DATA2
+ 1503  491                      ;---
+ 1504  492   000210 0282 00     		dc.b	02h, 82h, 0
+ 1505  493   000213 xxxx        		dc.w	*+2
+ 1506  494   000215 0737        		dc.b	07h,037h	;Empfänger 7
+ 1507  495                      
+ 1508  496   000217 3708 00     		dc.b	37h, 08h, 0
+ 1509  497   00021A xxxx        		dc.w	RX_DATA0
+ 1510  498                      
+ 1511  499   00021C 3808 00     		dc.b	38h, 08h, 0
+ 1512  500   00021F xxxx        		dc.w	RX_DATA1
+ 1513  501                      
+ 1514  502   000221 3908 00     		dc.b	39h, 08h, 0
+ 1515  503   000224 xxxx        		dc.w	RX_DATA2
+ 1516  504                      ;---
+ 1517  505   000226 02A2 00     		dc.b	02h, 0A2h, 0
+ 1518  506   000229 xxxx        		dc.w	*+2
+ 1519  507   00022B 0837        		dc.b	08h,037h	;Empfänger 8
+ 1520  508                      
+ 1521  509   00022D 3728 00     		dc.b	37h, 28h, 0
+ 1522  510   000230 xxxx        		dc.w	RX_DATA0
+ 1523  511                      
+ 1524  512   000232 3828 00     		dc.b	38h, 28h, 0
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1525  513   000235 xxxx        		dc.w	RX_DATA1
+ 1526  514                      
+ 1527  515   000237 3928 00     		dc.b	39h, 28h, 0
+ 1528  516   00023A xxxx        		dc.w	RX_DATA2
+ 1529  517                      					;
+ 1530  518                      REQ_DATA_RX3:
+ 1531  519   00023C 2184 01     		dc.b	21h, 84h, 1	;Trigger 3 einschalten
+ 1532  520   00023F xxxx        		dc.w	*+2
+ 1533  521   000241 0303 0043   		dc.b	03h,03h,00h,43h
+ 1534  522                      
+ 1535  523   000245 2184 05     		dc.b	21h, 84h, 5	;Trigger 3 ausschalten
+ 1536  524   000248 xxxx        		dc.w	*+2
+ 1537  525   00024A 0303 0040   		dc.b	03h,03h,00h,40h
+ 1538  526                      ;---
+ 1539  527   00024E 02B2 00     		dc.b	02h, 0B2h, 0
+ 1540  528   000251 xxxx        		dc.w	*+2
+ 1541  529   000253 0537        		dc.b	05h,037h	;Empfänger 5
+ 1542  530                      
+ 1543  531   000255 3738 00     		dc.b	37h, 38h, 0
+ 1544  532   000258 xxxx        		dc.w	RX_DATA0
+ 1545  533                      
+ 1546  534   00025A 3838 00     		dc.b	38h, 38h, 0
+ 1547  535   00025D xxxx        		dc.w	RX_DATA1
+ 1548  536                      
+ 1549  537   00025F 3938 00     		dc.b	39h, 38h, 0
+ 1550  538   000262 xxxx        		dc.w	RX_DATA2
+ 1551  539                      ;---
+ 1552  540   000264 0292 00     		dc.b	02h, 92h, 0
+ 1553  541   000267 xxxx        		dc.w	*+2
+ 1554  542   000269 0637        		dc.b	06h,037h	;Empfänger 6
+ 1555  543                      
+ 1556  544   00026B 3718 00     		dc.b	37h, 18h, 0
+ 1557  545   00026E xxxx        		dc.w	RX_DATA0
+ 1558  546                      
+ 1559  547   000270 3818 00     		dc.b	38h, 18h, 0
+ 1560  548   000273 xxxx        		dc.w	RX_DATA1
+ 1561  549                      
+ 1562  550   000275 3918 00     		dc.b	39h, 18h, 0
+ 1563  551   000278 xxxx        		dc.w	RX_DATA2
+ 1564  552                      ;---
+ 1565  553   00027A 0282 00     		dc.b	02h, 82h, 0
+ 1566  554   00027D xxxx        		dc.w	*+2
+ 1567  555   00027F 0737        		dc.b	07h,037h	;Empfänger 7
+ 1568  556                      
+ 1569  557   000281 3708 00     		dc.b	37h, 08h, 0
+ 1570  558   000284 xxxx        		dc.w	RX_DATA0
+ 1571  559                      
+ 1572  560   000286 3808 00     		dc.b	38h, 08h, 0
+ 1573  561   000289 xxxx        		dc.w	RX_DATA1
+ 1574  562                      
+ 1575  563   00028B 3908 00     		dc.b	39h, 08h, 0
+ 1576  564   00028E xxxx        		dc.w	RX_DATA2
+ 1577  565                      ;---
+ 1578  566   000290 02A2 00     		dc.b	02h, 0A2h, 0
+ 1579  567   000293 xxxx        		dc.w	*+2
+ 1580  568   000295 0837        		dc.b	08h,037h	;Empfänger 8
+ 1581  569                      
+ 1582  570   000297 3728 00     		dc.b	37h, 28h, 0
+ 1583  571   00029A xxxx        		dc.w	RX_DATA0
+ 1584  572                      
+ 1585  573   00029C 3828 00     		dc.b	38h, 28h, 0
+ 1586  574   00029F xxxx        		dc.w	RX_DATA1
+ 1587  575                      
+ 1588  576   0002A1 3928 00     		dc.b	39h, 28h, 0
+ 1589  577   0002A4 xxxx        		dc.w	RX_DATA2
+ 1590  578                      					;
+ 1591  579                      REQ_DATA_RX4:
+ 1592  580   0002A6 21A4 01     		dc.b	21h, 0A4h, 1	;Trigger 4 einschalten
+ 1593  581   0002A9 xxxx        		dc.w	*+2
+ 1594  582   0002AB 0404 0043   		dc.b	04h,04h,00h,43h
+ 1595  583                      
+ 1596  584   0002AF 21A4 05     		dc.b	21h, 0A4h, 5	;Trigger 4 ausschalten
+ 1597  585   0002B2 xxxx        		dc.w	*+2
+ 1598  586   0002B4 0404 0040   		dc.b	04h,04h,00h,40h
+ 1599  587                      ;---
+ 1600  588   0002B8 02B2 00     		dc.b	02h, 0B2h, 0
+ 1601  589   0002BB xxxx        		dc.w	*+2
+ 1602  590   0002BD 0537        		dc.b	05h,037h	;Empfänger 5
+ 1603  591                      
+ 1604  592   0002BF 3738 00     		dc.b	37h, 38h, 0
+ 1605  593   0002C2 xxxx        		dc.w	RX_DATA0
+ 1606  594                      
+ 1607  595   0002C4 3838 00     		dc.b	38h, 38h, 0
+ 1608  596   0002C7 xxxx        		dc.w	RX_DATA1
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1609  597                      
+ 1610  598   0002C9 3938 00     		dc.b	39h, 38h, 0
+ 1611  599   0002CC xxxx        		dc.w	RX_DATA2
+ 1612  600                      ;---
+ 1613  601   0002CE 0292 00     		dc.b	02h, 92h, 0
+ 1614  602   0002D1 xxxx        		dc.w	*+2
+ 1615  603   0002D3 0637        		dc.b	06h,037h	;Empfänger 6
+ 1616  604                      
+ 1617  605   0002D5 3718 00     		dc.b	37h, 18h, 0
+ 1618  606   0002D8 xxxx        		dc.w	RX_DATA0
+ 1619  607                      
+ 1620  608   0002DA 3818 00     		dc.b	38h, 18h, 0
+ 1621  609   0002DD xxxx        		dc.w	RX_DATA1
+ 1622  610                      
+ 1623  611   0002DF 3918 00     		dc.b	39h, 18h, 0
+ 1624  612   0002E2 xxxx        		dc.w	RX_DATA2
+ 1625  613                      ;---
+ 1626  614   0002E4 0282 00     		dc.b	02h, 82h, 0
+ 1627  615   0002E7 xxxx        		dc.w	*+2
+ 1628  616   0002E9 0737        		dc.b	07h,037h	;Empfänger 7
+ 1629  617                      
+ 1630  618   0002EB 3708 00     		dc.b	37h, 08h, 0
+ 1631  619   0002EE xxxx        		dc.w	RX_DATA0
+ 1632  620                      
+ 1633  621   0002F0 3808 00     		dc.b	38h, 08h, 0
+ 1634  622   0002F3 xxxx        		dc.w	RX_DATA1
+ 1635  623                      
+ 1636  624   0002F5 3908 00     		dc.b	39h, 08h, 0
+ 1637  625   0002F8 xxxx        		dc.w	RX_DATA2
+ 1638  626                      ;---
+ 1639  627   0002FA 02A2 00     		dc.b	02h, 0A2h, 0
+ 1640  628   0002FD xxxx        		dc.w	*+2
+ 1641  629   0002FF 0837        		dc.b	08h,037h	;Empfänger 8
+ 1642  630                      
+ 1643  631   000301 3728 00     		dc.b	37h, 28h, 0
+ 1644  632   000304 xxxx        		dc.w	RX_DATA0
+ 1645  633                      
+ 1646  634   000306 3828 00     		dc.b	38h, 28h, 0
+ 1647  635   000309 xxxx        		dc.w	RX_DATA1
+ 1648  636                      
+ 1649  637   00030B 3928 00     		dc.b	39h, 28h, 0
+ 1650  638   00030E xxxx        		dc.w	RX_DATA2
+ 1651  639                      ;---
+ 1652  640                      					;
+ 1653  641          0000 0001    ifndef fSINGLE
+ 1654  642                      REQUEST_DATA_END:
+ 1655  643                       endif
+ 1656  644                      					;
+ 1657  645                      ;------------------------------------------------------------------------------
+ 1658  646                      ;Störpegel abfragen
+ 1659  647                      					;
+ 1660  648                      REQUEST_ADC_TBL:
+ 1661  649                      					;
+ 1662  650                      REQ_ADC_TX1:
+ 1663  651   000310 02B2 00     		dc.b	02h, 0B2h, 0
+ 1664  652   000313 xxxx        		dc.w	*+2
+ 1665  653   000315 0185        		dc.b	01h,085h	;Trigger 1
+ 1666  654                      
+ 1667  655   000317 0532 00     		dc.b	05h, 32h, 0
+ 1668  656   00031A xxxx        		dc.w	TX1_ADC
+ 1669  657                      					;
+ 1670  658                      REQ_ADC_RX1:
+ 1671  659   00031C 02B2 00     		dc.b	02h, 0B2h, 0
+ 1672  660   00031F xxxx        		dc.w	*+2
+ 1673  661   000321 0585        		dc.b	05h,085h	;Empfänger 5
+ 1674  662                      
+ 1675  663   000323 0532 00     		dc.b	05h, 32h, 0
+ 1676  664   000326 xxxx        		dc.w	RX1_ADC
+ 1677  665                      					;
+ 1678  666          0000 0000    ifdef fSINGLE
+ 1680  668                       endif
+ 1681  669                      					;
+ 1682  670                      REQ_ADC_TX2:
+ 1683  671   000328 0292 00     		dc.b	02h, 92h, 0
+ 1684  672   00032B xxxx        		dc.w	*+2
+ 1685  673   00032D 0285        		dc.b	02h,085h	;Trigger 2
+ 1686  674                      
+ 1687  675   00032F 0512 00     		dc.b	05h, 12h, 0
+ 1688  676   000332 xxxx        		dc.w	TX2_ADC
+ 1689  677                      					;
+ 1690  678                      REQ_ADC_RX2:
+ 1691  679   000334 0292 00     		dc.b	02h, 92h, 0
+ 1692  680   000337 xxxx        		dc.w	*+2
+ 1693  681   000339 0685        		dc.b	06h,085h	;Empfänger 6
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1694  682                      
+ 1695  683   00033B 0512 00     		dc.b	05h, 12h, 0
+ 1696  684   00033E xxxx        		dc.w	RX2_ADC
+ 1697  685                      					;
+ 1698  686                      REQ_ADC_TX3:
+ 1699  687   000340 0282 00     		dc.b	02h, 82h, 0
+ 1700  688   000343 xxxx        		dc.w	*+2
+ 1701  689   000345 0385        		dc.b	03h,085h	;Trigger 3
+ 1702  690                      
+ 1703  691   000347 0502 00     		dc.b	05h, 02h, 0
+ 1704  692   00034A xxxx        		dc.w	TX3_ADC
+ 1705  693                      					;
+ 1706  694                      REQ_ADC_RX3:
+ 1707  695   00034C 0282 00     		dc.b	02h, 82h, 0
+ 1708  696   00034F xxxx        		dc.w	*+2
+ 1709  697   000351 0785        		dc.b	07h,085h	;Empfänger 7
+ 1710  698                      
+ 1711  699   000353 0502 00     		dc.b	05h, 02h, 0
+ 1712  700   000356 xxxx        		dc.w	RX3_ADC
+ 1713  701                      					;
+ 1714  702                      REQ_ADC_TX4:
+ 1715  703   000358 02A2 00     		dc.b	02h, 0A2h, 0
+ 1716  704   00035B xxxx        		dc.w	*+2
+ 1717  705   00035D 0485        		dc.b	04h,085h	;Trigger 4
+ 1718  706                      
+ 1719  707   00035F 0522 00     		dc.b	05h, 22h, 0
+ 1720  708   000362 xxxx        		dc.w	TX4_ADC
+ 1721  709                      					;
+ 1722  710                      REQ_ADC_RX4:
+ 1723  711   000364 02A2 00     		dc.b	02h, 0A2h, 0
+ 1724  712   000367 xxxx        		dc.w	*+2
+ 1725  713   000369 0885        		dc.b	08h,085h	;Empfänger 8
+ 1726  714                      
+ 1727  715   00036B 0522 00     		dc.b	05h, 22h, 0
+ 1728  716   00036E xxxx        		dc.w	RX4_ADC
+ 1729  717                      					;
+ 1730  718          0000 0001    ifndef fSINGLE
+ 1731  719                      REQUEST_ADC_END:
+ 1732  720                       endif
+ 1733  721                      					;
+ 1734  722                      ;
+ 1735  723                      ;begin 04.07.2008
+ 1736  724                      ;------------------------------------------------------------------------------
+ 1737  725                      ;Auto Transmission ausschalten und Umschalten auf Triggered Transmission
+ 1738  726                      					;
+ 1739  727                      REQUEST_AUTOOFF_TBL:
+ 1740  728                      					;
+ 1741  729                      REQ_AUTOOFF_TX1:
+ 1742  730   000370 02B2 00     		dc.b	02h, 0B2h, 0
+ 1743  731   000373 xxxx        		dc.w	*+2
+ 1744  732   000375 01BA        		dc.b	01h,0BAh	;Trigger 1
+ 1745  733                      
+ 1746  734   000377 3AB8 05     		dc.b    3Ah, 0B8h, 5
+ 1747  735   00037A xxxx        		dc.w	*+2
+ 1748  736   00037C 45FF FFFF   		dc.b	45h,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+             000380 FFFF FFFF  
+ 1749  737                      					;
+ 1750  738          0000 0000    ifdef fSINGLE
+ 1752  740                       endif
+ 1753  741                      					;
+ 1754  742                      REQ_AUTOOFF_TX2:
+ 1755  743   000384 0292 00     		dc.b	02h, 92h, 0
+ 1756  744   000387 xxxx        		dc.w	*+2
+ 1757  745   000389 02BA        		dc.b	02h,0BAh	;Trigger 2
+ 1758  746                      
+ 1759  747   00038B 3A98 05     		dc.b    3Ah, 98h, 5
+ 1760  748   00038E xxxx        		dc.w	*+2
+ 1761  749   000390 45FF FFFF   		dc.b	45h,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+             000394 FFFF FFFF  
+ 1762  750                      					;
+ 1763  751                      REQ_AUTOOFF_TX3:
+ 1764  752   000398 0282 00     		dc.b	02h, 82h, 0
+ 1765  753   00039B xxxx        		dc.w	*+2
+ 1766  754   00039D 03BA        		dc.b	03h,0BAh	;Trigger 3
+ 1767  755                      
+ 1768  756   00039F 3A88 05     		dc.b    3Ah, 88h, 5
+ 1769  757   0003A2 xxxx        		dc.w	*+2
+ 1770  758   0003A4 45FF FFFF   		dc.b	45h,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+             0003A8 FFFF FFFF  
+ 1771  759                      					;
+ 1772  760                      REQ_AUTOOFF_TX4:
+ 1773  761   0003AC 02A2 00     		dc.b	02h, 0A2h, 0
+ 1774  762   0003AF xxxx        		dc.w	*+2
+ 1775  763   0003B1 04BA        		dc.b	04h,0BAh	;Trigger 4
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1776  764                      
+ 1777  765   0003B3 3AA8 05     		dc.b    3Ah, 0A8h, 5
+ 1778  766   0003B6 xxxx        		dc.w	*+2
+ 1779  767   0003B8 45FF FFFF   		dc.b	45h,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh,0FFh
+             0003BC FFFF FFFF  
+ 1780  768                      					;
+ 1781  769          0000 0001    ifndef fSINGLE
+ 1782  770                      REQUEST_AUTOOFF_END:
+ 1783  771                       endif
+ 1784  772                      					;
+ 1785  773                      ;end
+ 1786  774                      ;
+ 1787  775                      					;
+ 1788  776          0000 0080   _TRIG_FL:	equ	bit7
+ 1789  777          0000 0040   _REC_FL:	equ	bit6
+ 1790  778          0000 0020   _TRIG_FR:	equ	bit5
+ 1791  779          0000 0010   _REC_FR:	equ	bit4
+ 1792  780          0000 0008   _TRIG_RL:	equ	bit3
+ 1793  781          0000 0004   _REC_RL:	equ	bit2
+ 1794  782          0000 0002   _TRIG_RR:	equ	bit1
+ 1795  783          0000 0001   _REC_RR:	equ	bit0
+ 1796  784                      					;
+ 1797  785                      ANTENNA_TBL:
+ 1798  786   0003C0 80          		dc.b	_TRIG_FL
+ 1799  787   0003C1 20          		dc.b	_TRIG_FR
+ 1800  788   0003C2 08          		dc.b	_TRIG_RL
+ 1801  789   0003C3 02          		dc.b	_TRIG_RR
+ 1802  790   0003C4 40          		dc.b	_REC_FL
+ 1803  791   0003C5 10          		dc.b	_REC_FR
+ 1804  792   0003C6 04          		dc.b	_REC_RL
+ 1805  793   0003C7 01          		dc.b	_REC_RR
+ 1806  794                      					;
+ 1807  795                      ;------------------------------------------------------------------------------
+ 1808  796                      ;Variables
+ 1809  797                      ;------------------------------------------------------------------------------
+ 1810  798                      					;
+ 1811  799                      .locals:	section
+ 1812  800                      					;
+ 1813  801                      BOV:
+ 1814  802                      					;
+ 1815  803   000000             LIN_FLAGS:	ds.b	1
+ 1816  804          0000 0001   _ACTIVATED:	equ	bit0
+ 1817  805          0000 0002   _CHECKED:	equ	bit1
+ 1818  806          0000 0004   _ADC:		equ	bit2
+ 1819  807          0000 0008   _RUNNING:	equ	bit3
+ 1820  808                      ;
+ 1821  809                      ;begin 05.07.2008
+ 1822  810          0000 0010   _AUTOOFF:	equ	bit4
+ 1823  811                      ;end
+ 1824  812                      ;
+ 1825  813                      ;
+ 1826  814                      ;
+ 1827  815                      ;
+ 1828  816                      					;
+ 1829  817   000001             SCHEDULE_FLAGS:	ds.b	1
+ 1830  818          0000 0001   _INTERN:	equ	bit0
+ 1831  819          0000 0002   _RESPONSE:	equ	bit1
+ 1832  820                      ;
+ 1833  821                      ;
+ 1834  822                      ;
+ 1835  823                      ;
+ 1836  824                      ;
+ 1837  825          0000 0080   _BUSY:		equ	bit7
+ 1838  826                      					;
+ 1839  827   000002             CLOCK_CTR:	ds.b	1
+ 1840  828   000003             DELAY_CTR:	ds.b	1
+ 1841  829                      					;
+ 1842  830                      		even
+ 1843  831   000004             ANTENNA_CTR:	ds.w	1		;DATA16:
+ 1844  832   000006             ANTENNA_POS:	ds.b	1		;DATA8:
+ 1845  833                      					;
+ 1846  834                      LIN_ANT_FLAGS:
+ 1847  835   000007             ANTENNA_FLAGS:	ds.b	1		;DATA8:
+ 1848  836                      					;
+ 1849  837                      		even
+ 1850  838   000008             SCHEDULE_PTR:	ds.w	1
+ 1851  839   00000A             SCHEDULE_END:	ds.w	1
+ 1852  840   00000C             RESPONSE_PTR:	ds.w	1
+ 1853  841   00000E             SCHEDULE_CTR:	ds.b	1
+ 1854  842                      					;
+ 1855  843   00000F             		even
+ 1856  844                      LIN_CONFIG_BUF:
+ 1857  845   000010             TX1_CONF:	ds.b	4
+ 1858  846   000014             RX1_CONF:	ds.b	4
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1859  847                      					;
+ 1860  848   000018             TX2_CONF:	ds.b	4
+ 1861  849   00001C             RX2_CONF:	ds.b	4
+ 1862  850                      					;
+ 1863  851   000020             TX3_CONF:	ds.b	4
+ 1864  852   000024             RX3_CONF:	ds.b	4
+ 1865  853                      					;
+ 1866  854   000028             TX4_CONF:	ds.b	4
+ 1867  855   00002C             RX4_CONF:	ds.b	4
+ 1868  856                      					;
+ 1869  857   000030             TX1_DIAG:	ds.b	4
+ 1870  858   000034             RX1_DIAG:	ds.b	4
+ 1871  859                      					;
+ 1872  860   000038             TX2_DIAG:	ds.b	4
+ 1873  861   00003C             RX2_DIAG:	ds.b	4
+ 1874  862                      					;
+ 1875  863   000040             TX3_DIAG:	ds.b	4
+ 1876  864   000044             RX3_DIAG:	ds.b	4
+ 1877  865                      					;
+ 1878  866   000048             TX4_DIAG:	ds.b	4
+ 1879  867   00004C             RX4_DIAG:	ds.b	4
+ 1880  868                      					;
+ 1881  869                      		align	16
+ 1882  870   000050             RX_DATA0:	ds.b	8
+ 1883  871   000058             RX_DATA1:	ds.b	8
+ 1884  872   000060             RX_DATA2:	ds.b	8
+ 1885  873                      					;
+ 1886  874   000068             		align	16
+ 1887  875                      LIN_ADC_BUF:
+ 1888  876   000070             TX1_ADC:	ds.b	2
+ 1889  877   000072             RX1_ADC:	ds.b	2
+ 1890  878   000074             TX2_ADC:	ds.b	2
+ 1891  879   000076             RX2_ADC:	ds.b	2
+ 1892  880   000078             TX3_ADC:	ds.b	2
+ 1893  881   00007A             RX3_ADC:	ds.b	2
+ 1894  882   00007C             TX4_ADC:	ds.b	2
+ 1895  883   00007E             RX4_ADC:	ds.b	2
+ 1896  884                      					;
+ 1897  885                      ;
+ 1898  886                      ;begin 05.07.2008
+ 1899  887                      		align	16
+ 1900  888   000080             TX_DATA0:	ds.b	8
+ 1901  889                      					;
+ 1902  890                      ;end
+ 1903  891                      ;
+ 1904  892                      		even
+ 1905  893   000088             LIN_TIME_CTR:	ds.w	1
+ 1906  894   00008A             TIME_CTR:	ds.w	1
+ 1907  895                      					;
+ 1908  896   00008C             PWS_STATE:	ds.b	1
+ 1909  897                      					;
+ 1910  898                      ;------------------------------------------------------------------------------
+ 1911  899                      					;
+ 1912  900   00008D             		align	16
+ 1913  901   000090             LIN_RX_BUF:	ds.b	24		;DATA
+ 1914  902                      					;
+ 1915  903   0000A8             LIN_RX_POS:	ds.b	1		;DATA8:
+ 1916  904   0000A9             LIN_TX_POS:	ds.b	1		;DATA8:
+ 1917  905                      					;
+ 1918  906                      TOV:
+ 1919  907                      					;
+ 1920  908                      .text_C000:	section
+ 1921  909                      					;
+ 1922  910                      ;------------------------------------------------------------------------------
+ 1923  911                      ;Public: LIN_START bringt die LIN-Kommunikation in Grundstellung.
+ 1924  912                      ;
+ 1925  913                      ;Eingangsparameter:	keine
+ 1926  914                      ;Ausgangsparameter:	keine
+ 1927  915                      ;veränderte Register:	CCR, A, B, X, Y
+ 1928  916                      ;------------------------------------------------------------------------------
+ 1929  917                      					;
+ 1930  918                      LIN_START:
+ 1931  919   000000 CExx xx     	LDX	#BOV			;Anfang der Systemvariablen
+ 1932  920   000003 CD00 AA     	LDY	#(TOV - BOV)		;Anzahl Bytes
+ 1933  921   000006 8600        	LDAA	#0			;Füllwert
+ 1934  922                      LIN_START1:
+ 1935  923   000008 6A30        	STAA	1,X+			;
+ 1936  924   00000A 0436 FB     	DBNE	Y,LIN_START1		;alle Variablen auf Füllwert setzen
+ 1937  925                      					;
+ 1938  926   00000D 180B 00xx   	MOVB	#0,SCHEDULE_FLAGS	;
+             000011 xx         
+ 1939  927   000012 180B 02xx   	MOVB	#CLOCK_CT,CLOCK_CTR	;
+             000016 xx         
+ 1940  928   000017 1803 01F4   	MOVW	#ANTENNA_CT,ANTENNA_CTR	;
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             00001B xxxx       
+ 1941  929                      					;
+ 1942  930   00001D 1803 xxxx   	MOVW	#BD_9600_REL,R0		;9600 bps
+             000021 1000       
+ 1943  931   000023 180B 0010   	MOVB	#00000000b,R2		;8 Datenbits, 1 Stoppbit, kein Parity
+             000027 02         
+ 1944  932   000028 16xx xx     	JSR	LIN_RESET		;LIN in Grundstellung
+ 1945  933   00002B 3D          	RTS				;
+ 1946  934                      					;
+ 1947  935                      ;------------------------------------------------------------------------------
+ 1948  936                      ;BEFORE_WRITE wird unmittelbar vor dem Unterprogramm LIN_WRITE ausgeführt.
+ 1949  937                      ;
+ 1950  938                      ;Eingangsparameter:	R1		Message-ID
+ 1951  939                      ;			R3		Anzahl Bytes des Datenobjektes
+ 1952  940                      ;			R4/R5		Zeiger auf Datensegment
+ 1953  941                      ;Ausgangsparameter:	LIN_TX_POS
+ 1954  942                      ;veränderte Register:	CCR, A, B, X, Y
+ 1955  943                      ;------------------------------------------------------------------------------
+ 1956  944                      					;
+ 1957  945                      BEFORE_WRITE:
+ 1958  946   00002C B610 01     	LDAA	R1			;
+ 1959  947   00002F 8102        	CMPA	#02h			;Message-ID = 0x02:
+ 1960  948   000031 260A        	BNE	BEFORE_WRITE1		;
+ 1961  949   000033 FE10 04     	LDX	R4			;
+ 1962  950   000036 A600        	LDAA    0,X			;
+ 1963  951   000038 7Axx xx     	STAA	ANTENNA_POS		;Antennen-Position merken
+ 1964  952   00003B 2045        	BRA	BEFORE_WRITE9		;
+ 1965  953                      					;
+ 1966  954                      BEFORE_WRITE1:
+ 1967  955   00003D 8121        	CMPA	#21h			;
+ 1968  956                      ;
+ 1969  957                      ;begin 05.07.2008
+ 1970  958   00003F 2614        	BNE	BEFORE_WRITE2		;
+ 1971  959                      ;end
+ 1972  960                      ;
+ 1973  961   000041 FE10 04     	LDX	R4			;Message-ID = 0x21:
+ 1974  962   000044 A603        	LDAA	3,X			;
+ 1975  963   000046 8143        	CMPA	#43h			;Kommando: Trigger einschalten
+ 1976  964   000048 2638        	BNE	BEFORE_WRITE9		;
+ 1977  965                      					;
+ 1978  966   00004A A600        	LDAA	0,X			;
+ 1979  967   00004C A101        	CMPA	1,X			;
+ 1980  968   00004E 2632        	BNE	BEFORE_WRITE9		;
+ 1981  969   000050 7Axx xx     	STAA	LIN_TX_POS		;Triggerantennen-Position merken
+ 1982  970                      ;
+ 1983  971                      ;begin 05.07.2008
+ 1984  972   000053 202D        	BRA	BEFORE_WRITE9		;
+ 1985  973                      					;
+ 1986  974                      BEFORE_WRITE2:
+ 1987  975   000055 813A        	CMPA	#3Ah			;Message-ID = 0x3A:
+ 1988  976   000057 2629        	BNE	BEFORE_WRITE3		;
+ 1989  977   000059 FE10 04     	LDX	R4			;
+ 1990  978   00005C CDxx xx     	LDY	#TX_DATA0		;
+ 1991  979   00005F C608        	LDAB	#8			;8 Bytes Datenfeld
+ 1992  980                      BEFORE_WRITE21:
+ 1993  981   000061 180A 3070   	MOVB	1,X+,1,Y+		;umspeichern
+ 1994  982   000065 0431 F9     	DBNE	B,BEFORE_WRITE21	;
+ 1995  983                      
+ 1996  984   000068 CExx xx     	LDX	#LIN_IDENTIFIER_TBL	;
+ 1997  985   00006B F6xx xx     	LDAB	ANTENNA_POS		;
+ 1998  986   00006E 53          	DECB				;Position decrementieren und mal 2
+ 1999  987   00006F 58          	LSLB				;liefert in B Zeiger in Identifierbuffer erster Stufe
+ 2000  988   000070 1AE5        	LEAX	B,X			;
+ 2001  989   000072 EE00        	LDX	0,X			;
+ 2002  990   000074 CDxx xx     	LDY	#TX_DATA0		;
+ 2003  991   000077 1802 0041   	MOVW	0,X,1,Y			;Radelektronik-Identifier in Datenfeld einfügen
+ 2004  992   00007B 1802 0243   	MOVW	2,X,3,Y			;
+ 2005  993   00007F 7D10 04     	STY	R4			;Zeiger auf zu sendende Daten
+ 2006  994                      					;
+ 2007  995                      BEFORE_WRITE3:
+ 2008  996                      					;
+ 2009  997                      ;end
+ 2010  998                      ;
+ 2011  999                      BEFORE_WRITE9:
+ 2012 1000   000082 3D          	RTS				;
+ 2013 1001                      					;
+ 2014 1002                      ;------------------------------------------------------------------------------
+ 2015 1003                      ;AFTER_READ wird unmittelbar nach dem Unterprogramm LIN_READ ausgeführt.
+ 2016 1004                      ;
+ 2017 1005                      ;Eingangsparameter:	R1		Message-ID
+ 2018 1006                      ;			R3		Anzahl Datenbytes
+ 2019 1007                      ;Ausgangsparameter:     LIN_RX_BUF
+ 2020 1008                      ;			LIN_RX_POS
+ 2021 1009                      ;			LIN_TX_POS
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 2022 1010                      ;veränderte Register:	CCR, A, B, X, Y
+ 2023 1011                      ;------------------------------------------------------------------------------
+ 2024 1012                      					;
+ 2025 1013                      AFTER_READ:
+ 2026 1014   000083 CExx xx     	LDX	#ANTENNA_TBL		;
+ 2027 1015   000086 B6xx xx     	LDAA	ANTENNA_POS		;letzte Antennen-Position
+ 2028 1016   000089 43          	DECA				;decrementieren
+ 2029 1017   00008A A6E4        	LDAA	A,X			;liefert Zeiger in Positionsmaskentabelle
+ 2030 1018   00008C BAxx xx     	ORAA	ANTENNA_FLAGS		;zuletzt angesprochene Antenne aktivieren
+ 2031 1019   00008F 7Axx xx     	STAA	ANTENNA_FLAGS		;
+ 2032 1020                      					;
+ 2033 1021   000092 B610 01     	LDAA	R1			;
+ 2034 1022   000095 8137        	CMPA	#37h			;Message-ID = 0x37: erster Teil des Funktelegrammes
+ 2035 1023   000097 2611        	BNE	AFTER_READ1		;
+ 2036 1024                      					;
+ 2037 1025   000099 FExx xx     	LDX	RESPONSE_PTR		;wenn der Ringpuffer leer ist,
+ 2038 1026   00009C A600        	LDAA	0,X			;[RESPONSE_PTR+0] = 0
+ 2039 1027   00009E 263B        	BNE	AFTER_READ9		;
+ 2040 1028                      					;
+ 2041 1029   0000A0 FExx xx     	LDX	SCHEDULE_PTR		;dann
+ 2042 1030   0000A3 1A0A        	LEAX	2*CMD_SIZE,X		;  die Anforderung der beiden folgenden Teile
+ 2043 1031   0000A5 7Exx xx     	STX	SCHEDULE_PTR		;  des Funktelegrammes überspringen
+ 2044 1032   0000A8 2031        	BRA	AFTER_READ9		;
+ 2045 1033                      					;
+ 2046 1034                      AFTER_READ1:
+ 2047 1035   0000AA 8139        	CMPA	#39h			;Message-ID = 0x39: letzter Teil des Funktelegrammes
+ 2048 1036   0000AC 262D        	BNE	AFTER_READ9		;
+ 2049 1037                      					;
+ 2050 1038   0000AE 16xx xx     	JSR	LIN_STATUS		;Status abfragen und Fehlerflags rücksetzen
+ 2051 1039   0000B1 841F        	ANDA	#00011111b		;
+ 2052 1040                      ;begin 05.07.2008 TEST
+ 2053 1041          0000 0000    ifne fDebug
+ 2064 1052                       else
+ 2065 1053   0000B3 2626        	BNE	AFTER_READ9		;
+ 2066 1054                       endif
+ 2067 1055                      ;end
+ 2068 1056                      ;
+ 2069 1057                      					;
+ 2070 1058   0000B5 CExx xx     	LDX	#RX_DATA0		;
+ 2071 1059   0000B8 A600        	LDAA	0,X			;
+ 2072 1060   0000BA 8101        	CMPA	#1			;wenn mehr als 1 Telegramm im Ringbuffer waren
+ 2073 1061   0000BC 270B        	BEQ	AFTER_READ1a		;dann
+ 2074 1062                      ;
+ 2075 1063                      ;begin 05.07.2008 TEST
+ 2076 1064   0000BE 34          	PSHX				;05.07.2008 neu: jedes Telegramm auswerten
+ 2077 1065                      
+ 2078 1066   0000BF FExx xx     	LDX	SCHEDULE_PTR		;  erst weiterlesen, bis alles gelesen
+ 2079 1067   0000C2 1AE1 EA     	LEAX	-READ_CMD_SIZE,X	;
+ 2080 1068   0000C5 7Exx xx     	STX	SCHEDULE_PTR		;
+ 2081 1069                      
+ 2082 1070   0000C8 30          	PULX
+ 2083 1071                      ;	BRA	AFTER_READ9		;
+ 2084 1072                      ;end
+ 2085 1073                      ;
+ 2086 1074                      					;
+ 2087 1075                      AFTER_READ1a:
+ 2088 1076   0000C9 CDxx xx     	LDY	#LIN_RX_BUF		;
+ 2089 1077   0000CC C618        	LDAB	#24			;
+ 2090 1078                      AFTER_READ2:
+ 2091 1079   0000CE 180A 3070   	MOVB	1,X+,1,Y+		;Daten umspeichern
+ 2092 1080   0000D2 0431 F9     	DBNE	B,AFTER_READ2		;
+ 2093 1081                      					;
+ 2094 1082   0000D5 B6xx xx     	LDAA	LIN_TX_POS		;
+ 2095 1083   0000D8 7Axx xx     	STAA	LIN_RX_POS		;aktuelle Triggerantennen-Position speichern
+ 2096 1084                      					;
+ 2097 1085                      AFTER_READ9:
+ 2098 1086   0000DB 180B 00xx   	MOVB	#0,DELAY_CTR		;
+             0000DF xx         
+ 2099 1087   0000E0 3D          	RTS				;
+ 2100 1088                      					;
+ 2101 1089                      ;------------------------------------------------------------------------------
+ 2102 1090                      ;NEXT_FRAME wertet einen Eintrag der aktuellen Scheduletabelle aus und
+ 2103 1091                      ;startet die geforderte Aktion.
+ 2104 1092                      ;
+ 2105 1093                      ;Eingangsparameter:	SCHEDULE_PTR
+ 2106 1094                      ;Ausgangsparameter:	DELAY_CTR
+ 2107 1095                      ;			RESPONSE_PTR
+ 2108 1096                      ;			SCHEDULE_PTR
+ 2109 1097                      ;			SCHEDULE_FLAGS._INTERN
+ 2110 1098                      ;			SCHEDULE_FLAGS._RESPONSE
+ 2111 1099                      ;			SCHEDULE_FLAGS._BUSY
+ 2112 1100                      ;veränderte Register:	CCR, A, X, Y, R[1,3..5]
+ 2113 1101                      ;------------------------------------------------------------------------------
+ 2114 1102                      					;
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 2115 1103                      NEXT_FRAME:
+ 2116 1104   0000E1 1Fxx xx02   	BRCLR	SCHEDULE_FLAGS,_RESPONSE,NEXT_FRAME0
+             0000E5 10         
+ 2117 1105                      					;wenn angeforderte Anwort ausgeblieben ist,
+ 2118 1106   0000E6 CExx xx     	LDX	#ANTENNA_TBL		;dann
+ 2119 1107   0000E9 B6xx xx     	LDAA	ANTENNA_POS		;  letzte Antennen-Position
+ 2120 1108   0000EC 43          	DECA				;  decrementieren
+ 2121 1109   0000ED A6E4        	LDAA	A,X			;  liefert Zeiger in Positionsmaskentabelle
+ 2122 1110   0000EF 41          	COMA				;
+ 2123 1111   0000F0 B4xx xx     	ANDA	ANTENNA_FLAGS		;  zuletzt angesprochene Antenne deaktivieren
+ 2124 1112   0000F3 7Axx xx     	STAA	ANTENNA_FLAGS		;
+ 2125 1113                      					;
+ 2126 1114                      NEXT_FRAME0:
+ 2127 1115   0000F6 FExx xx     	LDX	SCHEDULE_PTR		;Schedule-Zeiger lesen
+ 2128 1116   0000F9 BExx xx     	CPX	SCHEDULE_END		;Zeiger auf Ende der Scheduletabelle
+ 2129 1117   0000FC 2509        	BLO	NEXT_FRAME1		;
+ 2130 1118   0000FE 180B 00xx   	MOVB	#0,SCHEDULE_FLAGS	;
+             000102 xx         
+ 2131 1119   000103 1820 00C0   	LBRA	NEXT_FRAME9		;
+ 2132 1120                      					;
+ 2133 1121                      NEXT_FRAME1:
+ 2134 1122   000107 1Dxx xx02   	BCLR	SCHEDULE_FLAGS,_RESPONSE;
+ 2135 1123   00010B 1Dxx xx01   	BCLR	SCHEDULE_FLAGS,_INTERN	;_INTERN-Flag rücksetzen
+ 2136 1124                      					;
+ 2137 1125   00010F A600        	LDAA	0,X			;Message-ID
+ 2138 1126   000111 8180        	CMPA	#80h			;
+ 2139 1127   000113 2560        	BLO	NEXT_FRAME3		;wenn internes Kommando,
+ 2140 1128   000115 A601        	LDAA	1,X			;dann
+ 2141 1129   000117 84F0        	ANDA	#11110000b		;
+ 2142 1130                      					;
+ 2143 1131   000119 8140        	CMPA	#40h			;  wenn Power-On,
+ 2144 1132   00011B 2625        	BNE	NEXT_FRAME1a		;  dann
+ 2145 1133   00011D 1Cxx xx01   	BSET	SCHEDULE_FLAGS,_INTERN	;    _INTERN-Flag setzen
+ 2146 1134                      					;
+ 2147 1135   000121 ED03        	LDY	3,X			;    Portadresse laden
+ 2148 1136   000123 E640        	LDAB	0,Y			;    Portwert lesen
+ 2149 1137   000125 EA05        	ORAB	5,X			;    bit mittels bit-Maske setzen
+ 2150 1138   000127 6B40        	STAB	0,Y			;    geänderten Portwert schreiben
+ 2151 1139   000129 86AA        	LDAA	#0AAh			;
+ 2152 1140   00012B 7C10 00     	STD	R0			;
+ 2153 1141   00012E 16xx xx     	JSR	PWS_UPDATE		;
+ 2154 1142                      					;
+ 2155 1143   000131 CDxx xx     	LDY	#ANTENNA_TBL		;
+ 2156 1144   000134 A6E0 14     	LDAA	oINIT_ON_ID,X		;    Antennen-Position
+ 2157 1145                      
+ 2158 1146   000137 43          	DECA				;    decrementieren
+ 2159 1147   000138 A6EC        	LDAA	A,Y			;    liefert Zeiger in Positionsmaskentabelle
+ 2160 1148   00013A BAxx xx     	ORAA	ANTENNA_FLAGS		;    Antennen-Positionsflag setzen
+ 2161 1149   00013D 7Axx xx     	STAA	ANTENNA_FLAGS		;
+ 2162 1150   000140 202F        	BRA	NEXT_FRAME2		;
+ 2163 1151                      					;
+ 2164 1152                      NEXT_FRAME1a:
+ 2165 1153   000142 8110        	CMPA	#10h			;  sonst wenn Power-Off,
+ 2166 1154   000144 262B        	BNE	NEXT_FRAME2		;  dann
+ 2167 1155   000146 1Cxx xx01   	BSET	SCHEDULE_FLAGS,_INTERN	;    _INTERN-Flag setzen
+ 2168 1156                      					;
+ 2169 1157   00014A CDxx xx     	LDY	#ANTENNA_TBL		;
+ 2170 1158   00014D A6E0 1A     	LDAA	oINIT_OFF_ID,X		;    Antennenposition
+ 2171 1159                      
+ 2172 1160   000150 43          	DECA				;    decrementieren
+ 2173 1161   000151 A6EC        	LDAA	A,Y			;    liefert Zeiger in Positionsmaskentabelle
+ 2174 1162   000153 B4xx xx     	ANDA	ANTENNA_FLAGS		;    wenn Antenne bereits in Funktion,
+ 2175 1163   000156 2709        	BEQ	NEXT_FRAME1b		;    dann
+ 2176 1164   000158 180B 00xx   	MOVB	#0,DELAY_CTR		;      Einschaltprozedur für diese Antenne
+             00015C xx         
+ 2177 1165   00015D 8621        	LDAA	#INIT_ENTRY_SIZE	;      überspringen
+ 2178 1166   00015F 204C        	BRA	NEXT_FRAME6		;
+ 2179 1167                      					;
+ 2180 1168                      NEXT_FRAME1b:
+ 2181 1169   000161 ED03        	LDY	3,X			;    Portadresse laden
+ 2182 1170   000163 E640        	LDAB	0,Y			;    Portwert lesen
+ 2183 1171   000165 E405        	ANDB	5,X			;    bit mittels bit-Maske rücksetzen
+ 2184 1172   000167 6B40        	STAB	0,Y			;    geänderten Portwert schreiben
+ 2185 1173   000169 86AA        	LDAA	#0AAh			;
+ 2186 1174   00016B 7C10 00     	STD	R0			;
+ 2187 1175   00016E 16xx xx     	JSR	PWS_UPDATE		;
+ 2188 1176                      					;
+ 2189 1177                      NEXT_FRAME2:
+ 2190 1178   000171 A601        	LDAA	1,X			;  R/W-Flag und Anzahl Bytes
+ 2191 1179   000173 2024        	BRA	NEXT_FRAME5		;
+ 2192 1180                      					;
+ 2193 1181                      NEXT_FRAME3:
+ 2194 1182   000175 7A10 01     	STAA	R1			;sonst
+ 2195 1183                      ;
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 2196 1184                      ;begin 27.11.2007
+ 2197 1185   000178 A601        	LDAA	1,X			;
+ 2198 1186   00017A 8430        	ANDA	#00110000b		;  Empfangs-Multiplexer
+ 2199 1187   00017C 44          	LSRA				;
+ 2200 1188   00017D 44          	LSRA				;
+ 2201 1189   00017E 44          	LSRA				;
+ 2202 1190   00017F 44          	LSRA				;  neue Position in A
+ 2203 1191   000180 16xx xx     	JSR	MUX_UPDATE		;  einstellen
+ 2204 1192                      ;end
+ 2205 1193                      ;
+ 2206 1194   000183 A601        	LDAA	1,X			;  R/W-Flag und Anzahl Bytes
+ 2207 1195   000185 8580        	BITA	#10000000b		;
+ 2208 1196   000187 260B        	BNE	NEXT_FRAME4		;  wenn R/W-Flag rückgesetzt,
+ 2209 1197   000189 1Cxx xx02   	BSET	SCHEDULE_FLAGS,_RESPONSE;  dann
+ 2210 1198   00018D 1805 03xx   	MOVW	3,X,RESPONSE_PTR	;    Zeiger auf Anwortbuffer
+             000191 xx         
+ 2211 1199   000192 2005        	BRA	NEXT_FRAME5		;  sonst
+ 2212 1200                      NEXT_FRAME4:
+ 2213 1201   000194 1805 0310   	MOVW	3,X,R4			;    Zeiger auf zu sendende Daten
+             000198 04         
+ 2214 1202                      					;
+ 2215 1203                      NEXT_FRAME5:
+ 2216 1204   000199 840F        	ANDA	#00001111b		;Anzahl Datenbytes
+ 2217 1205   00019B 7A10 03     	STAA	R3			;
+ 2218 1206   00019E 180D 02xx   	MOVB	2,X,DELAY_CTR		;Delay auf Startwert
+             0001A2 xx         
+ 2219 1207   0001A3 8605        	LDAA	#CMD_SIZE		;
+ 2220 1208   0001A5 1Exx xx02   	BRSET	SCHEDULE_FLAGS,_RESPONSE,NEXT_FRAME6
+             0001A9 03         
+ 2221 1209   0001AA BB10 03     	ADDA	R3			;
+ 2222 1210                      NEXT_FRAME6:
+ 2223 1211   0001AD 1AE4        	LEAX	A,X			;Schedule-Zeiger auf nächsten Frame-Eintrag setzen
+ 2224 1212   0001AF 7Exx xx     	STX	SCHEDULE_PTR		;Schedule-Zeiger retten
+ 2225 1213                      					;
+ 2226 1214   0001B2 1Exx xx01   	BRSET	SCHEDULE_FLAGS,_INTERN,NEXT_FRAME9
+             0001B6 10         
+ 2227 1215   0001B7 1Exx xx02   	BRSET	SCHEDULE_FLAGS,_RESPONSE,NEXT_FRAME8
+             0001BB 08         
+ 2228 1216   0001BC 16xx xx     	JSR	BEFORE_WRITE		;
+ 2229 1217   0001BF 16xx xx     	JSR	LIN_WRITE		;Daten senden
+ 2230 1218   0001C2 2003        	BRA	NEXT_FRAME9		;
+ 2231 1219                      NEXT_FRAME8:
+ 2232 1220   0001C4 16xx xx     	JSR	LIN_REQUEST		;Daten anfordern
+ 2233 1221                      					;
+ 2234 1222                      NEXT_FRAME9:
+ 2235 1223   0001C7 3D          	RTS				;
+ 2236 1224                      					;
+ 2237 1225                      ;==============================================================================
+ 2238 1226                      ;LIN Modul-Einsprung
+ 2239 1227                      ;==============================================================================
+ 2240 1228                      					;
+ 2241 1229                      ;------------------------------------------------------------------------------
+ 2242 1230                      ;Public: LIN_RUN arbeitet LIN-Scheduletabellen ab.
+ 2243 1231                      ;
+ 2244 1232                      ;Eingangsparameter:	CLOCK_CTR
+ 2245 1233                      ;			SCHEDULE_FLAGS
+ 2246 1234                      ;			SCHEDULE_PTR
+ 2247 1235                      ;			SCHEDULE_END
+ 2248 1236                      ;			DELAY_CTR
+ 2249 1237                      ;Ausgangsparameter:	CLOCK_CTR
+ 2250 1238                      ;			SCHEDULE_FLAGS
+ 2251 1239                      ;			SCHEDULE_PTR
+ 2252 1240                      ;			SCHEDULE_END
+ 2253 1241                      ;			DELAY_CTR
+ 2254 1242                      ;veränderte Register:	CCR, A, B, X. Y, R[1,3..5]
+ 2255 1243                      ;------------------------------------------------------------------------------
+ 2256 1244                      					;
+ 2257 1245                      LIN_RUN:
+ 2258 1246   0001C8 FExx xx     	LDX	TIME_CTR		;Bearbeitungszeit incrementieren
+ 2259 1247   0001CB 08          	INX				;
+ 2260 1248   0001CC 7Exx xx     	STX	TIME_CTR		;
+ 2261 1249                      					;
+ 2262 1250   0001CF FExx xx     	LDX	ANTENNA_CTR		;Antennenprüftakt
+ 2263 1251   0001D2 2708        	BEQ	LIN_RUN0		;
+ 2264 1252   0001D4 09          	DEX				;
+ 2265 1253   0001D5 2705        	BEQ	LIN_RUN0		;
+ 2266 1254   0001D7 7Exx xx     	STX	ANTENNA_CTR		;
+ 2267 1255   0001DA 200E        	BRA	LIN_RUN0a		;
+ 2268 1256                      					;
+ 2269 1257                      LIN_RUN0:
+ 2270 1258   0001DC 1803 01F4   	MOVW	#ANTENNA_CT,ANTENNA_CTR	;
+             0001E0 xxxx       
+ 2271 1259   0001E2 1Dxx xx01   	BCLR	LIN_FLAGS,_ACTIVATED	;
+ 2272 1260                      ;
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 2273 1261                      ;begin 05.07.2008
+ 2274 1262   0001E6 1Dxx xx10   	BCLR	LIN_FLAGS,_AUTOOFF	;
+ 2275 1263                      ;end
+ 2276 1264                      ;					;
+ 2277 1265                      LIN_RUN0a:
+ 2278 1266   0001EA B6xx xx     	LDAA	CLOCK_CTR		;LIN-Takt
+ 2279 1267   0001ED 2709        	BEQ	LIN_RUN0b		;
+ 2280 1268   0001EF 43          	DECA				;
+ 2281 1269   0001F0 2706        	BEQ	LIN_RUN0b		;
+ 2282 1270   0001F2 7Axx xx     	STAA	CLOCK_CTR		;
+ 2283 1271   0001F5 06xx xx     	JMP	LIN_RUN9		;
+ 2284 1272                      					;
+ 2285 1273                      LIN_RUN0b:
+ 2286 1274   0001F8 180B 02xx   	MOVB	#CLOCK_CT,CLOCK_CTR	;
+             0001FC xx         
+ 2287 1275   0001FD 1Exx xx02   	BRSET	SCHEDULE_FLAGS,_RESPONSE,LIN_RUN0c
+             000201 07         
+ 2288 1276   000202 1Exx xx80   	BRSET	SCHEDULE_FLAGS,_BUSY,LIN_RUN0c
+             000206 02         
+ 2289 1277   000207 2004        	BRA	LIN_RUN1		;
+ 2290 1278                      					;
+ 2291 1279                      LIN_RUN0c:
+ 2292 1280   000209 1820 008F   	LBRA	LIN_RUN2		;
+ 2293 1281                      					;
+ 2294 1282                      ;------------------------------------------------------------------------------
+ 2295 1283                      ;Schedule-Table starten
+ 2296 1284                      					;
+ 2297 1285                      LIN_RUN1:
+ 2298 1286   00020D 1Exx xx01   	BRSET	LIN_FLAGS,_ACTIVATED,LIN_RUN1a
+             000211 12         
+ 2299 1287                      					;
+ 2300 1288   000212 1803 xxxx   	MOVW	#INITIALIZATION_TBL,SCHEDULE_PTR
+             000216 xxxx       
+ 2301 1289   000218 1803 xxxx   	MOVW	#INITIALIZATION_END,SCHEDULE_END
+             00021C xxxx       
+ 2302 1290   00021E 1Cxx xx01   	BSET	LIN_FLAGS,_ACTIVATED	;
+ 2303 1291   000222 206B        	BRA	LIN_RUN1z		;
+ 2304 1292                      					;
+ 2305 1293                      LIN_RUN1a:
+ 2306 1294   000224 1Exx xx02   	BRSET	LIN_FLAGS,_CHECKED,LIN_RUN1b
+             000228 12         
+ 2307 1295                      					;
+ 2308 1296   000229 1803 xxxx   	MOVW	#REQUEST_DIAG_TBL,SCHEDULE_PTR
+             00022D xxxx       
+ 2309 1297   00022F 1803 xxxx   	MOVW	#REQUEST_DIAG_END,SCHEDULE_END
+             000233 xxxx       
+ 2310 1298   000235 1Cxx xx02   	BSET	LIN_FLAGS,_CHECKED	;
+ 2311 1299   000239 2054        	BRA	LIN_RUN1z		;
+ 2312 1300                      					;
+ 2313 1301                      LIN_RUN1b:
+ 2314 1302                      ;
+ 2315 1303                      ;begin 05.07.2008                       ;05.07.2008 neu: AutoTransmission OFF
+ 2316 1304   00023B 1Exx xx10   	BRSET	LIN_FLAGS,_AUTOOFF,LIN_RUN1c
+             00023F 12         
+ 2317 1305                      					;
+ 2318 1306   000240 1803 xxxx   	MOVW	#REQUEST_AUTOOFF_TBL,SCHEDULE_PTR
+             000244 xxxx       
+ 2319 1307   000246 1803 xxxx   	MOVW	#REQUEST_AUTOOFF_END,SCHEDULE_END
+             00024A xxxx       
+ 2320 1308   00024C 1Cxx xx10   	BSET	LIN_FLAGS,_AUTOOFF	;
+ 2321 1309   000250 203D        	BRA	LIN_RUN1z		;
+ 2322 1310                      					;
+ 2323 1311                      LIN_RUN1c:
+ 2324 1312   000252 1Exx xx04   	BRSET	LIN_FLAGS,_ADC,LIN_RUN1d
+             000256 16         
+ 2325 1313                      					;
+ 2326 1314   000257 1803 xxxx   	MOVW	#REQUEST_ADC_TBL,SCHEDULE_PTR
+             00025B xxxx       
+ 2327 1315   00025D 1803 xxxx   	MOVW	#REQUEST_ADC_END,SCHEDULE_END
+             000261 xxxx       
+ 2328 1316   000263 1Cxx xx04   	BSET	LIN_FLAGS,_ADC		;
+ 2329 1317   000267 1Dxx xx08   	BCLR	LIN_FLAGS,_RUNNING	;
+ 2330 1318   00026B 2022        	BRA	LIN_RUN1z		;
+ 2331 1319                      					;
+ 2332 1320                      LIN_RUN1d:
+ 2333 1321   00026D 1804 xxxx   	MOVW	TIME_CTR,LIN_TIME_CTR	;Bearbeitungszeit auf 0
+             000271 xxxx       
+ 2334 1322   000273 1803 0000   	MOVW	#0,TIME_CTR		;
+             000277 xxxx       
+ 2335 1323                      					;
+ 2336 1324   000279 1803 xxxx   	MOVW	#REQUEST_DATA_TBL,SCHEDULE_PTR
+             00027D xxxx       
+ 2337 1325   00027F 1803 xxxx   	MOVW	#REQUEST_DATA_END,SCHEDULE_END
+             000283 xxxx       
+tg3LIN  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 2338 1326   000285 1Cxx xx08   	BSET	LIN_FLAGS,_RUNNING	;
+ 2339 1327   000289 1Dxx xx04   	BCLR	LIN_FLAGS,_ADC		;
+ 2340 1328                      					;
+ 2341 1329                      ;end
+ 2342 1330                      ;
+ 2343 1331   00028D 2000        	BRA	LIN_RUN1z		;
+ 2344 1332                      					;
+ 2345 1333                      LIN_RUN1z:
+ 2346 1334   00028F 180B 00xx   	MOVB	#0,DELAY_CTR		;
+             000293 xx         
+ 2347 1335                      					;
+ 2348 1336   000294 1Dxx xx02   	BCLR	SCHEDULE_FLAGS,_RESPONSE;
+ 2349 1337   000298 1Cxx xx80   	BSET	SCHEDULE_FLAGS,_BUSY	;
+ 2350 1338                      					;
+ 2351 1339                      ;------------------------------------------------------------------------------
+ 2352 1340                      ;ggf. Slave-Task ausführen
+ 2353 1341                      					;
+ 2354 1342                      LIN_RUN2:
+ 2355 1343   00029C 1Fxx xx02   	BRCLR	SCHEDULE_FLAGS,_RESPONSE,LIN_RUN3
+             0002A0 12         
+ 2356 1344                      					;
+ 2357 1345   0002A1 1804 xxxx   	MOVW    RESPONSE_PTR,R4		;
+             0002A5 1004       
+ 2358 1346   0002A7 16xx xx     	JSR	LIN_READ		;empfangene Daten lesen
+ 2359 1347   0002AA 2607        	BNE	LIN_RUN3		;
+ 2360 1348   0002AC 1Dxx xx02   	BCLR	SCHEDULE_FLAGS,_RESPONSE;
+ 2361 1349   0002B0 16xx xx     	JSR	AFTER_READ		;
+ 2362 1350                      					;
+ 2363 1351                      ;------------------------------------------------------------------------------
+ 2364 1352                      ;Schedule-Table fortsetzen
+ 2365 1353                      					;
+ 2366 1354                      LIN_RUN3:
+ 2367 1355   0002B3 B6xx xx     	LDAA	DELAY_CTR		;Pausenzeit zwischen zwei Frames
+ 2368 1356   0002B6 2706        	BEQ	LIN_RUN4		;
+ 2369 1357   0002B8 43          	DECA				;
+ 2370 1358   0002B9 7Axx xx     	STAA	DELAY_CTR		;
+ 2371 1359   0002BC 2003        	BRA	LIN_RUN9		;
+ 2372 1360                      					;
+ 2373 1361                      LIN_RUN4:
+ 2374 1362   0002BE 16xx xx     	JSR	NEXT_FRAME		;
+ 2375 1363                      					;
+ 2376 1364                      LIN_RUN9:
+ 2377 1365   0002C1 3D          	RTS				;
+ 2378 1366                      					;
+ 2379 1367   0002C2 FFFF FFFF   	dcb.b	6, 0FFh			;
+             0002C6 FFFF       
+ 2380 1368   0002C8 3F          	SWI				;
+ 2381 1369                      					;
+ 2382 1370                      ;------------------------------------------------------------------------------

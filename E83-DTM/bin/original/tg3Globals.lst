@@ -1,0 +1,168 @@
+tg3Globals  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title	"tg3Globals  Copyright (C) 2005-2011, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;TireGuard 3	Betriebsprogramm
+ 1018    6                      ;------------------------------------------------------------------------------
+ 1019    7                      ;Module:	tg3Globals.asm
+ 1020    8                      ;
+ 1021    9                      ;Copyright:	(C) 2005-2011, micro dynamics GmbH
+ 1022   10                      ;Author(s):	Michael Frank
+ 1023   11                      ;Update:	20.01.2011
+ 1024   12                      ;
+ 1025   13                      ;Description:	allgemeine Funktionen
+ 1026   14                      ;------------------------------------------------------------------------------
+ 1027   15                      ;Revision History:	Original Version  11.05
+ 1028   16                      ;
+ 1029   17                      ;20.01.2011	Version 2.50
+ 1030   18                      ;24.11.2006	Version 1.00
+ 1031   19                      ;08.11.2006	Anpassung an MC9S12C128
+ 1032   20                      ;------------------------------------------------------------------------------
+ 1033   21                      					;
+ 1034   22                      ;------------------------------------------------------------------------------
+ 1035   23                      ;Publics
+ 1036   24                      ;------------------------------------------------------------------------------
+ 1037   25                      					;
+ 1038   26                      	xdef	CLEAR_BUFFER		;Code
+ 1039   27                      	xdef	CALC_CHECKSUM		;Code
+ 1040   28                      	xdef	VERIFY_CHECKSUM		;Code
+ 1041   29                      	xdef	WATCHDOG_INIT		;Code
+ 1042   30                      	xdef	WATCHDOG_RESET		;Code
+ 1043   31                      					;
+ 1044   32                      .text:		section
+ 1045   33                      					;
+ 1046   34                      ;------------------------------------------------------------------------------
+ 1047   35                      ;Public: CLEAR_BUFFER füllt einen Speicherbereich mit einem festen Wert.
+ 1048   36                      ;
+ 1049   37                      ;Eingangsparameter:	LDY		Zeiger auf Speicherbereich
+ 1050   38                      ;			R3		Anzahl Bytes
+ 1051   39                      ;			A		Füllwert
+ 1052   40                      ;Ausgangsparameter:	keine
+ 1053   41                      ;veränderte Register:	CCR
+ 1054   42                      ;------------------------------------------------------------------------------
+ 1055   43                      					;
+ 1056   44                      CLEAR_BUFFER:
+ 1057   45   000000 6A70        	STAA	1,Y+			;
+ 1058   46   000002 7310 03     	DEC	R3			;
+ 1059   47   000005 26F9        	BNE	CLEAR_BUFFER		;
+ 1060   48   000007 3D          	RTS				;
+ 1061   49                      					;
+ 1062   50                      ;------------------------------------------------------------------------------
+ 1063   51                      ;Public: CALC_CHECKSUM bildet die Prüfsumme über einen Speicherbereich durch
+ 1064   52                      ;byteweise Addition der Werte mit jeweils nachfolgender Inkrementierung ohne
+ 1065   53                      ;Berücksichtigung der Überläufe.
+ 1066   54                      ;Als Ergebnis wird ein Zahlenwert so geliefert, dass die Summe einschließlich
+ 1067   55                      ;dieser Prüfsumme den Wert 0 ergibt.
+ 1068   56                      ;
+ 1069   57                      ;Eingangsparameter:	X 		Anfangsadresse des Datenbereiches
+ 1070   58                      ;			R3		Anzahl Bytes des Datenbereiches
+ 1071   59                      ;Ausgangsparameter:	A		Prüfsumme
+ 1072   60                      ;veraenderte Register:	CCR, B
+ 1073   61                      ;------------------------------------------------------------------------------
+ 1074   62                      					;
+ 1075   63                      CALC_CHECKSUM:
+ 1076   64   000008 C7          	CLRB				;Prüfsumme auf Null setzen
+ 1077   65   000009 B610 03     	LDAA	R3			;
+ 1078   66   00000C 270F        	BEQ	CALC_CHECKSUM2		;wenn Anzahl Bytes > 0,
+ 1079   67                      					;dann
+ 1080   68                      CALC_CHECKSUM1:
+ 1081   69   00000E EB30        	ADDB	1,X+			;  Byte lesen und zur Prüfsumme addieren
+ 1082   70   000010 F910 03     	ADCB	R3			;  Prüfsumme aktualisieren
+ 1083   71   000013 7310 03     	DEC	R3			;
+ 1084   72   000016 26F6        	BNE	CALC_CHECKSUM1		;  weiter, bis Bereich bearbeitet
+ 1085   73                      					;
+ 1086   74   000018 87          	CLRA				;
+ 1087   75   000019 1816        	SBA				;  0 - Prüfsumme
+ 1088   76   00001B B781        	EXG	A,B			;  nach B
+ 1089   77                      					;
+ 1090   78                      CALC_CHECKSUM2:
+ 1091   79   00001D B781        	EXG	A,B			;Prüfsumme nach A
+ 1092   80   00001F 3D          	RTS				;
+ 1093   81                      					;
+ 1094   82                      ;------------------------------------------------------------------------------
+ 1095   83                      ;Public: VERIFY_CHECKSUM bildet die Prüfsumme über einen Speicherbereich durch
+ 1096   84                      ;byteweise Addition der Werte mit jeweils nachfolgender Inkrementierung ohne
+tg3Globals  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1097   85                      ;Berücksichtigung der Überläufe.
+ 1098   86                      ;Zuletzt wird die originale Prüfsumme addiert. Bei Konsistenz von Daten und
+ 1099   87                      ;originaler Prüfsumme muss das Ergebnis der Prüfung den Wert 0 ergeben.
+ 1100   88                      ;
+ 1101   89                      ;Eingangsparameter:	X		Anfangsadresse des Datenbereiches
+ 1102   90                      ;			Y		Zeiger auf originale Prüfsumme
+ 1103   91                      ;			R3		Anzahl Bytes des Datenbereiches
+ 1104   92                      ;Ausgangsparameter:	A		0	= ok
+ 1105   93                      ;					<> 0	= Daten nicht konsistent
+ 1106   94                      ;veraenderte Register:	CCR, B
+ 1107   95                      ;------------------------------------------------------------------------------
+ 1108   96                      					;
+ 1109   97                      VERIFY_CHECKSUM:
+ 1110   98   000020 C7          	CLRB				;Prüfsumme auf Null setzen
+ 1111   99   000021 B610 03     	LDAA	R3			;
+ 1112  100   000024 270C        	BEQ	VERIFY_CHECKSUM2	;wenn Anzahl Bytes > 0,
+ 1113  101                      					;dann
+ 1114  102                      VERIFY_CHECKSUM1:
+ 1115  103   000026 EB30        	ADDB	1,X+			;  Byte lesen und zur Prüfsumme addieren
+ 1116  104   000028 F910 03     	ADCB	R3			;  Prüfsumme aktualisieren
+ 1117  105   00002B 7310 03     	DEC	R3
+ 1118  106   00002E 26F6        	BNE	VERIFY_CHECKSUM1	;  weiter, bis Bereich bearbeitet
+ 1119  107                      					;
+ 1120  108   000030 EB40        	ADDB	0,Y			;  originale Prüfsumme addieren
+ 1121  109                      
+ 1122  110                      VERIFY_CHECKSUM2:
+ 1123  111   000032 B781        	EXG	A,B			;Prüfungsergebnis nach A
+ 1124  112   000034 3D          	RTS				;
+ 1125  113                      					;
+ 1126  114                      ;------------------------------------------------------------------------------
+ 1127  115                      ;Public: WATCHDOG_INIT stellt die Zeitgrenze auf 2exp22 Oszillator-Takte und
+ 1128  116                      ;startet den Watchdog-Timer.
+ 1129  117                      ;
+ 1130  118                      ;Eingangsparameter:	keine
+ 1131  119                      ;Ausgangsparameter:	keine
+ 1132  120                      ;veraenderte Register:	CCR
+ 1133  121                      ;------------------------------------------------------------------------------
+ 1134  122                      					;
+ 1135  123                      WATCHDOG_INIT:
+ 1136  124                      					;
+ 1137  125          0000 0000    ifeq fDebug
+ 1138  126   000035 180B 4700   	MOVB	#01000111b,COPCTL	;stops COP if in BDM mode / 2exp24 cycles
+             000039 3C         
+ 1139  127                      					;=> Timeout = 1056 ms @ 16 MHz OSC_CLK
+ 1140  128                       endif
+ 1141  129                      					;
+ 1142  130   00003A 3D          	RTS				;
+ 1143  131                      					;
+ 1144  132                      ;------------------------------------------------------------------------------
+ 1145  133                      ;Public: WATCHDOG_RESET startet den Watchdog-Timer neu.
+ 1146  134                      ;
+ 1147  135                      ;Eingangsparameter:	keine
+ 1148  136                      ;Ausgangsparameter:	keine
+ 1149  137                      ;veraenderte Register:	CCR
+ 1150  138                      ;------------------------------------------------------------------------------
+ 1151  139                      					;
+ 1152  140                      WATCHDOG_RESET:
+ 1153  141                      					;
+ 1154  142          0000 0000    ifeq fDebug
+ 1155  143   00003B 180B 5500   	MOVB	#55h,ARMCOP		;
+             00003F 3F         
+ 1156  144   000040 180B AA00   	MOVB	#0AAh,ARMCOP		;
+             000044 3F         
+ 1157  145                       endif
+ 1158  146                      					;
+ 1159  147   000045 3D          	RTS				;
+ 1160  148                      					;
+ 1161  149   000046 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00004A FFFF       
+ 1162  150   00004C 3F          	SWI				;
+ 1163  151                      					;
+ 1164  152                      ;------------------------------------------------------------------------------

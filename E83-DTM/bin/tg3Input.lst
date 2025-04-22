@@ -1,0 +1,124 @@
+tg3Input  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include "s12c_128.sfr"
+  982    2                      	title	"tg3Input  Copyright (C) 2005-2006, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;TireGuard 3	Betriebsprogramm
+  985    5                      ;------------------------------------------------------------------------------
+  986    6                      ;Module:	tg3Input.asm
+  987    7                      ;
+  988    8                      ;Copyright: 	(C) 2005-2006, micro dynamics GmbH
+  989    9                      ;Author(s):	Michael Frank
+  990   10                      ;Update:	24.11.2006
+  991   11                      ;
+  992   12                      ;Description:	Abfragen der Analogeingänge
+  993   13                      ;------------------------------------------------------------------------------
+  994   14                      ;Revision History:	Original Version  11.05
+  995   15                      ;
+  996   16                      ;24.11.2006	Version 1.00
+  997   17                      ;08.11.2006	Anpassung an MC9S12C128
+  998   18                      ;------------------------------------------------------------------------------
+  999   19                      					;
+ 1000   20                      ;------------------------------------------------------------------------------
+ 1001   21                      ;Externals
+ 1002   22                      ;------------------------------------------------------------------------------
+ 1003   23                      					;
+ 1004   24                      	xref	SDT_READ_VALUE		;Code
+ 1005   25                      					;
+ 1006   26                      	xref	ANALOG_BUF		;Data
+ 1007   27                      	xref	ANALOG_FLAGS		;Data
+ 1008   28                      	xref.b	_ADC_ERROR		;bitMask
+ 1009   29                      	xref	UNIT_TEMPERATURE	;Data
+ 1010   30                      					;
+ 1011   31                      ;------------------------------------------------------------------------------
+ 1012   32                      ;Publics
+ 1013   33                      ;------------------------------------------------------------------------------
+ 1014   34                      					;
+ 1015   35                      	xdef	INPUT			;Code
+ 1016   36                      					;
+ 1017   37                      .text:		section
+ 1018   38                      					;
+ 1019   39                      ;==============================================================================
+ 1020   40                      ;INPUT Modul-Einsprung
+ 1021   41                      ;==============================================================================
+ 1022   42                      					;
+ 1023   43                      INPUT:
+ 1024   44   000000 16xx xx     	JSR	GET_ANALOG_VALUES	;analoge Eingänge abfragen
+ 1025   45   000003 16xx xx     	JSR	GET_SENSOR_VALUES	;Temperatursensor abfragen
+ 1026   46   000006 3D          	RTS				;
+ 1027   47                      					;
+ 1028   48   000007 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00000B FFFF       
+ 1029   49   00000D 3F          	SWI				;
+ 1030   50                      					;
+ 1031   51                      ;------------------------------------------------------------------------------
+ 1032   52                      ;GET_ANALOG_VALUES liest den analogen Eingang.
+ 1033   53                      ;Der 1 analoge Eingang werden abgefragt und die Ergebniswerte im
+ 1034   54                      ;prozessorinternen RAM abgelegt.
+ 1035   55                      ;
+ 1036   56                      ;Eingangsparameter:	keine
+ 1037   57                      ;Ausgangsparameter:	ANALOG_BUF	Analogeingänge-Rohdaten
+ 1038   58                      ;			ADC_ERROR
+ 1039   59                      ;veraenderte Register:	CCR, A, X, Y, R[2..3]
+ 1040   60                      ;------------------------------------------------------------------------------
+ 1041   61                      					;
+ 1042   62                      GET_ANALOG_VALUES:
+ 1043   63   00000E 180B B000   	MOVB	#10110000b,ATD0STAT0	;Statusflags quittieren
+             000012 86         
+ 1044   64   000013 8690        	LDAA	#10010000b		;Right adjusted, unsigned, single shot, multi-channel
+ 1045   65   000015 5A85        	STAA	ATD0CTL5		;Wandlungssequenz starten
+ 1046   66   000017 1803 0080   	MOVW	#128,R2			;Timeout-Zähler
+             00001B 1002       
+ 1047   67                      GET_ANALOG_VALUES1:
+ 1048   68   00001D 4E86 8011   	BRSET	ATD0STAT0,_SCF,GET_ANALOG_VALUES3
+ 1049   69                      GET_ANALOG_VALUES2:
+ 1050   70   000021 7310 03     	DEC	R3			;
+ 1051   71   000024 26F7        	BNE	GET_ANALOG_VALUES1	;
+ 1052   72   000026 7310 02     	DEC	R2			;warten, bis Wandlungssequenz abgeschlossen
+ 1053   73   000029 26F2        	BNE	GET_ANALOG_VALUES1	;bzw. Zeitgrenze erreicht
+ 1054   74   00002B 1Cxx xxxx   	BSET	ANALOG_FLAGS,_ADC_ERROR	;dann mit Fehlermeldung zurück
+ 1055   75   00002F 06xx xx     	JMP	GET_ANALOG_VALUES9	;
+ 1056   76                      					;
+ 1057   77                      GET_ANALOG_VALUES3:
+ 1058   78   000032 CE00 90     	LDX	#ATD0DR0		;
+ 1059   79   000035 CDxx xx     	LDY	#ANALOG_BUF		;
+ 1060   80   000038 180B 0110   	MOVB	#1,R3			;
+             00003C 03         
+tg3Input  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1061   81                      GET_ANALOG_VALUES4:
+ 1062   82   00003D 1802 3171   	MOVW	2,X+,2,Y+		;Ergebnisse von AD-Wandler 0 abholen
+ 1063   83   000041 7310 03     	DEC	R3			;
+ 1064   84   000044 26F7        	BNE	GET_ANALOG_VALUES4	;
+ 1065   85                      					;
+ 1066   86                      GET_ANALOG_VALUES9:
+ 1067   87   000046 3D          	RTS				;
+ 1068   88                      					;
+ 1069   89                      ;-----------------------------------------------------------------------------
+ 1070   90                      ;GET_SENSOR_VALUES liest den Temperatursensor DS1722 und legt das
+ 1071   91                      ;Messergebnis im internen RAM ab.
+ 1072   92                      ;
+ 1073   93                      ;Eingangsparameter:	keine
+ 1074   94                      ;Ausgangsparameter:	UNIT_TEMPERATURE Gerätetemperaturwert
+ 1075   95                      ;veränderte Register:	CCR, A, B, R[0..1,3]
+ 1076   96                      ;-----------------------------------------------------------------------------
+ 1077   97                      					;
+ 1078   98                      GET_SENSOR_VALUES:
+ 1079   99   000047 16xx xx     	JSR	SDT_READ_VALUE		;Temperatursensor abfragen
+ 1080  100   00004A FC10 00     	LDD	R0			;
+ 1081  101   00004D 7Cxx xx     	STD	UNIT_TEMPERATURE	;Temperaturwert ablegen
+ 1082  102   000050 3D          	RTS				;
+ 1083  103                      					;
+ 1084  104   000051 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000055 FFFF       
+ 1085  105   000057 3F          	SWI				;
+ 1086  106                      					;
+ 1087  107                      ;------------------------------------------------------------------------------

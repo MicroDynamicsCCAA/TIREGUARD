@@ -1,0 +1,136 @@
+s12c_MC33879_s  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_MC33879_s.sfr"
+ 1026    3                      	title	"s12c_MC33879_s  Copyright (C) 2006, micro dynamics GmbH"
+ 1027    4                      ;------------------------------------------------------------------------------
+ 1028    5                      ;Module:	s12c_MC33879.asm
+ 1029    6                      ;
+ 1030    7                      ;Copyright:	(C) 2006, micro dynamics GmbH
+ 1031    8                      ;Author(s):	Michael Frank
+ 1032    9                      ;Update:	24.11.2006
+ 1033   10                      ;
+ 1034   11                      ;Description:	Funktionen für den Zugriff auf den seriellen Achtfach-Lasttreiber
+ 1035   12                      ;		vom Typ Freescale MC33879.
+ 1036   13                      ;
+ 1037   14                      ;		SingleChip-Version ohne MSB-Businterface
+ 1038   15                      ;
+ 1039   16                      ;Folgende Bezeichner sind in s12c_MC33879_s.sfr zu definieren:
+ 1040   17                      ;
+ 1041   18                      ;Bits:		_MISO
+ 1042   19                      ;		_MOSI
+ 1043   20                      ;		_SCLK
+ 1044   21                      ;		_CS
+ 1045   22                      ;
+ 1046   23                      ;Ports:		MISO_DIR
+ 1047   24                      ;		MISO_PORT
+ 1048   25                      ;		MOSI_DIR
+ 1049   26                      ;		MOSI_PORT
+ 1050   27                      ;		SCLK_DIR
+ 1051   28                      ;		SCLK_PORT
+ 1052   29                      ;		CS_DIR
+ 1053   30                      ;		CS_PORT
+ 1054   31                      ;------------------------------------------------------------------------------
+ 1055   32                      ;Revision History:	Original Version  11.06
+ 1056   33                      ;
+ 1057   34                      ;------------------------------------------------------------------------------
+ 1058   35                      					;
+ 1059   36                      ;------------------------------------------------------------------------------
+ 1060   37                      ;Publics
+ 1061   38                      ;------------------------------------------------------------------------------
+ 1062   39                      					;
+ 1063   40                      	xdef	PWS_RESET		;Code
+ 1064   41                      	xdef	PWS_UPDATE		;Code
+ 1065   42                      					;
+ 1066   43                      .text:		section
+ 1067   44                      					;
+ 1068   45                      ;//////////////////////////////////////////////////////////////////////////////
+ 1069   46                      ;SWRITE schreibt neue Zustände für die acht Schaltausgänge und liest den
+ 1070   47                      ;Fehlerstatus des Bauelementes (MSB first).
+ 1071   48                      ;
+ 1072   49                      ;Die Taktfrequenz beträgt ca. 1,0 MHz bei 24,0 MHz Bustakt.
+ 1073   50                      ;Der Hersteller des Bauelementes empfiehlt 4 MHz bei 3,1..5,5 V.
+ 1074   51                      ;
+ 1075   52                      ;Eingangsparameter:	D		zu schreibende Daten
+ 1076   53                      ;Ausgangsparameter:	D		Fehlerstatus
+ 1077   54                      ;			SCLK_PORT._SCLK	0
+ 1078   55                      ;veränderte Register:	CCR, R3
+ 1079   56                      ;//////////////////////////////////////////////////////////////////////////////
+ 1080   57                      					;
+ 1081   58                      SWRITE:
+ 1082   59   000000 1D02 5020   	BCLR	SCLK_PORT,_SCLK		;Takt auf '0'
+ 1083   60   000004 1D02 4010   	BCLR	CS_PORT,_CS		;Bauteil selektieren
+ 1084   61   000008 180B 1010   	MOVB	#16,R3			;bit-Zähler auf Startwert
+             00000C 03         
+ 1085   62                      SWRITE1:
+ 1086   63   00000D 1C02 5020   	BSET	SCLK_PORT,_SCLK		;Takt auf '1' zur Übernahme des zu lesenden bits
+ 1087   64   000011 59          	LSLD				;Daten um ein bit nach links schieben
+ 1088   65   000012 2406        	BCC	SWRITE2			;wenn CARRY
+ 1089   66   000014 1C02 5010   	BSET	MOSI_PORT,_MOSI		;dann Sendeleitung auf '1'
+ 1090   67   000018 2005        	BRA	SWRITE3			;
+ 1091   68                      SWRITE2:
+ 1092   69   00001A 1D02 5010   	BCLR	MOSI_PORT,_MOSI		;sonst Sendeleitung auf '0'
+ 1093   70   00001E A7          	NOP				;
+ 1094   71                      SWRITE3:
+ 1095   72   00001F 1F02 5004   	BRCLR	MISO_PORT,_MISO,SWRITE4	;wenn zu lesendes bit gesetzt
+             000023 04         
+ 1096   73   000024 CA01        	ORAB	#00000001b		;dann '1' in gelesene Daten eintragen
+ 1097   74   000026 2002        	BRA	SWRITE5			;
+ 1098   75                      SWRITE4:
+ 1099   76   000028 C4FE        	ANDB	#11111110b		;sonst '0' in gelesene Daten eintragen
+ 1100   77                      SWRITE5:
+ 1101   78   00002A 1D02 5020   	BCLR	SCLK_PORT,_SCLK 	;Takt auf '0' zur Übernahme des zu schreibenden bits
+ 1102   79   00002E 7310 03     	DEC	R3			;weiter,
+ 1103   80   000031 26DA        	BNE	SWRITE1			;  bis alle bits übertragen
+ 1104   81   000033 1C02 4010   	BSET	CS_PORT,_CS		;danach Bauteil deaktivieren
+ 1105   82   000037 3D          	RTS				;
+s12c_MC33879_s  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1106   83                      					;
+ 1107   84                      ;//////////////////////////////////////////////////////////////////////////////
+ 1108   85                      ;Public: PWS_RESET bringt Daten- und Taktleitungen in Grundstellung.
+ 1109   86                      ;
+ 1110   87                      ;Eingangsparameter:	keine
+ 1111   88                      ;Ausgangsparameter:	keine
+ 1112   89                      ;veränderte Register:	CCR
+ 1113   90                      ;//////////////////////////////////////////////////////////////////////////////
+ 1114   91                      					;
+ 1115   92                      PWS_RESET:
+ 1116   93   000038 1C02 4210   	BSET	CS_DIR,_CS		;CS-Pin auf Ausgang schalten
+ 1117   94   00003C 1C02 4010   	BSET	CS_PORT,_CS		;CS:		Out= 1
+ 1118   95                      					;
+ 1119   96   000040 1C02 5220   	BSET	SCLK_DIR,_SCLK		;SCLK-Pin auf Ausgang schalten
+ 1120   97   000044 1D02 5020   	BCLR	SCLK_PORT,_SCLK		;SCLK:		Out= 0
+ 1121   98   000048 1C02 5210   	BSET	MOSI_DIR,_MOSI		;MOSI-Pin auf Ausgang schalten
+ 1122   99   00004C 1D02 5010   	BCLR	MOSI_PORT,_MOSI		;MOSI:		Out= 0
+ 1123  100   000050 1D02 5204   	BCLR	MISO_DIR,_MISO		;MISO-Pin auf Eingang schalten
+ 1124  101                      					;MISO:		In
+ 1125  102   000054 3D          	RTS				;
+ 1126  103                      					;
+ 1127  104                      ;------------------------------------------------------------------------------
+ 1128  105                      ;Public: PWS_UPDATE lädt neue Schalt-Zustände in den Treiber-Baustein.
+ 1129  106                      ;
+ 1130  107                      ;Eingangsparameter:	R0/R1		Schalt- und Überwachungskommando
+ 1131  108                      ;Ausgangsparameter:	R0/R1		letzter Fehlerstatus
+ 1132  109                      ;veränderte Register:	CCR, A, B, R3
+ 1133  110                      ;------------------------------------------------------------------------------
+ 1134  111                      					;
+ 1135  112                      PWS_UPDATE:
+ 1136  113   000055 FC10 00     	LDD	R0			;
+ 1137  114   000058 16xx xx     	JSR	SWRITE			;Kommando ausführen
+ 1138  115   00005B 7C10 00     	STD	R0			;
+ 1139  116   00005E 3D          	RTS				;
+ 1140  117                      					;
+ 1141  118   00005F FFFF FFFF   	dcb.b	6, 0FFh			;
+             000063 FFFF       
+ 1142  119   000065 3F          	SWI				;
+ 1143  120                      					;
+ 1144  121                      ;------------------------------------------------------------------------------

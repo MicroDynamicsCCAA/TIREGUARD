@@ -1,0 +1,718 @@
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_SoftUart.sfr"
+ 1018    3                      	title	"s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH"
+ 1019    4                      ;------------------------------------------------------------------------------
+ 1020    5                      ;Module:	s12c_SoftUart.asm
+ 1021    6                      ;
+ 1022    7                      ;Copyright:	(C) 2006, micro dynamics GmbH
+ 1023    8                      ;Author(s):	Michael Frank
+ 1024    9                      ;Update:	24.11.2006
+ 1025   10                      ;
+ 1026   11                      ;Description:	Funktion für die Full-Duplex serielle RS232-Kommuniktion.
+ 1027   12                      ;
+ 1028   13                      ;Folgende Bezeichner sind in s12c_SoftUart.sfr zu definieren:
+ 1029   14                      ;
+ 1030   15                      ;Bits:		_RX
+ 1031   16                      ;		_TX
+ 1032   17                      ;
+ 1033   18                      ;Ports:		RX_DIR
+ 1034   19                      ;		RX_PORT
+ 1035   20                      ;		TX_DIR
+ 1036   21                      ;		TX_PORT
+ 1037   22                      ;
+ 1038   23                      ;------------------------------------------------------------------------------
+ 1039   24                      ;Revision History:	Original Version  11.06
+ 1040   25                      ;
+ 1041   26                      ;------------------------------------------------------------------------------
+ 1042   27                      					;
+ 1043   28                      ;------------------------------------------------------------------------------
+ 1044   29                      ;Externals
+ 1045   30                      ;------------------------------------------------------------------------------
+ 1046   31                      					;
+ 1047   32                      	xref	BUS_CLK			;Number
+ 1048   33                      	xref	BD_9600x4_REL		;Number
+ 1049   34                      					;
+ 1050   35                      ;------------------------------------------------------------------------------
+ 1051   36                      ;Publics
+ 1052   37                      ;------------------------------------------------------------------------------
+ 1053   38                      					;
+ 1054   39                      	xdef	SCI_INT			;Code
+ 1055   40                      					;
+ 1056   41                      	xdef	SCI_RESET		;Code
+ 1057   42                      	xdef	SCI_READ8		;Code
+ 1058   43                      	xdef	SCI_STATUS		;Code
+ 1059   44                      	xdef	SCI_TX_DISABLE		;Code
+ 1060   45                      	xdef	SCI_TX_ENABLE		;Code
+ 1061   46                      	xdef	SCI_TX_STATUS		;Code
+ 1062   47                      	xdef	SCI_WRITE8		;Code
+ 1063   48                      					;
+ 1064   49                      	xdef	E_SCI_TIMEOUT		;Number
+ 1065   50                      					;
+ 1066   51                      ;------------------------------------------------------------------------------
+ 1067   52                      ;Constants
+ 1068   53                      ;------------------------------------------------------------------------------
+ 1069   54                      					;
+ 1070   55          FFFF FFFF   E_SCI_TIMEOUT:	equ	-1
+ 1071   56                      					;
+ 1072   57          0000 0004   BIT_CT:		equ	4		;Anzahl Interrupts pro bit
+ 1073   58                      					;
+ 1074   59                      ;------------------------------------------------------------------------------
+ 1075   60                      ;Variables
+ 1076   61                      ;------------------------------------------------------------------------------
+ 1077   62                      					;
+ 1078   63                      .locals:	section
+ 1079   64                      					;
+ 1080   65                      BOV:
+ 1081   66   000000             TXSTEP:		ds.b	1		;Transmit Step Register
+ 1082   67   000001             TXICTR:		ds.b	1		;Transmit Interrupt Counter Register
+ 1083   68   000002             TXBCTR:		ds.b	1		;Transmit Bit Counter Register
+ 1084   69                      TXSHFT:					;Transmit Shift Register
+ 1085   70   000003             TXSHFTH:	ds.b	1		;Transmit Shift Register High Byte
+ 1086   71   000004             TXSHFTL:	ds.b	1		;Transmit Shift Register Low Byte
+ 1087   72   000005             TXPAR:		ds.b	1		;Transmit Parity Register
+ 1088   73                      					;
+ 1089   74   000006             RXSTEP:		ds.b	1		;Receive Step Register
+ 1090   75   000007             RXICTR:		ds.b	1		;Receive Interrupt Counter Register
+ 1091   76   000008             RXBCTR:		ds.b	1		;Receive Bit Counter Register
+ 1092   77                      RXSHFT:					;Receive Shift Register
+ 1093   78   000009             RXSHFTH:	ds.b	1		;Receive Shift Register High Byte
+ 1094   79   00000A             RXSHFTL:	ds.b	1		;Receive Shift Register Low Byte
+ 1095   80   00000B             RXPAR:		ds.b	1		;Receive Parity Register
+ 1096   81                      					;
+ 1097   82                      ;------------------------------------------------------------------------------
+ 1098   83                      					;
+ 1099   84   00000C             SCIBD:		ds.w	1		;Baudrate Register
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1100   85   00000E             SCICR1:		ds.b	1		;Control Register 1
+ 1101   86   00000F             SCICR2:		ds.b	1		;Control Register 2
+ 1102   87   000010             SCISR1:		ds.b	1		;Status Register
+ 1103   88                      SCITDR:					;Transmit Data Register
+ 1104   89   000011             SCITDRH:	ds.b	1		;Transmit Data Register High Byte
+ 1105   90   000012             SCITDRL:	ds.b	1		;Transmit Data Register Low Byte
+ 1106   91                      SCIRDR:					;Receive Data Register
+ 1107   92   000013             SCIRDRH:	ds.b	1		;Receive Data Register High Byte
+ 1108   93   000014             SCIRDRL:	ds.b	1		;Receive Data Register Low Byte
+ 1109   94                      TOV:
+ 1110   95                      					;
+ 1111   96                      .text:		section
+ 1112   97                      					;
+ 1113   98                      ;------------------------------------------------------------------------------
+ 1114   99                      ;SCI_INT		SoftUart-Interrupt
+ 1115  100                      ;
+ 1116  101                      ;Priorität:		normal
+ 1117  102                      ;Interruptquelle:	TFLG1._C6F
+ 1118  103                      ;Auslöser:              Timer Channel 6 Compare Event
+ 1119  104                      ;Initialisierung:	Module 's12c_SoftUart'
+ 1120  105                      ;
+ 1121  106                      ;Eingangsparameter:
+ 1122  107                      ;Ausgangsparameter:
+ 1123  108                      ;Laufzeit:		ca. 6 µs max.	@ 24 MHz
+ 1124  109                      ;------------------------------------------------------------------------------
+ 1125  110                      					;
+ 1126  111                      SCI_INT:
+ 1127  112                      					;
+ 1128  113                      ;==============================================================================
+ 1129  114                      ;Transmitter Bit Clock
+ 1130  115                      					;
+ 1131  116   000000 B6xx xx     	LDAA	TXSTEP			;wenn TXSTEP = 0,
+ 1132  117   000003 270F        	BEQ	SCI_INT1		;  dann sofort Ausgabe starten
+ 1133  118                      					;
+ 1134  119   000005 B6xx xx     	LDAA	TXICTR			;sonst
+ 1135  120   000008 270A        	BEQ	SCI_INT1		;  wenn bit-Zeitzähler > 0,
+ 1136  121   00000A 43          	DECA				;    dann bit-Zeitzähler decrementieren
+ 1137  122   00000B 7Axx xx     	STAA	TXICTR			;  wenn bit-Zeitzähler = 0
+ 1138  123   00000E 2704        	BEQ	SCI_INT1		;    dann Ausgabe fortsetzen
+ 1139  124                      					;
+ 1140  125   000010 1820 0101   	LBRA	SCI_INT3		;sonst sofort zur Eingabefunktion
+ 1141  126                      					;
+ 1142  127                      ;==============================================================================
+ 1143  128                      ;Transmit Data
+ 1144  129                      					;
+ 1145  130                      SCI_INT1:
+ 1146  131   000014 F6xx xx     	LDAB	TXSTEP			;
+ 1147  132   000017 C107        	CMPB	#LOW(TX_JMP_TBL_CNT)	;
+ 1148  133   000019 2502        	BLO	SCI_INT2		;
+ 1149  134   00001B C606        	LDAB	#LOW(TX_JMP_TBL_CNT-1)	;
+ 1150  135                      SCI_INT2:
+ 1151  136   00001D 87          	CLRA				;Code nach A:B
+ 1152  137   00001E 59          	LSLD				;* 2 ergibt Offset in Adressentabelle
+ 1153  138   00001F CExx xx     	LDX	#TX_JMP_TBL		;
+ 1154  139   000022 15E7        	JSR	[D,X]			;Aufruf des Unterprogrammes
+ 1155  140   000024 1820 00ED   	LBRA	SCI_INT3		;
+ 1156  141                      					;
+ 1157  142                      TX_JMP_TBL:
+ 1158  143   000028 xxxx        	dc.w	STEP0_TX
+ 1159  144   00002A xxxx        	dc.w	STEP1_TX
+ 1160  145   00002C xxxx        	dc.w	STEP2_TX
+ 1161  146   00002E xxxx        	dc.w	STEP3_TX
+ 1162  147   000030 xxxx        	dc.w	STEP4_TX
+ 1163  148   000032 xxxx        	dc.w	STEP5_TX
+ 1164  149   000034 xxxx        	dc.w	ERROR_TX
+ 1165  150                      					;
+ 1166  151          0000 0007   TX_JMP_TBL_CNT:		equ	(* - TX_JMP_TBL) / 2
+ 1167  152                      					;
+ 1168  153                      ;------------------------------------------------------------------------------
+ 1169  154                      ;TxD-Step 0
+ 1170  155                      ;Check to see if a new byte to transmitted is in the Transmit Data Register.
+ 1171  156                      ;Test SCISR1._TDRE = false. If so move Data from Transmit Data Register to
+ 1172  157                      ;Transmit Shift Register.
+ 1173  158                      ;=> Step 1
+ 1174  159                      					;
+ 1175  160                      STEP0_TX:
+ 1176  161   000036 1Fxx xx40   	BRCLR	SCISR1,_TC,STEP0_TX9	;wenn _TC gesetzt und _TDRE rückgesetzt,
+             00003A 1D         
+ 1177  162   00003B 1Exx xx80   	BRSET	SCISR1,_TDRE,STEP0_TX9	;dann
+             00003F 18         
+ 1178  163   000040 1804 xxxx   	MOVW    SCITDR,TXSHFT		;  Zeichen in Schieberegister laden
+             000044 xxxx       
+ 1179  164   000046 1Cxx xx80   	BSET	SCISR1,_TDRE		;  Zeichenübernahme ins Schieberegister quittieren
+ 1180  165   00004A 1Dxx xx40   	BCLR	SCISR1,_TC		;  Datenausgabe starten
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1181  166   00004E 180B 01xx   	MOVB    #1,TXICTR		;  bit-Zeitzähler auf 1
+             000052 xx         
+ 1182  167   000053 180B 01xx   	MOVB	#1,TXSTEP		;  => Step 1
+             000057 xx         
+ 1183  168                      STEP0_TX9:
+ 1184  169   000058 3D          	RTS				;
+ 1185  170                      					;
+ 1186  171                      ;------------------------------------------------------------------------------
+ 1187  172                      ;TxD-Step 1
+ 1188  173                      ;Transmit a start bit and prepare data transmission.
+ 1189  174                      ;=> Step 2
+ 1190  175                      					;
+ 1191  176                      STEP1_TX:
+ 1192  177   000059 1D02 4002   	BCLR	TX_PORT,_TX		;Port = 0
+ 1193  178   00005D 180B 00xx   	MOVB	#0,TXPAR		;Parity Register auf 0
+             000061 xx         
+ 1194  179   000062 180B 04xx   	MOVB    #BIT_CT,TXICTR		;1 bit-Zeit
+             000066 xx         
+ 1195  180   000067 1Fxx xx10   	BRCLR	SCICR1,_M,STEP1_TX1
+             00006B 07         
+ 1196  181   00006C 180B 09xx   	MOVB	#9,TXBCTR		;9 Datenbits
+             000070 xx         
+ 1197  182   000071 2005        	BRA	STEP1_TX2		;
+ 1198  183                      STEP1_TX1:
+ 1199  184   000073 180B 08xx   	MOVB	#8,TXBCTR		;8 Datenbits
+             000077 xx         
+ 1200  185                      STEP1_TX2:
+ 1201  186   000078 180B 02xx   	MOVB	#2,TXSTEP		;
+             00007C xx         
+ 1202  187   00007D 3D          	RTS				;
+ 1203  188                      					;
+ 1204  189                      ;------------------------------------------------------------------------------
+ 1205  190                      ;TxD-Step 2
+ 1206  191                      ;Transmit data bits. At end either set up for parity or for stop bit
+ 1207  192                      ;
+ 1208  193                      					;
+ 1209  194                      STEP2_TX:
+ 1210  195   00007E FCxx xx     	LDD	TXSHFT			;Transmit Shift Register
+ 1211  196   000081 49          	LSRD				;nach rechts ins CARRY schieben
+ 1212  197   000082 7Cxx xx     	STD	TXSHFT			;
+ 1213  198   000085 2506        	BCS	STEP2_TX1		;wenn CARRY rückgesetzt
+ 1214  199   000087 1D02 4002   	BCLR	TX_PORT,_TX		;  dann Port = 0
+ 1215  200   00008B 2007        	BRA	STEP2_TX2		;
+ 1216  201                      STEP2_TX1:
+ 1217  202   00008D 1C02 4002   	BSET	TX_PORT,_TX		;sonst Port = 1
+ 1218  203   000091 72xx xx     	INC	TXPAR			;Parity Register incrementieren
+ 1219  204                      STEP2_TX2:
+ 1220  205   000094 180B 04xx   	MOVB	#BIT_CT,TXICTR		;1 bit-Zeit
+             000098 xx         
+ 1221  206   000099 73xx xx     	DEC	TXBCTR			;Bitzähler decrementieren
+ 1222  207   00009C 2611        	BNE	STEP2_TX9		;
+ 1223  208   00009E 1Fxx xx02   	BRCLR	SCICR1,_PE,STEP2_TX3	;wenn Parity,
+             0000A2 07         
+ 1224  209   0000A3 180B 03xx   	MOVB	#3,TXSTEP		;  dann => Step 3
+             0000A7 xx         
+ 1225  210   0000A8 2005        	BRA	STEP2_TX9		;
+ 1226  211                      STEP2_TX3:
+ 1227  212   0000AA 180B 04xx   	MOVB	#4,TXSTEP		;  sonst => Step 4
+             0000AE xx         
+ 1228  213                      STEP2_TX9:
+ 1229  214   0000AF 3D          	RTS				;
+ 1230  215                      					;
+ 1231  216                      ;------------------------------------------------------------------------------
+ 1232  217                      ;TxD-Step 3
+ 1233  218                      ;Transmit parity bit.
+ 1234  219                      ;=> Step 4
+ 1235  220                      					;
+ 1236  221                      STEP3_TX:
+ 1237  222   0000B0 B6xx xx     	LDAA	TXPAR			;
+ 1238  223   0000B3 1Fxx xx01   	BRCLR	SCICR1,_PT,STEP3_TX1	;
+             0000B7 01         
+ 1239  224   0000B8 41          	COMA				;
+ 1240  225                      STEP3_TX1:
+ 1241  226   0000B9 8401        	ANDA	#00000001b		;
+ 1242  227   0000BB 2606        	BNE	STEP3_TX2		;
+ 1243  228   0000BD 1D02 4002   	BCLR	TX_PORT,_TX		;
+ 1244  229   0000C1 2004        	BRA	STEP3_TX3		;
+ 1245  230                      STEP3_TX2:
+ 1246  231   0000C3 1C02 4002   	BSET	TX_PORT,_TX		;
+ 1247  232                      STEP3_TX3:
+ 1248  233   0000C7 180B 04xx   	MOVB    #BIT_CT,TXICTR		;1 bit-Zeit
+             0000CB xx         
+ 1249  234   0000CC 180B 04xx   	MOVB	#4,TXSTEP		;=> Step 4
+             0000D0 xx         
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1250  235   0000D1 3D          	RTS				;
+ 1251  236                      					;
+ 1252  237                      ;------------------------------------------------------------------------------
+ 1253  238                      ;TxD-Step 4
+ 1254  239                      ;Transmit a stop bit.
+ 1255  240                      ;=> Step 5
+ 1256  241                      					;
+ 1257  242                      STEP4_TX:
+ 1258  243   0000D2 1C02 4002   	BSET	TX_PORT,_TX		;Port = 1
+ 1259  244   0000D6 180B 04xx   	MOVB    #BIT_CT,TXICTR		;1 bit-Zeit
+             0000DA xx         
+ 1260  245   0000DB 180B 05xx   	MOVB	#5,TXSTEP		;=> Step 5
+             0000DF xx         
+ 1261  246                      STEP4_TX9:
+ 1262  247   0000E0 3D          	RTS				;
+ 1263  248                      					;
+ 1264  249                      ;------------------------------------------------------------------------------
+ 1265  250                      ;TxD-Step 5
+ 1266  251                      ;Cleanup after all bits of a character are transmitted.
+ 1267  252                      ;=> Step 0
+ 1268  253                      					;
+ 1269  254                      STEP5_TX:
+ 1270  255   0000E1 1C02 4002   	BSET	TX_PORT,_TX		;Port = 1
+ 1271  256   0000E5 180B 00xx   	MOVB	#0,TXICTR		;bit-Zeitzähler auf 0
+             0000E9 xx         
+ 1272  257   0000EA 180B 00xx   	MOVB	#0,TXBCTR		;Bitzähler auf 0
+             0000EE xx         
+ 1273  258   0000EF 1Cxx xx40   	BSET	SCISR1,_TC		;_TC setzen
+ 1274  259   0000F3 180B 00xx   	MOVB	#0,TXSTEP		;=> Step 0
+             0000F7 xx         
+ 1275  260   0000F8 3D          	RTS				;
+ 1276  261                      					;
+ 1277  262                      ;------------------------------------------------------------------------------
+ 1278  263                      ;TxD-Error
+ 1279  264                      					;
+ 1280  265                      ERROR_TX:
+ 1281  266   0000F9 1Cxx xx02   	BSET	SCISR1,_FE		;Frame Error setzen
+ 1282  267   0000FD 1C02 4002   	BSET	TX_PORT,_TX		;Port = 1
+ 1283  268   000101 180B 00xx   	MOVB	#0,TXICTR		;bit-Zeitzähler auf 0
+             000105 xx         
+ 1284  269   000106 180B 00xx   	MOVB	#0,TXBCTR		;Bitzähler auf 0
+             00010A xx         
+ 1285  270   00010B 1Cxx xx40   	BSET	SCISR1,_TC		;_TC setzen
+ 1286  271   00010F 180B 00xx   	MOVB	#0,TXSTEP		;=> Step 0
+             000113 xx         
+ 1287  272   000114 3D          	RTS				;
+ 1288  273                      					;
+ 1289  274                      ;==============================================================================
+ 1290  275                      ;Receiver Bit Clock
+ 1291  276                      					;
+ 1292  277                      SCI_INT3:
+ 1293  278   000115 B6xx xx     	LDAA	RXSTEP			;wenn RXSTEP = 0
+ 1294  279   000118 270F        	BEQ	SCI_INT4		;  dann sofort auf Startbit prüfen
+ 1295  280                      
+ 1296  281   00011A B6xx xx     	LDAA	RXICTR			;sonst
+ 1297  282   00011D 270A        	BEQ	SCI_INT4		;  wenn bit-Zeitzähler > 0,
+ 1298  283   00011F 43          	DECA				;    dann bit-Zeitzähler decrementieren
+ 1299  284   000120 7Axx xx     	STAA	RXICTR			;  wenn bit-Zeitzähler = 0,
+ 1300  285   000123 2704        	BEQ	SCI_INT4		;    dann Empfang fortsetzen
+ 1301  286                      					;
+ 1302  287   000125 1820 0101   	LBRA	SCI_INT9		;sonst sofort zum Funktionsende
+ 1303  288                      					;
+ 1304  289                      ;==============================================================================
+ 1305  290                      ;Receive Data
+ 1306  291                      					;
+ 1307  292                      SCI_INT4:
+ 1308  293   000129 F6xx xx     	LDAB	RXSTEP			;
+ 1309  294   00012C C106        	CMPB	#LOW(RX_JMP_TBL_CNT)	;
+ 1310  295   00012E 2502        	BLO	SCI_INT5		;
+ 1311  296   000130 C605        	LDAB	#LOW(RX_JMP_TBL_CNT-1)	;
+ 1312  297                      SCI_INT5:
+ 1313  298   000132 87          	CLRA				;Code nach A:B
+ 1314  299   000133 59          	LSLD				;* 2 ergibt Offset in Adressentabelle
+ 1315  300   000134 CExx xx     	LDX	#RX_JMP_TBL		;
+ 1316  301   000137 15E7        	JSR	[D,X]			;Aufruf des Unterprogrammes
+ 1317  302   000139 1820 00ED   	LBRA	SCI_INT9		;
+ 1318  303                      					;
+ 1319  304                      RX_JMP_TBL:
+ 1320  305   00013D xxxx        	dc.w	STEP0_RX
+ 1321  306   00013F xxxx        	dc.w	STEP1_RX
+ 1322  307   000141 xxxx        	dc.w	STEP2_RX
+ 1323  308   000143 xxxx        	dc.w	STEP3_RX
+ 1324  309   000145 xxxx        	dc.w	STEP4_RX
+ 1325  310   000147 xxxx        	dc.w	ERROR_RX
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1326  311                      					;
+ 1327  312          0000 0006   RX_JMP_TBL_CNT:		equ	(* - RX_JMP_TBL) / 2
+ 1328  313                      					;
+ 1329  314                      ;------------------------------------------------------------------------------
+ 1330  315                      ;RxD-Step 0
+ 1331  316                      ;Wait for 0-Level to begin start bit check.
+ 1332  317                      ;=> Step 1
+ 1333  318                      					;
+ 1334  319                      STEP0_RX:
+ 1335  320   000149 1E02 4001   	BRSET	RX_PORT,_RX,STEP0_RX9	;
+             00014D 0A         
+ 1336  321   00014E 180B 02xx   	MOVB    #(BIT_CT/2),RXICTR	;1/2 bit-Zeit
+             000152 xx         
+ 1337  322   000153 180B 01xx   	MOVB	#1,RXSTEP		;=> Step 1
+             000157 xx         
+ 1338  323                      STEP0_RX9:
+ 1339  324   000158 3D          	RTS				;
+ 1340  325                      					;
+ 1341  326                      ;------------------------------------------------------------------------------
+ 1342  327                      ;RxD-Step 1
+ 1343  328                      ;Validate start bit and set up for data receive
+ 1344  329                      ;=> Step 2
+ 1345  330                      					;
+ 1346  331                      STEP1_RX:
+ 1347  332   000159 1E02 4001   	BRSET	RX_PORT,_RX,STEP1_RX8	;
+             00015D 22         
+ 1348  333                      					;gültiges Startbit:
+ 1349  334   00015E 180B 04xx   	MOVB    #BIT_CT,RXICTR		;1 bit-Zeit
+             000162 xx         
+ 1350  335   000163 180B 00xx   	MOVB	#0,RXPAR		;Parity Register auf 0
+             000167 xx         
+ 1351  336   000168 1Fxx xx10   	BRCLR	SCICR1,_M,STEP1_RX1	;
+             00016C 07         
+ 1352  337   00016D 180B 09xx   	MOVB	#9,RXBCTR		;9 Datenbits
+             000171 xx         
+ 1353  338   000172 2005        	BRA	STEP1_RX2		;
+ 1354  339                      STEP1_RX1:
+ 1355  340   000174 180B 08xx   	MOVB	#8,RXBCTR		;8 Datenbits
+             000178 xx         
+ 1356  341                      STEP1_RX2:
+ 1357  342   000179 180B 02xx   	MOVB	#2,RXSTEP		;=> Step 2
+             00017D xx         
+ 1358  343   00017E 2005        	BRA	STEP1_RX9		;
+ 1359  344                      STEP1_RX8:
+ 1360  345                      					;Startbit nicht in Ordnung:
+ 1361  346   000180 180B 00xx   	MOVB	#0,RXSTEP		;=> Step 0
+             000184 xx         
+ 1362  347                      STEP1_RX9:
+ 1363  348   000185 3D          	RTS				;
+ 1364  349                      					;
+ 1365  350                      ;------------------------------------------------------------------------------
+ 1366  351                      ;RxD-Step 2
+ 1367  352                      ;Data bit receive, at end set up for parity or stop bit receiption.
+ 1368  353                      ;
+ 1369  354                      					;
+ 1370  355                      STEP2_RX:
+ 1371  356   000186 FCxx xx     	LDD	RXSHFT			;
+ 1372  357   000189 49          	LSRD				;einmal nach rechts schieben
+ 1373  358   00018A 1F02 4001   	BRCLR	RX_PORT,_RX,STEP2_RX1	;
+             00018E 07         
+ 1374  359   00018F 72xx xx     	INC	RXPAR			;RxD-Parity aktualisieren
+ 1375  360   000192 8A01        	ORAA	#00000001b		;empfangenes bit ist '1'
+ 1376  361   000194 2002        	BRA	STEP2_RX2		;
+ 1377  362                      STEP2_RX1:
+ 1378  363   000196 84FE        	ANDA	#11111110b		;empfangenes bit ist '0'
+ 1379  364                      STEP2_RX2:
+ 1380  365   000198 7Cxx xx     	STD	RXSHFT			;
+ 1381  366   00019B 180B 04xx   	MOVB	#BIT_CT,RXICTR		;1 bit-Zeit
+             00019F xx         
+ 1382  367   0001A0 73xx xx     	DEC	RXBCTR			;
+ 1383  368   0001A3 2611        	BNE	STEP2_RX9		;
+ 1384  369   0001A5 1Fxx xx02   	BRCLR	SCICR1,_PE,STEP2_RX3	;wenn Parity,
+             0001A9 07         
+ 1385  370   0001AA 180B 03xx   	MOVB	#3,RXSTEP		;  dann => Step 3
+             0001AE xx         
+ 1386  371   0001AF 2005        	BRA	STEP2_RX9		;
+ 1387  372                      STEP2_RX3:
+ 1388  373   0001B1 180B 04xx   	MOVB	#4,RXSTEP		;sonst => Step 4
+             0001B5 xx         
+ 1389  374                      STEP2_RX9:
+ 1390  375   0001B6 3D          	RTS				;
+ 1391  376                      					;
+ 1392  377                      ;------------------------------------------------------------------------------
+ 1393  378                      ;RxD-Step 3
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1394  379                      ;Receive parity bit, at end set up for stop bit receiption
+ 1395  380                      ;=> Step 4
+ 1396  381                      					;
+ 1397  382                      STEP3_RX:
+ 1398  383   0001B7 1F02 4001   	BRCLR	RX_PORT,_RX,STEP3_RX1	;
+             0001BB 04         
+ 1399  384   0001BC 8601        	LDAA	#00000001b		;empfangenes Parity-bit mit
+ 1400  385   0001BE 2001        	BRA	STEP3_RX2		;
+ 1401  386                      STEP3_RX1:
+ 1402  387   0001C0 87          	CLRA				;
+ 1403  388                      STEP3_RX2:
+ 1404  389   0001C1 F6xx xx     	LDAB	RXPAR			;
+ 1405  390   0001C4 1Fxx xx01   	BRCLR	SCICR1,_PT,STEP3_RX3	;
+             0001C8 01         
+ 1406  391   0001C9 51          	COMB				;
+ 1407  392                      STEP3_RX3:
+ 1408  393   0001CA C401        	ANDB	#00000001b		;neu gebildetetem Parity-bit vergleichen
+ 1409  394   0001CC 1816        	SBA				;
+ 1410  395   0001CE 2706        	BEQ	STEP3_RX4		;wenn verschieden
+ 1411  396   0001D0 1Cxx xx01   	BSET	SCISR1,_PF		;  dann Parity Error
+ 1412  397   0001D4 2004        	BRA	STEP3_RX5		;
+ 1413  398                      STEP3_RX4:
+ 1414  399   0001D6 1Dxx xx01   	BCLR	SCISR1,_PF		;sonst Parity ok
+ 1415  400                      STEP3_RX5:
+ 1416  401   0001DA 180B 04xx   	MOVB	#BIT_CT,RXICTR		;1 bit-Zeit
+             0001DE xx         
+ 1417  402   0001DF 180B 04xx   	MOVB	#4,RXSTEP		;=> Step 4
+             0001E3 xx         
+ 1418  403                      STEP3_RX9:
+ 1419  404   0001E4 3D          	RTS				;
+ 1420  405                      					;
+ 1421  406                      ;------------------------------------------------------------------------------
+ 1422  407                      ;RxD-Step 4
+ 1423  408                      ;Receive stop bit.
+ 1424  409                      ;=> Step 0
+ 1425  410                      					;
+ 1426  411                      STEP4_RX:
+ 1427  412   0001E5 1E02 4001   	BRSET	RX_PORT,_RX,STEP4_RX1	;wenn RX_PORT = '0'
+             0001E9 04         
+ 1428  413   0001EA 1Cxx xx02   	BSET	SCISR1,_FE		;  dann Frame-Fehler setzen
+ 1429  414                      STEP4_RX1:
+ 1430  415   0001EE 1Fxx xx20   	BRCLR	SCISR1,_RDRF,STEP4_RX2	;wenn _RDRF gesetzt,
+             0001F2 04         
+ 1431  416   0001F3 1Cxx xx08   	BSET	SCISR1,_OR		;  dann Überlauf-Fehler setzen
+ 1432  417                      STEP4_RX2:
+ 1433  418   0001F7 FCxx xx     	LDD	RXSHFT			;
+ 1434  419   0001FA 1Exx xx10   	BRSET	SCICR1,_M,STEP4_RX3	;wenn 8-bit Datenformat
+             0001FE 01         
+ 1435  420   0001FF 49          	LSRD				;  dann einmal rechts schieben
+ 1436  421                      STEP4_RX3:
+ 1437  422   000200 7Cxx xx     	STD	SCIRDR			;Zeichen in Empfangsregister umspeichern
+ 1438  423   000203 180B 00xx   	MOVB	#0,RXICTR		;bit-Zähler auf 0
+             000207 xx         
+ 1439  424   000208 1Cxx xx20   	BSET	SCISR1,_RDRF		;_RDRF setzen
+ 1440  425   00020C 180B 00xx   	MOVB	#0,RXSTEP		;=> Step 0
+             000210 xx         
+ 1441  426                      STEP4_RX9:
+ 1442  427   000211 3D          	RTS				;
+ 1443  428                      					;
+ 1444  429                      ;------------------------------------------------------------------------------
+ 1445  430                      ;RxD-Error
+ 1446  431                      ;
+ 1447  432                      ;=> Step 0
+ 1448  433                      					;
+ 1449  434                      ERROR_RX:
+ 1450  435   000212 1Cxx xx02   	BSET	SCISR1,_FE		;Frame Error setzen
+ 1451  436   000216 180B 00xx   	MOVB	#0,RXICTR		;Interruptzähler auf 0
+             00021A xx         
+ 1452  437   00021B 180B 00xx   	MOVB	#0,RXBCTR		;Bitzähler auf 0
+             00021F xx         
+ 1453  438   000220 1Dxx xx20   	BCLR	SCISR1,_RDRF		;_RDRE rücksetzen
+ 1454  439   000224 180B 00xx   	MOVB	#0,RXSTEP		;=> Step 0
+             000228 xx         
+ 1455  440   000229 3D          	RTS				;
+ 1456  441                      					;
+ 1457  442                      ;==============================================================================
+ 1458  443                      					;
+ 1459  444                      SCI_INT9:
+ 1460  445   00022A DC5C        	LDD	TC6			;
+ 1461  446   00022C F3xx xx     	ADDD	SCIBD			;
+ 1462  447   00022F 5C5C        	STD	TC6			;
+ 1463  448   000231 4C4C 40     	BSET	TIE,_C6I		;
+ 1464  449   000234 180B 4000   	MOVB	#_C6F,TFLG1		;
+             000238 4E         
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1465  450   000239 0B          	RTI				;
+ 1466  451                      					;
+ 1467  452                      ;------------------------------------------------------------------------------
+ 1468  453                      ;Public: SCI_RESET bringt die SoftUart-Schnittstelle in Grundstellung.
+ 1469  454                      ;
+ 1470  455                      ;Eingangsparameter:	keine
+ 1471  456                      ;Ausgangsparameter:	keine
+ 1472  457                      ;veränderte Register:	CCR, A, X, Y
+ 1473  458                      ;------------------------------------------------------------------------------
+ 1474  459                      					;
+ 1475  460                      SCI_RESET:
+ 1476  461   00023A CDxx xx     	LDY	#BOV			;Anfang der Systemvariablen
+ 1477  462   00023D CE00 15     	LDX	#(TOV - BOV)		;Anzahl Bytes
+ 1478  463   000240 8600        	LDAA	#0			;Füllwert
+ 1479  464                      SCI_RESET1:
+ 1480  465   000242 6A70        	STAA	1,Y+			;
+ 1481  466   000244 0435 FB     	DBNE	X,SCI_RESET1		;alle Variablen auf Füllwert setzen
+ 1482  467                      					;
+ 1483  468   000247 1803 xxxx   	MOVW	#BD_9600x4_REL,SCIBD	;9600 bps
+             00024B xxxx       
+ 1484  469   00024D 180B 00xx   	MOVB	#00000000b,SCICR1	;8 Datenbits, 1 Stoppbit, kein Parity
+             000251 xx         
+ 1485  470                      
+ 1486  471   000252 1D02 4201   	BCLR	RX_DIR,_RX		;Empfangsleitung auf Eingang schalten
+ 1487  472   000256 B6xx xx     	LDAA	SCICR2			;
+ 1488  473   000259 8404        	ANDA	#00000100b		;
+ 1489  474   00025B 8A04        	ORAA	#00000100b		;RxD aktiv, TxD inaktiv (!)
+ 1490  475   00025D 7Axx xx     	STAA	SCICR2			;
+ 1491  476   000260 1Cxx xxC0   	BSET	SCISR1,_TDRE | _TC	;
+ 1492  477                      					;
+ 1493  478   000264 DC44        	LDD	TCNT			;
+ 1494  479   000266 F3xx xx     	ADDD	SCIBD			;Compare Register 6 für nächsten bit-Takt aktualisieren
+ 1495  480   000269 5C5C        	STD	TC6			;
+ 1496  481   00026B 4C4C 40     	BSET	TIE,_C6I		;Compare Channel 6 Interrupt-Flag rücksetzen
+ 1497  482   00026E 180B 4000   	MOVB	#_C6F,TFLG1		;schwebenden Timer Channel 6 Interrupt quittieren
+             000272 4E         
+ 1498  483   000273 3D          	RTS				;
+ 1499  484                      					;
+ 1500  485                      ;------------------------------------------------------------------------------
+ 1501  486                      ;Public: SCI_STATUS liefert den Status der SoftUart-Schnittstelle.
+ 1502  487                      ;
+ 1503  488                      ;Eingangsparameter:	keine
+ 1504  489                      ;Ausgangsparameter:	A		Funktionsstatus
+ 1505  490                      ;			B		Portstatus
+ 1506  491                      ;			SCISR1._OR
+ 1507  492                      ;			SCISR1._NF
+ 1508  493                      ;			SCISR1._FE
+ 1509  494                      ;			SCISR1._PF
+ 1510  495                      ;veränderte Register:	CCR
+ 1511  496                      ;------------------------------------------------------------------------------
+ 1512  497                      					;
+ 1513  498                      SCI_STATUS:
+ 1514  499   000274 B6xx xx     	LDAA	SCISR1			;Status lesen
+ 1515  500   000277 180E        	TAB				;
+ 1516  501   000279 C4F0        	ANDB	#11110000b		;Fehler-Flags rücksetzen
+ 1517  502   00027B 7Bxx xx     	STAB	SCISR1			;Status
+ 1518  503   00027E 3D          	RTS				;
+ 1519  504                      					;
+ 1520  505                      ;------------------------------------------------------------------------------
+ 1521  506                      ;Public: SCI_TX_DISABLE sperrt den Sendeausgang der SoftUart-Schnittstelle.
+ 1522  507                      ;
+ 1523  508                      ;Eingangsparameter:	keine
+ 1524  509                      ;Ausgangsparameter:	SCICR2._TE
+ 1525  510                      ;veränderte Register:	CCR
+ 1526  511                      ;------------------------------------------------------------------------------
+ 1527  512                      					;
+ 1528  513                      SCI_TX_DISABLE:
+ 1529  514   00027F 1Dxx xx08   	BCLR	SCICR2,_TE		;_TE rücksetzen
+ 1530  515   000283 3D          	RTS				;
+ 1531  516                      					;
+ 1532  517                      ;------------------------------------------------------------------------------
+ 1533  518                      ;Public: SCI_TX_ENABLE aktiviert den Sendeausgang der SoftUart-Schnittstelle
+ 1534  519                      ;und setzt ihn auf '1'.
+ 1535  520                      ;
+ 1536  521                      ;Eingangsparameter:	keine
+ 1537  522                      ;Ausgangsparameter:	TX_DIR._TX
+ 1538  523                      ;			TX_PORT._TX
+ 1539  524                      ;			SCICR2._TE
+ 1540  525                      ;veränderte Register:	CCR
+ 1541  526                      ;------------------------------------------------------------------------------
+ 1542  527                      					;
+ 1543  528                      SCI_TX_ENABLE:
+ 1544  529   000284 1C02 4202   	BSET	TX_DIR,_TX		;Sendeleitung auf Ausgang schalten
+ 1545  530   000288 1C02 4002   	BSET	TX_PORT,_TX		;und auf '1'
+s12c_SoftUart  Copyright (C) 2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1546  531   00028C 1Cxx xx08   	BSET	SCICR2,_TE		;_TE setzen
+ 1547  532   000290 3D          	RTS				;
+ 1548  533                      					;
+ 1549  534                      ;------------------------------------------------------------------------------
+ 1550  535                      ;Public: SCI_TX_STATUS liefert den Ein-/Ausschaltzustand des Sendeausganges
+ 1551  536                      ;der SoftUart-Schnittstelle.
+ 1552  537                      ;
+ 1553  538                      ;Eingangsparameter:	keine
+ 1554  539                      ;Ausgangsparameter:	A		0	= gesperrt
+ 1555  540                      ;					<> 0	= aktiv
+ 1556  541                      ;veränderte Register:	CCR
+ 1557  542                      ;------------------------------------------------------------------------------
+ 1558  543                      					;
+ 1559  544                      SCI_TX_STATUS:
+ 1560  545   000291 B6xx xx     	LDAA	SCICR2			;
+ 1561  546   000294 8408        	ANDA	#_TE			;_TE abfragen
+ 1562  547   000296 3D          	RTS				;
+ 1563  548                      					;
+ 1564  549                      ;------------------------------------------------------------------------------
+ 1565  550                      ;Public: SCI_READ8 liest ein Zeichen aus dem SoftUart-Empfangsregister.
+ 1566  551                      ;
+ 1567  552                      ;Eingangsparameter:	SCISR1._RDRF
+ 1568  553                      ;Ausgangsparameter:	SCISR1._RDRF
+ 1569  554                      ;			CCR.C		clr 	= Zeichen empfangen
+ 1570  555                      ;					set 	= kein neues Zeichen
+ 1571  556                      ;  wenn CCR.C = clr	A		empfangenes Zeichen
+ 1572  557                      ;veränderte Register:	CCR
+ 1573  558                      ;------------------------------------------------------------------------------
+ 1574  559                      					;
+ 1575  560                      SCI_READ8:
+ 1576  561   000297 1Fxx xx20   	BRCLR	SCISR1,_RDRF,SCI_READ8_8
+             00029B 0B         
+ 1577  562                      					;wenn neues Zeichen da,
+ 1578  563   00029C B6xx xx     	LDAA	SCIRDRL			;dann
+ 1579  564   00029F 1Dxx xx20   	BCLR	SCISR1,_RDRF		;  Zeichen nach A, _RDRF rücksetzen
+ 1580  565   0002A3 10FE        	CLC				;  mit CCR.C = 0 zurück
+ 1581  566   0002A5 2002        	BRA	SCI_READ8_9		;
+ 1582  567                      					;
+ 1583  568                      SCI_READ8_8:
+ 1584  569   0002A7 1401        	SEC				;kein neues Zeichen, mit CCR.C = 1 zurück
+ 1585  570                      					;
+ 1586  571                      SCI_READ8_9:
+ 1587  572   0002A9 3D          	RTS				;
+ 1588  573                      					;
+ 1589  574                      ;------------------------------------------------------------------------------
+ 1590  575                      ;Public: SCI_WRITE8 schreibt ein Zeichen in das SoftUart-Senderegister.
+ 1591  576                      ;
+ 1592  577                      ;Eingangsparameter:	A		zu sendendes Zeichen
+ 1593  578                      ;			SCISR1._TDRE
+ 1594  579                      ;Ausgangsparameter:	SCISR1._TDRE
+ 1595  580                      ;			A		0	= ok
+ 1596  581                      ;					<> 0	= Fehlercode
+ 1597  582                      ;veränderte Register:	CCR, B, X
+ 1598  583                      ;------------------------------------------------------------------------------
+ 1599  584                      					;
+ 1600  585                      SCI_WRITE8:
+ 1601  586   0002AA CExx xx     	LDX	#BUS_CLK		;
+ 1602  587   0002AD B7C5        	EXG	D,X			;
+ 1603  588   0002AF 49          	LSRD				;
+ 1604  589   0002B0 49          	LSRD				;Timeout maximal ca. 2 ms
+ 1605  590   0002B1 B7C5        	EXG	D,X			;
+ 1606  591                      					;
+ 1607  592                      SCI_WRITE8_1:
+ 1608  593   0002B3 1Exx xx80   	BRSET	SCISR1,_TDRE,SCI_WRITE8_2
+             0002B7 07         
+ 1609  594   0002B8 0435 F8     	DBNE	X,SCI_WRITE8_1		;warten, bis Transmitter bereit
+ 1610  595   0002BB 86FF        	LDAA	#E_SCI_TIMEOUT		;
+ 1611  596   0002BD 2008        	BRA	SCI_WRITE8_9		;nach Timeout mit Fehler zurück
+ 1612  597                      					;
+ 1613  598                      SCI_WRITE8_2:
+ 1614  599   0002BF 7Axx xx     	STAA	SCITDRL			;sonst Zeichen ausgeben
+ 1615  600   0002C2 1Dxx xx80   	BCLR	SCISR1,_TDRE		;und _TDRE rücksetzen
+ 1616  601   0002C6 87          	CLRA				;ok, mit A = 0 zurück
+ 1617  602                      					;
+ 1618  603                      SCI_WRITE8_9:
+ 1619  604   0002C7 3D          	RTS				;
+ 1620  605                      					;
+ 1621  606   0002C8 FFFF FFFF   	dcb.b	6, 0FFh			;
+             0002CC FFFF       
+ 1622  607   0002CE 3F          	SWI				;
+ 1623  608                      					;
+ 1624  609                      ;------------------------------------------------------------------------------

@@ -1,0 +1,120 @@
+tg3Main  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title	"tg3Main  Copyright (C) 2005-2011, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;TireGuard 3	Betriebsprogramm
+ 1018    6                      ;------------------------------------------------------------------------------
+ 1019    7                      ;Module:	tg3Main.asm
+ 1020    8                      ;
+ 1021    9                      ;Copyright: 	(C) 2005-2011, micro dynamics GmbH
+ 1022   10                      ;Author(s):	Michael Frank
+ 1023   11                      ;Update:	20.01.2011
+ 1024   12                      ;
+ 1025   13                      ;Description:	Start und Hauptprogrammschleife
+ 1026   14                      ;------------------------------------------------------------------------------
+ 1027   15                      ;Revision History:	Original Version  11.05
+ 1028   16                      ;
+ 1029   17                      ;20.01.2011	Version 2.50
+ 1030   18                      ;24.11.2006	Version 1.00
+ 1031   19                      ;08.11.2006	Anpassung an MC9S12C128
+ 1032   20                      ;------------------------------------------------------------------------------
+ 1033   21                      					;
+ 1034   22                      ;------------------------------------------------------------------------------
+ 1035   23                      ;Externals
+ 1036   24                      ;------------------------------------------------------------------------------
+ 1037   25                      					;
+ 1038   26                      	xref	COMMUNICATE		;Code
+ 1039   27                      	xref	INIT			;Code
+ 1040   28                      	xref	INPUT			;Code
+ 1041   29                      	xref	LIN_RUN			;Code
+ 1042   30                      	xref	OUTPUT			;Code
+ 1043   31                      	xref	RESET			;Code
+ 1044   32                      	xref	SCALE			;Code
+ 1045   33                      					;
+ 1046   34                      	xref	BOR			;Data
+ 1047   35                      	xref	BOV			;Data
+ 1048   36                      	xref	BOS			;Data
+ 1049   37                      	xref	TOS			;Data
+ 1050   38                      					;
+ 1051   39                      	xref	REGS_SIZE_CT		;Number
+ 1052   40                      	xref	VAR_SIZE_CT		;Number
+ 1053   41                      	xref	STACK_SIZE_CT		;Number
+ 1054   42                      					;
+ 1055   43                      ;------------------------------------------------------------------------------
+ 1056   44                      ;Publics
+ 1057   45                      ;------------------------------------------------------------------------------
+ 1058   46                      					;
+ 1059   47                      	xdef	SYS_START		;Code
+ 1060   48                      					;
+ 1061   49                      .init:		section
+ 1062   50                      					;
+ 1063   51                      ;==============================================================================
+ 1064   52                      ;Hauptprogramm Modul-Einsprung
+ 1065   53                      ;==============================================================================
+ 1066   54                      					;
+ 1067   55                      SYS_START:
+ 1068   56   000000 1410        	SEI				;Interrupts sperren
+ 1069   57                      					;
+ 1070   58   000002 180B 0000   	MOVB	#00000000b,INITRG	;MCU-Register beginnen bei 0x0000h
+             000006 11         
+ 1071   59   000007 180B 0100   	MOVB	#00000001b,INITEE	;internes EEPROM beginnt bei 0x0400h
+             00000B 12         
+ 1072   60   00000C 180B 1100   	MOVB	#00010001b,INITRM	;internes RAM beginnt bei 0x1000h
+             000010 10         
+ 1073   61                      					;
+ 1074   62   000011 CDxx xx     	LDY	#BOR			;Anfang der General Purpose Registers
+ 1075   63   000014 CExx xx     	LDX	#REGS_SIZE_CT		;Anzahl Bytes
+ 1076   64   000017 8600        	LDAA	#0			;Füllwert
+ 1077   65                      SYS_START1:
+ 1078   66   000019 6A70        	STAA	1,Y+			;sämtliche General Purpose Register
+ 1079   67   00001B 0435 FB     	DBNE	X,SYS_START1		;auf Anfangswert setzen
+ 1080   68                      					;
+ 1081   69   00001E CDxx xx     	LDY	#BOV			;Anfang der Systemvariablen
+ 1082   70   000021 CExx xx     	LDX	#VAR_SIZE_CT		;Anzahl Bytes
+ 1083   71   000024 8600        	LDAA	#0			;Füllwert
+ 1084   72                      SYS_START2:
+ 1085   73   000026 6A70        	STAA	1,Y+			;sämtliche Arbeitsvariablen
+ 1086   74   000028 0435 FB     	DBNE	X,SYS_START2		;auf Anfangswert setzen
+ 1087   75                      					;
+ 1088   76   00002B CDxx xx     	LDY	#BOS			;Anfang des Stackbereichs
+ 1089   77   00002E CExx xx     	LDX	#STACK_SIZE_CT		;Anzahl Bytes
+ 1090   78   000031 86BB        	LDAA	#0BBh			;Füllwert
+ 1091   79                      SYS_START3:
+ 1092   80   000033 6A70        	STAA	1,Y+			;gesamten Stackbereich
+ 1093   81   000035 0435 FB     	DBNE	X,SYS_START3		;auf Füllwert setzen
+tg3Main  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1094   82                      					;
+ 1095   83   000038 CFxx xx     	LDS	#TOS			;Stackpointer auf Anfangswert
+ 1096   84   00003B 16xx xx     	JSR	RESET			;Rücksetzen des Tireguard 2 - Systems
+ 1097   85                      					;
+ 1098   86                      ;------------------------------------------------------------------------------
+ 1099   87                      ;Hauptprogrammschleife
+ 1100   88                      ;Diese wird in einem festen Zeitraster entsprechend der Vorgabe der Konstanten
+ 1101   89                      ;LOOPTIME durchlaufen.
+ 1102   90                      ;------------------------------------------------------------------------------
+ 1103   91                      					;
+ 1104   92                      LOOP:
+ 1105   93   00003E 16xx xx     	JSR	INIT			;Initialisieren der Peripherie
+ 1106   94   000041 16xx xx     	JSR	INPUT			;Abfragen der Eingangswerte
+ 1107   95   000044 16xx xx     	JSR	LIN_RUN			;LIN-Kommunikation
+ 1108   96   000047 16xx xx     	JSR	SCALE			;Berechnungen
+ 1109   97   00004A 16xx xx     	JSR	OUTPUT			;Ansteuern der Warnlampe
+ 1110   98   00004D 16xx xx     	JSR	COMMUNICATE		;CAN- und RS232-Kommunikation
+ 1111   99   000050 20EC        	BRA	LOOP			;
+ 1112  100                      					;
+ 1113  101   000052 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000056 FFFF       
+ 1114  102   000058 3F          	SWI				;
+ 1115  103                      					;
+ 1116  104                      ;------------------------------------------------------------------------------

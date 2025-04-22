@@ -1,0 +1,160 @@
+	include "s12ga_240.sfr"
+	title	"tg4Input  Copyright (C) 2005-2015, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;TIREGUARD 4	Betriebsprogramm
+;------------------------------------------------------------------------------
+;Module:	tg4Input.asm
+;
+;Copyright: 	(C) 2005-2015, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	07.01.2015
+;
+;Description:	Abfragen der Analogeingänge
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.05
+;
+;07.01.2015	Version 4.00
+;30.11.2014	Anpassung an MC9S12GA240
+;		Herkunft: tg3Input.asm
+;
+;18.09.2013	Version 4.0 Beta 0
+;
+;24.11.2006	Version 1.00
+;08.11.2006	Anpassung an MC9S12C128
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;Externals
+;------------------------------------------------------------------------------
+					;
+	xref	MPL_READ_VALUES		;Code
+	xref	SDT_READ_VALUE		;Code
+					;
+	xref	ANALOG_BUF		;Data
+	xref	ANALOG_FLAGS		;Data
+	xref.b	_ADC_ERROR		;bitMask
+	xref	SB_P_AMBIENT		;Data
+	xref	SB_T_AMBIENT		;Data
+	xref	SB_T_UNIT		;Data
+					;
+	xref.b	ANALOG_CT		;Number
+	xref	MPL_NOVALUE		;Number
+					;
+;------------------------------------------------------------------------------
+;Publics
+;------------------------------------------------------------------------------
+					;
+	xdef	INPUT			;Code
+					;
+.text:		section
+					;
+;==============================================================================
+;INPUT Modul-Einsprung
+;==============================================================================
+					;
+INPUT:
+	JSR	GET_ANALOG_VALUES	;analoge Eingänge abfragen
+	JSR	GET_SENSOR_VALUES	;interne Sensoren abfragen
+	RTS				;
+					;
+	dcb.b	6, 0FFh			;
+	SWI				;
+					;
+;------------------------------------------------------------------------------
+;GET_ANALOG_VALUES fragt die analogen Eingänge ab und legt die Ergebniswerte 
+;im internen RAM ab.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	ANALOG_BUF	Rohdatenwerte
+;			ANALOG_FLAGS,_ADC_ERROR
+;veränderte Register:	CCR, A, X, Y, R[2..3]
+;------------------------------------------------------------------------------
+					;
+GET_ANALOG_VALUES:
+	MOVB	#10110000b,ATD0STAT0	;Statusflags quittieren
+					;
+	LDAA	#01000000b		;12 bit
+	STAA	ATD0CTL1		;
+					;
+	LDAA	#10010000b		;Right Adjusted, 2 Channels
+	STAA	ATD0CTL3		;
+					;
+	LDAA	#00010000b		;Unsigned, single shot, multi-channel
+	STAA	ATD0CTL5		;Wandlungssequenz starten
+					;
+	MOVW	#128,R2			;Timeout-Zähler
+GET_ANALOG_VALUES1:
+	BRSET	ATD0STAT0,_SCF,GET_ANALOG_VALUES3
+GET_ANALOG_VALUES2:
+	DEC	R3			;
+	BNE	GET_ANALOG_VALUES1	;
+	DEC	R2			;warten, bis Wandlungssequenz abgeschlossen
+	BNE	GET_ANALOG_VALUES1	;bzw. Zeitgrenze erreicht
+	BSET	ANALOG_FLAGS,_ADC_ERROR	;dann mit Fehlermeldung zurück
+	JMP	GET_ANALOG_VALUES9	;
+					;
+GET_ANALOG_VALUES3:
+	LDX	#ATD0DR0		;
+	LDY	#ANALOG_BUF		;
+	MOVB	#ANALOG_CT,R3		;
+GET_ANALOG_VALUES4:
+	MOVW	2,X+,2,Y+		;Ergebniss(e) von AD-Wandler 0 abholen
+	DEC	R3			;
+	BNE	GET_ANALOG_VALUES4	;
+					;
+GET_ANALOG_VALUES9:
+	RTS				;
+					;
+;-----------------------------------------------------------------------------
+;GET_SENSOR_VALUES liest den Temperatursensor DS1722 und den Drucksensor MPL115A
+;aus und legt die Messergebnisse im internen RAM ab.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	SENSOR_BUF
+;			- SB_T_UNIT 	Gerätetemperatur
+;			- SB_P_AMBIENT	Umgebungsluftdruck
+;			- SB_T_AMBIENT	Umgebungstemperatur
+;veränderte Register:	CCR, A, B, R[0..1,3]
+;-----------------------------------------------------------------------------
+					;
+GET_SENSOR_VALUES:
+					;
+;-----------------------------------------------------------------------------
+;Gerätetemperatur
+;
+GET_SENSOR_VALUES0:
+	JSR	SDT_READ_VALUE		;internen Temperatursensor abfragen
+	LDD	R0			;
+	MOVB	#4+1,R3			;umskalieren auf 0.125°C
+GET_SENSOR_VALUES01:
+	ASRA				;
+	RORB				;
+	DEC	R3			;
+	BNE	GET_SENSOR_VALUES01	;
+	STD	SB_T_UNIT		;Temperaturwert ablegen
+ 					;
+;-----------------------------------------------------------------------------
+;Umgebungsluftdruck und Temperatur
+;
+GET_SENSOR_VALUES1:
+	JSR	MPL_READ_VALUES		;internen Drucksensor abfragen
+	LDD	R0			;
+	CPD	#MPL_NOVALUE		;
+	BEQ	GET_SENSOR_VALUES11	;
+	STD	SB_P_AMBIENT		;Druckwert ablegen
+GET_SENSOR_VALUES11:
+	LDD	R2			;
+	CPD	#MPL_NOVALUE		;
+	BEQ	GET_SENSOR_VALUES12	;
+	STD	SB_T_AMBIENT		;Temperaturwert ablegen
+GET_SENSOR_VALUES12:
+					;
+;-----------------------------------------------------------------------------
+					;
+GET_SENSOR_VALUES9:
+	RTS				;
+					;
+	dcb.b	6, 0FFh			;
+	SWI				;
+					;
+;------------------------------------------------------------------------------

@@ -1,0 +1,145 @@
+s12c_Mean16  Copyright (C) 2004-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	title	"s12c_Mean16  Copyright (C) 2004-2006, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;Module:	s12c_Mean16.asm
+  985    5                      ;
+  986    6                      ;Copyright:	(C) 2004-2006, micro dynamics GmbH
+  987    7                      ;Author(s):	Michael Frank
+  988    8                      ;Update:	24.11.2006
+  989    9                      ;
+  990   10                      ;Description:	Berechnung des fortlaufenden Mittelwertes eines
+  991   11                      ;		16-bit Datenstromes.
+  992   12                      ;------------------------------------------------------------------------------
+  993   13                      ;Revision History:	Original Version  12.04
+  994   14                      ;
+  995   15                      ;24.11.2006
+  996   16                      ;08.11.2006	Anpassung an MC9S12C128
+  997   17                      ;
+  998   18                      ;27.02.2005	geänderte Nutzung der Register: R[20..27] statt R[8..17]
+  999   19                      ;------------------------------------------------------------------------------
+ 1000   20                      					;
+ 1001   21                      ;------------------------------------------------------------------------------
+ 1002   22                      ;Publics
+ 1003   23                      ;------------------------------------------------------------------------------
+ 1004   24                      					;
+ 1005   25                      	xdef	MEAN16			;Code
+ 1006   26                      					;
+ 1007   27                      .text:		section
+ 1008   28                      					;
+ 1009   29                      ;------------------------------------------------------------------------------
+ 1010   30                      ;Public: MEAN16 bildet den fortlaufenden Mittelwert eines 16-bit Datenstromes.
+ 1011   31                      ;
+ 1012   32                      ;Der Berechnung liegen folgende Beziehungen zugrunde:
+ 1013   33                      ;s1 = ue + s1
+ 1014   34                      ;ua = s1 / c
+ 1015   35                      ;s1 = s1 - ua
+ 1016   36                      ;
+ 1017   37                      ;Eingangsparameter:	R4/R5	Zeiger auf 16-bit Eingangswert mit Vorzeichen
+ 1018   38                      ;			R0	Mittelungslänge, also Anzahl der Werte, über
+ 1019   39                      ;				die zu mitteln ist
+ 1020   40                      ;			R6/R7	Zeiger auf 24-bit Vorgeschichtswert
+ 1021   41                      ;
+ 1022   42                      ;Ausgangsparameter:	R4/R5	Zeiger auf 16-bit Ausgangswert mit Vorzeichen ( unverändert )
+ 1023   43                      ;				Eingangswert wird vom Ausgangswert überschrieben
+ 1024   44                      ;			R6/R7	Zeiger auf 24-bit Vorgeschichtswert ( unverändert )
+ 1025   45                      ;veränderte Register:	CCR, A, B, X, Y, R[20..27]
+ 1026   46                      ;Laufzeit:		29 µs	@ 8 MHz Bustakt
+ 1027   47                      ;------------------------------------------------------------------------------
+ 1028   48                      
+ 1029   49                      MEAN16:
+ 1030   50   000000 B610 00     	LDAA	R0			;wenn Mittelungslänge > 0
+ 1031   51   000003 2603        	BNE	MEAN16_1		;dann
+ 1032   52   000005 06xx xx     	JMP	MEAN16_9		;
+ 1033   53                      					;
+ 1034   54                      MEAN16_1:
+ 1035   55   000008 FE10 04     	LDX	R4			;  Zeiger auf Eingangswert
+ 1036   56   00000B FD10 06     	LDY	R6			;  Zeiger auf Vorgeschichtswert
+ 1037   57                      					;
+ 1038   58   00000E EC00        	LDD	0,X			;
+ 1039   59   000010 7C10 16     	STD	R22			;
+ 1040   60   000013 B704        	SEX	A,D                     ;
+ 1041   61   000015 7A10 15     	STAA	R21			;  ue auf 32 bit erweitert
+ 1042   62   000018 B704        	SEX	A,D			;
+ 1043   63   00001A 7A10 14     	STAA	R20			;  in R[20..23]
+ 1044   64                      					;
+ 1045   65   00001D 1805 4110   	MOVW	1,Y,R26			;
+             000021 1A         
+ 1046   66   000022 A640        	LDAA	0,Y			;
+ 1047   67   000024 7A10 19     	STAA	R25			;  s1 auf 32 bit erweitert
+ 1048   68   000027 B704        	SEX	A,D			;
+ 1049   69   000029 7A10 18     	STAA	R24			;  in R[24..27]
+ 1050   70                      					;
+ 1051   71   00002C CE10 14     	LDX	#R20			;  Zeiger auf ue
+ 1052   72   00002F CD10 18     	LDY	#R24			;  Zeiger auf s1
+ 1053   73                      					;
+ 1054   74   000032 EC02        	LDD	2,X			;  s1:= ue + s1
+ 1055   75   000034 E342        	ADDD	2,Y			;
+ 1056   76   000036 6C42        	STD	2,Y			;
+ 1057   77   000038 A601        	LDAA	1,X			;
+ 1058   78   00003A A941        	ADCA	1,Y			;
+ 1059   79   00003C 6A41        	STAA	1,Y			;
+ 1060   80   00003E A600        	LDAA	0,X			;
+ 1061   81   000040 A940        	ADCA	0,Y			;
+ 1062   82   000042 6A40        	STAA	0,Y			;
+ 1063   83                      					;
+s12c_Mean16  Copyright (C) 2004-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1064   84   000044 F610 00     	LDAB	R0			;
+ 1065   85   000047 8600        	LDAA	#0			;  16-bit Divisor c in X
+ 1066   86   000049 B745        	TFR	D,X			;
+ 1067   87                      					;
+ 1068   88   00004B FD10 18     	LDY	R24			;
+ 1069   89   00004E FC10 1A     	LDD	R26			;  32-bit Dividend s1 in Y:D
+ 1070   90                      					;
+ 1071   91   000051 1814        	EDIVS				;  32/16 bit Division
+ 1072   92                      					;
+ 1073   93   000053 7D10 16     	STY	R22			;  Ergebnis ist ua
+ 1074   94                      					;
+ 1075   95   000056 CE10 14     	LDX	#R20			;  Zeiger auf ua
+ 1076   96   000059 CD10 18     	LDY	#R24			;  Zeiger auf s1
+ 1077   97                      					;
+ 1078   98   00005C EC02        	LDD	2,X			;
+ 1079   99   00005E B704        	SEX	A,D			;
+ 1080  100   000060 7A10 15     	STAA	R21			;  ua auf 32 bit erweitert
+ 1081  101   000063 B704        	SEX	A,D			;
+ 1082  102   000065 7A10 14     	STAA	R20			;  in R[20..23]
+ 1083  103                      					;
+ 1084  104   000068 EC42        	LDD	2,Y			;
+ 1085  105   00006A A302        	SUBD	2,X			;
+ 1086  106   00006C 6C42        	STD	2,Y			;
+ 1087  107   00006E A641        	LDAA	1,Y			;
+ 1088  108   000070 A201        	SBCA	1,X			;  s1:= s1 - ua
+ 1089  109   000072 6A41        	STAA	1,Y			;
+ 1090  110   000074 A640        	LDAA	0,Y			;
+ 1091  111   000076 A200        	SBCA	0,X			;
+ 1092  112   000078 6A40        	STAA	0,Y			;
+ 1093  113                      					;
+ 1094  114   00007A FE10 04     	LDX	R4			;  Zeiger auf Ausgangswert
+ 1095  115   00007D FD10 06     	LDY	R6			;  Zeiger auf Vorgeschichtswert
+ 1096  116                      					;
+ 1097  117   000080 1801 0010   	MOVW	R22,0,X			;  ua speichern
+             000084 16         
+ 1098  118                      					;
+ 1099  119   000085 1809 4010   	MOVB	R25,0,Y			;  s1 speichern
+             000089 19         
+ 1100  120   00008A 1801 4110   	MOVW	R26,1,Y			;
+             00008E 1A         
+ 1101  121                      					;
+ 1102  122                      MEAN16_9:
+ 1103  123   00008F 3D          	RTS				;und fertig
+ 1104  124                      					;
+ 1105  125   000090 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000094 FFFF       
+ 1106  126   000096 3F          	SWI				;
+ 1107  127                      					;
+ 1108  128                      ;------------------------------------------------------------------------------

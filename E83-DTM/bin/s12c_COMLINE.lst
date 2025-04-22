@@ -1,0 +1,880 @@
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_COMLINE.sfr"
+ 1017    3                      	title	"s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH"
+ 1018    4                      ;------------------------------------------------------------------------------
+ 1019    5                      ;Module:	s12c_COMLINE.asm
+ 1020    6                      ;
+ 1021    7                      ;Copyright:	(C) 2005-2015, micro dynamics GmbH
+ 1022    8                      ;Author(s):	Michael Frank
+ 1023    9                      ;Update:	04.10.2015
+ 1024   10                      ;
+ 1025   11                      ;Description:	Funktionen der Programmier-Schnittstelle
+ 1026   12                      ;
+ 1027   13                      ;Folgende Bezeichner sind in s12p_COMLINE.sfr zu definieren:
+ 1028   14                      ;
+ 1029   15                      ;Switches:	fBlockRead
+ 1030   16                      ;		fCalibration
+ 1031   17                      ;		fE_CMD_CALLBACK
+ 1032   18                      ;		fV_CMD_CALLBACK
+ 1033   19                      ;
+ 1034   20                      ;------------------------------------------------------------------------------
+ 1035   21                      ;Revision History:	Original Version  01.05
+ 1036   22                      ;
+ 1037   23                      ;04.10.2015	Änderung in D_CMD für Konfigurationen > 256 Bytes
+ 1038   24                      ;
+ 1039   25                      ;28.12.2014	Korrektur in GET_DATA_HANDLE: Am Ende RTS ergänzt
+ 1040   26                      ;
+ 1041   27                      ;30.04.2013	Korrektur in COMLINE_TIMEOUTS
+ 1042   28                      ;
+ 1043   29                      ;20.01.2011	neue Schalter: fBlockRead, fCalibration, fE_CMD_CALLBACK und fV_CMD_CALLBACK
+ 1044   30                      ;		Korrektur in GET_DATA_HANDLE: Echo erst am Schluss der Funktion, da
+ 1045   31                      ;               anderenfalls der Zeitablauf bei s12c_SoftUart nicht sichergestellt
+ 1046   32                      ;28.08.2009	in V_CMD Aufruf von Callbackfunktion V_CMD_EXECUTE neu hinzugefügt
+ 1047   33                      ;
+ 1048   34                      ;29.07.2009	function COMLINE_TIMEOUTS neu
+ 1049   35                      ;28.07.2009	neue Kommandos: SelectSector und ReadSector
+ 1050   36                      ;               Kommandos ReadFirstSector und ReadNextSector restlos wieder entfernt
+ 1051   37                      ;29.06.2009	neue Kommandos: ReadFirstSector und ReadNextSector
+ 1052   38                      ;24.06.2009	zusätzlichen Speicherbereich DATA_FLASH berücksichtigen
+ 1053   39                      ;12.06.2009	8-bit Prüfsumme durch CRC-16/X25 Prüfcode ersetzt
+ 1054   40                      ;
+ 1055   41                      ;24.11.2006	Einbindung der externen SoftUart-Funktionen SCI_???
+ 1056   42                      ;20.11.2006	Parameterspeicher im FLASH-Speicher
+ 1057   43                      ;08.11.2006	Anpassung an MC9S12C128
+ 1058   44                      ;
+ 1059   45                      ;03.04.2006	in COMLINE_RESET Sendeleitung stets deaktivieren
+ 1060   46                      ;		in O_CMD Wartezeit verlängert
+ 1061   47                      ;		Zeitgrenzen jetzt in Abhängigkeit von BUS_CLK setzen
+ 1062   48                      ;------------------------------------------------------------------------------
+ 1063   49                      					;
+ 1064   50                      ;------------------------------------------------------------------------------
+ 1065   51                      ;Externals
+ 1066   52                      ;------------------------------------------------------------------------------
+ 1067   53                      					;
+ 1068   54                      ;					;
+ 1069   55                      ;Anwendungsprogramm			;
+ 1070   56          0000 0000    if fE_CMD_CALLBACK
+ 1072   58                       endif
+ 1073   59          0000 0000    if fBlockRead
+ 1075   61                       endif
+ 1076   62          0000 0000    if fV_CMD_CALLBACK
+ 1078   64                       endif
+ 1079   65                      ;					;
+ 1080   66                      ;s12c_CRC.asm				;
+ 1081   67                      	xref	CREATE_KERMIT		;Code
+ 1082   68                      	xref	CREATE_X25		;Code
+ 1083   69                      ;					;
+ 1084   70                      ;s12c_FTS.asm				;
+ 1085   71                      	xref	FTS_COPY		;Code
+ 1086   72                      	xref	FTS_FLASH		;Code
+ 1087   73                      	xref	FTS_WRITE8		;Code
+ 1088   74                      	xref	FTS_WRITE16		;Code
+ 1089   75                      ;					;
+ 1090   76                      ;s12c_Uart.asm				;
+ 1091   77                      	xref	SCI_READ8		;Code
+ 1092   78                      	xref	SCI_RESET		;Code
+ 1093   79                      	xref	SCI_TX_DISABLE		;Code
+ 1094   80                      	xref	SCI_TX_ENABLE		;Code
+ 1095   81                      	xref	SCI_WRITE8		;Code
+ 1096   82          0000 0000    if fBlockRead == _true
+ 1099   85                       endif
+ 1100   86                      					;
+ 1101   87                      	xref	CONFIG_TBL		;roData
+ 1102   88                       					;
+ 1103   89          0000 0000    if fCalibration == _true
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1106   92                       endif
+ 1107   93                      					;
+ 1108   94                      	xref	E_CONFIG_CRC		;bssData
+ 1109   95                      	xref	E_CONFIG_TBL		;bssData
+ 1110   96                      					;
+ 1111   97                      	xref	B_EEPROM		;Data
+ 1112   98                      	xref	T_EEPROM		;Data
+ 1113   99          0000 0000    if fCalibration
+ 1116  102                       endif
+ 1117  103                      	xref	B_RAM			;Data
+ 1118  104                      	xref	T_RAM			;Data
+ 1119  105                      					;
+ 1120  106          0000 0000    if fBlockRead == _true
+ 1125  111                       endif
+ 1126  112                      					;
+ 1127  113                      	xref	BUS_CLK			;Number
+ 1128  114          0000 0000    if fCalibration == _true
+ 1130  116                       endif
+ 1131  117                      	xref.b	CONFIG_TBL_CNT		;Number
+ 1132  118                      	xref.b	C_STEP			;Number
+ 1133  119                      	xref	SCI_SECTOR_SIZE		;Number
+ 1134  120                      	xref	RX_TIMEOUT_CT		;Number
+ 1135  121                      	xref	TX_TIMEOUT_CT		;Number
+ 1136  122                      					;
+ 1137  123                      ;------------------------------------------------------------------------------
+ 1138  124                      ;Publics
+ 1139  125                      ;------------------------------------------------------------------------------
+ 1140  126                      					;
+ 1141  127                      	xdef	COMLINE_INPUT		;Code
+ 1142  128                      	xdef	COMLINE_REACTION	;Code
+ 1143  129                      	xdef	COMLINE_RESET		;Code
+ 1144  130                      	xdef	COMLINE_TIMEOUTS	;Code
+ 1145  131                      					;
+ 1146  132                      ;------------------------------------------------------------------------------
+ 1147  133                      ;Variablen und Konstanten
+ 1148  134                      ;------------------------------------------------------------------------------
+ 1149  135                      					;
+ 1150  136                      .locals:	section
+ 1151  137                      					;
+ 1152  138                      BOV:
+ 1153  139                      					;
+ 1154  140   000000             CML_FLAGS:	ds.b	1		;Flags
+ 1155  141          0000 0001   _TX_FLAG:	equ	bit0		;1, wenn Echo erwartet wird
+ 1156  142          0000 0002   _RX_FLAG:	equ	bit1		;1, wenn Datenempfang erwartet wird
+ 1157  143          0000 0004   _COMLINE_ERROR:	equ	bit2		;temporärer Kommunikationsfehler
+ 1158  144          0000 0008   _CMD_MODE_FLAG:	equ	bit3		;1, wenn Kommando aktiv
+ 1159  145          0000 0010   _GET_DATA_FLAG:	equ	bit4		;1, wenn Datenempfang aktiv
+ 1160  146          0000 0020   _PUT_DATA_FLAG:	equ	bit5		;1, wenn Datenausgabe aktiv
+ 1161  147          0000 0040   _COMLINE_FLAG:	equ	bit6		;1, wenn RS232-Kommunikation aktiv
+ 1162  148          0000 0080   _COMLINE_TRIG:	equ	bit7		;Startflag für die RS232-Kommunikation aktiv
+ 1163  149                      					;
+ 1164  150   000001             CMD_FLAGS:	ds.b	1		;Flags
+ 1165  151                      ;
+ 1166  152                      ;
+ 1167  153                      ;
+ 1168  154                      ;
+ 1169  155                      ;
+ 1170  156                      ;
+ 1171  157                      ;
+ 1172  158          0000 0080   _BLOCKREAD:	equ	bit7		;1, solange Sektor-Blocktransfer läuft
+ 1173  159                      					;
+ 1174  160   000002             TX_BUFFER:	ds.b	1		;DATA8: Ausgabebuffer
+ 1175  161   000003             RX_BUFFER:	ds.b	1		;DATA8: Empfangsbuffer
+ 1176  162                      					;
+ 1177  163                      		even
+ 1178  164   000004             TX_TIMEOUT:	ds.w	1		;DATA16: Zeitzähler für Sende-Echo
+ 1179  165   000006             RX_TIMEOUT:	ds.w	1		;DATA16: Zeitzähler für Datenempfang
+ 1180  166   000008             IO_PTR:		ds.w	1		;DATA16: Zeiger für RS232 Kommandos
+ 1181  167   00000A             IO_CTR:		ds.w	1		;DATA16: Bytezähler für RS232 Kommandos
+ 1182  168                      					;
+ 1183  169   00000C             IO_DATA_PTR:	ds.w	1		;DATA16: Zeiger für RS232 Kommandos
+ 1184  170   00000E             IO_DATA_CTR:	ds.w	1		;DATA16: Bytezähler für RS232 Kommandos
+ 1185  171                      					;
+ 1186  172                      PARAMETER_BLOCK:
+ 1187  173   000010             PB_TYPE:	ds.b	1		;DATA8: Speichertyp der Datenquelle
+ 1188  174                      					;	0 : interner RAM-, EEPROM- oder FLASH-Speicher
+ 1189  175                      					;	1 : externer FRAM-Datenspeicher
+ 1190  176                      					;	sonst : nicht definiert
+ 1191  177   000011             PB_PAGE:	ds.w	1		;DATA16: undefiniert (Type = 0) oder PAGE-Adresse (TYPE = 1)
+ 1192  178   000013             PB_OFFSET:	ds.w	1		;DATA16: Adresse (TYPE = 0) oder OFFSET-Adresse (TYPE = 1)
+ 1193  179          0000 0005   PARAMETER_CNT:		equ	* - PARAMETER_BLOCK
+ 1194  180                      					;
+ 1195  181                      TOV:
+ 1196  182                      					;
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1197  183                      .text:		section
+ 1198  184                      					;
+ 1199  185                      ;-----------------------------------------------------------------------------
+ 1200  186                      ;Public: COMLINE_RESET bringt die RS232-Schnittstelle in Grundstellung.
+ 1201  187                      ;
+ 1202  188                      ;Eingangsparameter:	keine
+ 1203  189                      ;Ausgangsparameter:	keine
+ 1204  190                      ;veränderte Register:	CCR, A, X, Y
+ 1205  191                      ;-----------------------------------------------------------------------------
+ 1206  192                      					;
+ 1207  193                      COMLINE_RESET:
+ 1208  194   000000 CDxx xx     	LDY	#BOV			;
+ 1209  195   000003 CE00 15     	LDX	#(TOV - BOV)		;
+ 1210  196   000006 8600        	LDAA	#0			;
+ 1211  197                      COMLINE_RESET1:
+ 1212  198   000008 6A70        	STAA	1,Y+			;alle Variablen auf null setzen
+ 1213  199   00000A 0435 FB     	DBNE	X,COMLINE_RESET1	;
+ 1214  200                      					;
+ 1215  201   00000D 16xx xx     	JSR	SCI_RESET		;
+ 1216  202   000010 3D          	RTS				;
+ 1217  203                      					;
+ 1218  204                      ;-----------------------------------------------------------------------------
+ 1219  205                      ;Public: COMLINE_TIMEOUTS prüft den RS232-Sende- und RS232-Empfangskanal auf
+ 1220  206                      ;Wartezeitüberschreitung.
+ 1221  207                      ;
+ 1222  208                      ;Eingangsparameter:	RX_TIMEOUT
+ 1223  209                      ;			TX_TIMEOUT
+ 1224  210                      ;Ausgangsparameter:	RX_TIMEOUT
+ 1225  211                      ;			TX_TIMEOUT
+ 1226  212                      ;			CML_FLAGS._TX_FLAG
+ 1227  213                      ;			CML_FLAGS._COMLINE_ERROR
+ 1228  214                      ;veränderte Register:	CCR, A, B
+ 1229  215                      ;-----------------------------------------------------------------------------
+ 1230  216                      					;
+ 1231  217                      COMLINE_TIMEOUTS:
+ 1232  218   000011 1Fxx xx08   	BRCLR	CML_FLAGS,_CMD_MODE_FLAG,COMLINE_TIMEOUTS8
+             000015 32         
+ 1233  219                      					;wenn CML_FLAGS._CMD_MODE_FLAG
+ 1234  220                      ;
+ 1235  221                      ;begin 30.04.2013
+ 1236  222                      					;dann
+ 1237  223   000016 1Fxx xx10   	BRCLR	CML_FLAGS,_GET_DATA_FLAG,COMLINE_TIMEOUTS1
+             00001A 11         
+ 1238  224                      ;end
+ 1239  225                      ;
+ 1240  226   00001B FCxx xx     	LDD	RX_TIMEOUT		;  wenn Daten Empfangen aktiv,
+ 1241  227   00001E 270C        	BEQ	COMLINE_TIMEOUTS1	;
+ 1242  228   000020 8300 01     	SUBD	#1			;  dann
+ 1243  229   000023 7Cxx xx     	STD	RX_TIMEOUT		;    wenn RX_TIMEOUT_abgelaufen,
+ 1244  230   000026 2604        	BNE	COMLINE_TIMEOUTS1	;    dann
+ 1245  231   000028 1Cxx xx04   	BSET	CML_FLAGS,_COMLINE_ERROR;      _COMLINE_ERROR setzen
+ 1246  232                      					;
+ 1247  233                      COMLINE_TIMEOUTS1:
+ 1248  234                      ;
+ 1249  235                      ;begin 30.04.2013
+ 1250  236   00002C 1Fxx xx20   	BRCLR	CML_FLAGS,_PUT_DATA_FLAG,COMLINE_TIMEOUTS2
+             000030 15         
+ 1251  237                      ;end
+ 1252  238                      ;
+ 1253  239   000031 FCxx xx     	LDD	TX_TIMEOUT		;  wenn Daten Senden aktiv,
+ 1254  240   000034 2710        	BEQ	COMLINE_TIMEOUTS2	;
+ 1255  241   000036 8300 01     	SUBD	#1			;  dann
+ 1256  242   000039 7Cxx xx     	STD	TX_TIMEOUT		;    wenn TX_TIMEOUT_abgelaufen,
+ 1257  243   00003C 2608        	BNE	COMLINE_TIMEOUTS2	;    dann
+ 1258  244   00003E 1Cxx xx04   	BSET	CML_FLAGS,_COMLINE_ERROR;      _COMLINE_ERROR setzen
+ 1259  245   000042 1Dxx xx01   	BCLR	CML_FLAGS,_TX_FLAG	;      und _TX_FLAG ruecksetzen
+ 1260  246                      					;
+ 1261  247                      COMLINE_TIMEOUTS2:
+ 1262  248   000046 200C        	BRA	COMLINE_TIMEOUTS9	;
+ 1263  249                      					;
+ 1264  250                      COMLINE_TIMEOUTS8:
+ 1265  251                      ;
+ 1266  252                      ;begin 30.04.2013
+ 1267  253   000048 CCxx xx     	LDD	#RX_TIMEOUT_CT		;sonst
+ 1268  254   00004B 7Cxx xx     	STD	RX_TIMEOUT		;  RX_TIMEOUT auf Startwert
+ 1269  255   00004E CCxx xx     	LDD	#TX_TIMEOUT_CT
+ 1270  256   000051 7Cxx xx     	STD	TX_TIMEOUT		;  TX_TIMEOUT auf Startwert
+ 1271  257                      ;end
+ 1272  258                      ;
+ 1273  259                      					;
+ 1274  260                      COMLINE_TIMEOUTS9:
+ 1275  261   000054 3D          	RTS				;
+ 1276  262                      					;
+ 1277  263                      ;-----------------------------------------------------------------------------
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1278  264                      ;Public: COMLINE_INPUT nimmt Zeichen vom RS232-Empfangskanal entgegen.
+ 1279  265                      ;Es wird zwischen einem Echo eines vorher gesendeten Zeichens und einem
+ 1280  266                      ;echt empfangenen Zeichen unterschieden.
+ 1281  267                      ;
+ 1282  268                      ;Eingangsparameter:	CML_FLAGS._TX_FLAG
+ 1283  269                      ;Ausgangsparameter:	CML_FLAGS._TX_FLAG
+ 1284  270                      ;			CML_FLAGS._RX_FLAG
+ 1285  271                      ;			CML_FLAGS._COMLINE_ERROR
+ 1286  272                      ;veränderte Register:	CCR, A
+ 1287  273                      ;-----------------------------------------------------------------------------
+ 1288  274                      					;
+ 1289  275                      COMLINE_INPUT:
+ 1290  276                      ;
+ 1291  277                      ;begin 20.01.2011
+ 1292  278          0000 0000    if fBlockRead == _true
+ 1294  280                       endif
+ 1295  281                      ;end
+ 1296  282                      ;
+ 1297  283   000055 16xx xx     	JSR	SCI_READ8		;wenn neues Zeichen da,
+ 1298  284   000058 251F        	BCS	COMLINE_INPUT3		;dann
+ 1299  285   00005A 7Axx xx     	STAA	RX_BUFFER		;  empfangenes Zeichen lesen
+ 1300  286   00005D 1Exx xx01   	BRSET	CML_FLAGS,_TX_FLAG,COMLINE_INPUT1
+             000061 07         
+ 1301  287   000062 1Cxx xx02   	BSET	CML_FLAGS,_RX_FLAG	;wenn Echoflag rückgesetzt,
+ 1302  288   000066 06xx xx     	JMP	COMLINE_INPUT3		;dann RX_FLAG setzen
+ 1303  289                      COMLINE_INPUT1:
+ 1304  290   000069 B6xx xx     	LDAA	TX_BUFFER		;
+ 1305  291   00006C B1xx xx     	CMPA	RX_BUFFER		;wenn empfangenes <> gesendetem Zeichen,
+ 1306  292   00006F 2704        	BEQ	COMLINE_INPUT2		;dann
+ 1307  293   000071 1Cxx xx04   	BSET	CML_FLAGS,_COMLINE_ERROR;  Fehler bei der Datenübertragung
+ 1308  294                      COMLINE_INPUT2:
+ 1309  295   000075 1Dxx xx01   	BCLR	CML_FLAGS,_TX_FLAG	;Echoflag rücksetzen
+ 1310  296                      					;
+ 1311  297                      COMLINE_INPUT3:
+ 1312  298   000079 3D          	RTS				;
+ 1313  299                      					;
+ 1314  300                      ;-----------------------------------------------------------------------------
+ 1315  301                      ;Public: COMLINE_REACTION wertet empfangene Kommandocodes aus und
+ 1316  302                      ;bearbeitet die entsprechenden Aufgaben.
+ 1317  303                      ;
+ 1318  304                      ;Eingangsparameter:	CML_FLAGS._CMD_MODE_FLAG
+ 1319  305                      ;			CML_FLAGS._RX_FLAG
+ 1320  306                      ;Ausgangsparameter:	CML_FLAGS._RX_FLAG
+ 1321  307                      ;veränderte Register:	CCR, A
+ 1322  308                      ;-----------------------------------------------------------------------------
+ 1323  309                      					;
+ 1324  310                      COMLINE_REACTION:
+ 1325  311                      ;
+ 1326  312                      ;begin 20.01.2011
+ 1327  313          0000 0000    if fBlockRead == _true
+ 1333  319                       endif
+ 1334  320                      ;end
+ 1335  321                      ;
+ 1336  322   00007A 1Exx xx08   	BRSET	CML_FLAGS,_CMD_MODE_FLAG,COMLINE_REACTION1
+             00007E 08         
+ 1337  323   00007F 1Exx xx02   	BRSET	CML_FLAGS,_RX_FLAG,COMLINE_REACTION2
+             000083 09         
+ 1338  324   000084 06xx xx     	JMP	COMLINE_REACTION3	;
+ 1339  325                      					;
+ 1340  326                      COMLINE_REACTION1:
+ 1341  327   000087 16xx xx     	JSR	CMD_EXECUTE		;
+ 1342  328   00008A 06xx xx     	JMP	COMLINE_REACTION3	;Kommando bearbeiten
+ 1343  329                      					;
+ 1344  330                      COMLINE_REACTION2:
+ 1345  331   00008D 16xx xx     	JSR	CMD_DECODE		;Kommandocode entschlüsseln
+ 1346  332                      					;
+ 1347  333                      COMLINE_REACTION3:
+ 1348  334   000090 3D          	RTS				;
+ 1349  335                      					;
+ 1350  336                      ;-----------------------------------------------------------------------------
+ 1351  337                      ;CMD_DECODE
+ 1352  338                      ;
+ 1353  339                      ;Eingangsparameter:
+ 1354  340                      ;Ausgangsparameter:
+ 1355  341                      ;veränderte Register:	CCR, A, B, X
+ 1356  342                      ;-----------------------------------------------------------------------------
+ 1357  343                      					;
+ 1358  344                      CMD_DECODE:
+ 1359  345   000091 F6xx xx     	LDAB	RX_BUFFER		;alle Kommandos mit Ausnahme von OPEN
+ 1360  346   000094 C14F        	CMPB	#'O'			;werden nur bei gesetztem _COMLINE_FLAG
+ 1361  347   000096 2705        	BEQ	CMD_DECODE0		;ausgeführt
+ 1362  348   000098 1Fxx xx40   	BRCLR	CML_FLAGS,_COMLINE_FLAG,NO_CMD
+             00009C 50         
+ 1363  349                      					;
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1364  350                      CMD_DECODE0:
+ 1365  351   00009D C041        	SUBB	#41h			;
+ 1366  352   00009F C11A        	CMPB	#1Ah			;
+ 1367  353   0000A1 2411        	BHS	CMD_DECODE3		;
+ 1368  354   0000A3 87          	CLRA				;
+ 1369  355   0000A4 59          	LSLD				;
+ 1370  356   0000A5 CExx xx     	LDX	#CMD_TBL		;
+ 1371  357   0000A8 05E7        	JMP	[D,X]			;
+ 1372  358                      					;
+ 1373  359                      CMD_DECODE1:
+ 1374  360   0000AA 7Axx xx     	STAA	TX_BUFFER		;
+ 1375  361   0000AD 16xx xx     	JSR	SCI_WRITE8		;
+ 1376  362                      ;
+ 1377  363                      ;begin 20.01.2011
+ 1378  364          0000 0000    if fBlockRead == _true
+ 1381  367                       endif
+ 1382  368                      ;end
+ 1383  369                      ;
+ 1384  370                      					;
+ 1385  371                      CMD_DECODE2:
+ 1386  372   0000B0 1Cxx xx08   	BSET	CML_FLAGS,_CMD_MODE_FLAG;
+ 1387  373                      					;
+ 1388  374                      CMD_DECODE3:
+ 1389  375   0000B4 1Dxx xx02   	BCLR	CML_FLAGS,_RX_FLAG	;
+ 1390  376   0000B8 3D          	RTS				;
+ 1391  377                      					;
+ 1392  378                      CMD_TBL:
+ 1393  379                      ;
+ 1394  380                      ;begin 20.01.2011
+ 1395  381          0000 0000    if fBlockRead == _true
+ 1398  384                       else
+ 1399  385   0000B9 xxxx        	dc.w	NO_CMD			;A
+ 1400  386   0000BB xxxx        	dc.w	NO_CMD			;B
+ 1401  387                       endif
+ 1402  388                      ;end
+ 1403  389                      ;
+ 1404  390   0000BD xxxx        	dc.w	C_CMD			;C	Close
+ 1405  391   0000BF xxxx        	dc.w	D_CMD			;D	Default
+ 1406  392   0000C1 xxxx        	dc.w	E_CMD			;E	Execute
+ 1407  393   0000C3 xxxx        	dc.w	NO_CMD			;F
+ 1408  394   0000C5 xxxx        	dc.w	NO_CMD			;G
+ 1409  395   0000C7 xxxx        	dc.w	NO_CMD			;H
+ 1410  396   0000C9 xxxx        	dc.w	NO_CMD			;I
+ 1411  397   0000CB xxxx        	dc.w	NO_CMD			;J
+ 1412  398   0000CD xxxx        	dc.w	NO_CMD			;K
+ 1413  399   0000CF xxxx        	dc.w	NO_CMD			;L
+ 1414  400   0000D1 xxxx        	dc.w	NO_CMD			;M
+ 1415  401   0000D3 xxxx        	dc.w	NO_CMD			;N
+ 1416  402   0000D5 xxxx        	dc.w	O_CMD			;O	Open
+ 1417  403   0000D7 xxxx        	dc.w	P_CMD			;P	SetPointer
+ 1418  404   0000D9 xxxx        	dc.w	NO_CMD			;Q
+ 1419  405   0000DB xxxx        	dc.w	R_CMD			;R	Read
+ 1420  406   0000DD xxxx        	dc.w	S_CMD			;S	SetSize
+ 1421  407   0000DF xxxx        	dc.w	NO_CMD			;T
+ 1422  408   0000E1 xxxx        	dc.w	NO_CMD			;U
+ 1423  409   0000E3 xxxx        	dc.w	V_CMD			;V	SetConfigCRC
+ 1424  410   0000E5 xxxx        	dc.w	W_CMD			;W	Write
+ 1425  411                      ;
+ 1426  412                      ;begin 20.01.2011
+ 1427  413          0000 0000    if fCalibration == _true
+ 1429  415                       else
+ 1430  416   0000E7 xxxx        	dc.w	NO_CMD			;X
+ 1431  417                       endif
+ 1432  418                      ;end
+ 1433  419                      ;
+ 1434  420   0000E9 xxxx        	dc.w	NO_CMD			;Y
+ 1435  421   0000EB xxxx        	dc.w	NO_CMD			;Z
+ 1436  422                      					;
+ 1437  423                      NO_CMD:
+ 1438  424   0000ED 06xx xx     	JMP	CMD_DECODE3		;
+ 1439  425                      					;
+ 1440  426                      ;
+ 1441  427                      ;begin 20.01.2011
+ 1442  428          0000 0000    if fBlockRead == _true
+ 1513  499                       endif
+ 1514  500                      ;end
+ 1515  501                      ;
+ 1516  502                      					;
+ 1517  503                      ;-----------------------------------------------------------------------------
+ 1518  504                      ;C_CMD	schaltet die TxD-Leitung auf General Purpose IO um.
+ 1519  505                      ;-----------------------------------------------------------------------------
+ 1520  506                      					;
+ 1521  507                      C_CMD:
+ 1522  508   0000F0 16xx xx     	JSR	SCI_TX_DISABLE		;TxD-Leitung abschalten
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1523  509   0000F3 1Dxx xx40   	BCLR	CML_FLAGS,_COMLINE_FLAG	;COMLINE_FLAG rücksetzen
+ 1524  510   0000F7 06xx xx     	JMP	CMD_DECODE3		;
+ 1525  511                      					;
+ 1526  512                      ;-----------------------------------------------------------------------------
+ 1527  513                      ;D_CMD	setzt alle programmierbaren Einstellungen auf Defaultwerte.
+ 1528  514                      ;-----------------------------------------------------------------------------
+ 1529  515                      					;
+ 1530  516                      D_CMD:
+ 1531  517   0000FA 1803 xxxx   	MOVW	#CONFIG_TBL,R4		;Quelladresse
+             0000FE 1004       
+ 1532  518   000100 1803 xxxx   	MOVW	#E_CONFIG_TBL,R6	;Zieladresse
+             000104 1006       
+ 1533  519                      ;
+ 1534  520                      ;begin 04.10.2015
+ 1535  521                      ;	MOVB	#CONFIG_TBL_CNT,R3	;Anzahl Bytes
+ 1536  522                      ;	JSR	FTS_COPY		;Konfiguration schreiben
+ 1537  523   000106 1803 xxxx   	MOVW	#CONFIG_TBL_CNT,R2	;Anzahl Bytes
+             00010A 1002       
+ 1538  524                      D_CMD1:
+ 1539  525   00010C 16xx xx     	JSR	FTS_COPY		;Konfiguration schreiben
+ 1540  526   00010F F710 02     	TST	R2			;
+ 1541  527   000112 2705        	BEQ	D_CMD2			;
+ 1542  528   000114 7310 02     	DEC	R2			;
+ 1543  529   000117 20F3        	BRA	D_CMD1			;
+ 1544  530                      					;
+ 1545  531                      D_CMD2:
+ 1546  532                      ;end
+ 1547  533                      ;
+ 1548  534   000119 16xx xx     	JSR	FTS_FLASH		;
+ 1549  535                      					;
+ 1550  536   00011C CExx xx     	LDX	#E_CONFIG_TBL		;Prüfcode der programmierbaren Werte
+ 1551  537   00011F 1803 xxxx   	MOVW	#CONFIG_TBL_CNT,R2	;
+             000123 1002       
+ 1552  538   000125 16xx xx     	JSR	CREATE_KERMIT		;neu berechnen
+ 1553  539   000128 1803 xxxx   	MOVW	#E_CONFIG_CRC,R6	;
+             00012C 1006       
+ 1554  540   00012E 16xx xx     	JSR	FTS_WRITE16		;und schreiben
+ 1555  541   000131 16xx xx     	JSR	FTS_FLASH		;EEPROM neu programmieren
+ 1556  542                      					;
+ 1557  543   000134 86BC        	LDAA	#0-'D'			;
+ 1558  544   000136 06xx xx     	JMP	CMD_DECODE1		;
+ 1559  545                      					;
+ 1560  546                      ;-----------------------------------------------------------------------------
+ 1561  547                      ;E_CMD	startet nach dem Empfang von Kommandocode und Parametern die
+ 1562  548                      ;Ausführung eines Kommandos.
+ 1563  549                      ;-----------------------------------------------------------------------------
+ 1564  550                      					;
+ 1565  551                      E_CMD:
+ 1566  552                      ;
+ 1567  553                      ;begin 20.01.2011
+ 1568  554          0000 0000    if fE_CMD_CALLBACK = _true
+ 1570  556                       endif
+ 1571  557                      ;end
+ 1572  558                      ;
+ 1573  559                      					;
+ 1574  560   000139 86BB        	LDAA	#0-'E'			;
+ 1575  561   00013B 06xx xx     	JMP	CMD_DECODE1		;
+ 1576  562                      					;
+ 1577  563                      ;-----------------------------------------------------------------------------
+ 1578  564                      ;O_CMD	schaltet die TxD-Leitung auf die RS232-Kommunikation um.
+ 1579  565                      ;
+ 1580  566                      ;Nur dieses Kommando setzt das COMLINE_FLAG.
+ 1581  567                      ;Alle sonstigen Kommandos werden bei nicht gesetztem COMLINE_FLAG
+ 1582  568                      ;vollständig ignoriert.
+ 1583  569                      ;-----------------------------------------------------------------------------
+ 1584  570                      					;
+ 1585  571                      O_CMD_STR:
+ 1586  572   00013E FFB1        	dc.b	0FFh, 0-'O'
+ 1587  573          0000 0002   O_CMD_CNT:	equ	(* - O_CMD_STR)
+ 1588  574                      					;
+ 1589  575                      O_CMD:
+ 1590  576   000140 16xx xx     	JSR	SCI_TX_ENABLE		;TxD-Leitung zuschalten
+ 1591  577   000143 1Cxx xx80   	BSET	CML_FLAGS,_COMLINE_TRIG	;_COMLINE_TRIG setzen
+ 1592  578   000147 CExx xx     	LDX	#BUS_CLK		;ca. 10 ms abwarten
+ 1593  579                      O_CMD1:
+ 1594  580   00014A A7          	NOP				;	1
+ 1595  581   00014B A7          	NOP				;	1
+ 1596  582   00014C A7          	NOP				;	1
+ 1597  583   00014D A7          	NOP				;	1
+ 1598  584   00014E A7          	NOP				;	1
+ 1599  585   00014F A7          	NOP				;	1
+ 1600  586   000150 09          	DEX				;	1
+ 1601  587   000151 26F7        	BNE	O_CMD1			;	3
+ 1602  588                      					;
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1603  589   000153 1803 xxxx   	MOVW	#O_CMD_STR,IO_PTR	;Zeiger auf Antwortstring
+             000157 xxxx       
+ 1604  590   000159 1803 0001   	MOVW	#O_CMD_CNT-1,IO_CTR	;Anzahl Bytes - 1
+             00015D xxxx       
+ 1605  591   00015F 1Cxx xx20   	BSET	CML_FLAGS,_PUT_DATA_FLAG;Daten senden
+ 1606  592   000163 06xx xx     	JMP	CMD_DECODE2		;
+ 1607  593                      					;
+ 1608  594                      ;-----------------------------------------------------------------------------
+ 1609  595                      ;P_CMD	empfängt die Startadresse für ein folgendes Schreib-/Lesekommando.
+ 1610  596                      ;-----------------------------------------------------------------------------
+ 1611  597                      					;
+ 1612  598                      P_CMD:
+ 1613  599   000166 1803 xxxx   	MOVW	#IO_DATA_PTR,IO_PTR	;Zeiger auf Datenadresse
+             00016A xxxx       
+ 1614  600   00016C 1803 0001   	MOVW	#1,IO_CTR		;Anzahl Bytes - 1
+             000170 xxxx       
+ 1615  601   000172 1Cxx xx10   	BSET	CML_FLAGS,_GET_DATA_FLAG;Daten empfangen
+ 1616  602                      					;
+ 1617  603   000176 86B0        	LDAA	#0-'P'			;
+ 1618  604   000178 06xx xx     	JMP	CMD_DECODE1		;
+ 1619  605                      					;
+ 1620  606                      ;-----------------------------------------------------------------------------
+ 1621  607                      ;R_CMD	sendet Daten an den PC.
+ 1622  608                      ;-----------------------------------------------------------------------------
+ 1623  609                      					;
+ 1624  610                      R_CMD:
+ 1625  611   00017B 1804 xxxx   	MOVW	IO_DATA_PTR,IO_PTR	;Zeiger auf Datenquelle
+             00017F xxxx       
+ 1626  612   000181 1804 xxxx   	MOVW	IO_DATA_CTR,IO_CTR	;Anzahl Bytes - 1
+             000185 xxxx       
+ 1627  613   000187 1Cxx xx20   	BSET	CML_FLAGS,_PUT_DATA_FLAG;Daten senden
+ 1628  614                      					;
+ 1629  615   00018B 86AE        	LDAA	#0-'R'			;
+ 1630  616   00018D 06xx xx     	JMP	CMD_DECODE1		;
+ 1631  617                      					;
+ 1632  618                      ;-----------------------------------------------------------------------------
+ 1633  619                      ;S_CMD	empfängt die Byteanzahl für ein folgendes Schreib-/Lesekommando.
+ 1634  620                      ;-----------------------------------------------------------------------------
+ 1635  621                      					;
+ 1636  622                      S_CMD:
+ 1637  623   000190 1803 xxxx   	MOVW	#IO_DATA_CTR,IO_PTR	;Zeiger auf Datenanzahl
+             000194 xxxx       
+ 1638  624   000196 1803 0001   	MOVW	#1,IO_CTR		;Anzahl Bytes - 1
+             00019A xxxx       
+ 1639  625   00019C 1Cxx xx10   	BSET	CML_FLAGS,_GET_DATA_FLAG;Daten empfangen
+ 1640  626                      					;
+ 1641  627   0001A0 86AD        	LDAA	#0-'S'			;
+ 1642  628   0001A2 06xx xx     	JMP	CMD_DECODE1		;
+ 1643  629                      					;
+ 1644  630                      ;-----------------------------------------------------------------------------
+ 1645  631                      ;V_CMD	aktualisiert den Prüfcode der programmierbaren Einstellungen.
+ 1646  632                      ;-----------------------------------------------------------------------------
+ 1647  633                      					;
+ 1648  634                      V_CMD:
+ 1649  635                      ;
+ 1650  636                      ;begin 20.01.2011
+ 1651  637          0000 0000    if fV_CMD_CALLBACK == _true
+ 1654  640                       endif
+ 1655  641                      ;end
+ 1656  642                      ;
+ 1657  643   0001A5 CExx xx     	LDX	#E_CONFIG_TBL		;Prüfcode der programmierbaren Werte
+ 1658  644   0001A8 1803 xxxx   	MOVW	#CONFIG_TBL_CNT,R2	;
+             0001AC 1002       
+ 1659  645   0001AE 16xx xx     	JSR	CREATE_KERMIT		;neu berechnen
+ 1660  646   0001B1 1803 xxxx   	MOVW	#E_CONFIG_CRC,R6	;
+             0001B5 1006       
+ 1661  647   0001B7 16xx xx     	JSR	FTS_WRITE16		;und schreiben
+ 1662  648   0001BA 16xx xx     	JSR	FTS_FLASH		;EEPROM neu programmieren
+ 1663  649                      					;
+ 1664  650   0001BD 86AA        	LDAA	#0-'V'			;
+ 1665  651   0001BF 06xx xx     	JMP	CMD_DECODE1		;
+ 1666  652                      					;
+ 1667  653                      ;-----------------------------------------------------------------------------
+ 1668  654                      ;W_CMD	empfängt Daten vom PC und schreibt sie.
+ 1669  655                      ;-----------------------------------------------------------------------------
+ 1670  656                      					;
+ 1671  657                      W_CMD:
+ 1672  658   0001C2 1804 xxxx   	MOVW	IO_DATA_PTR,IO_PTR	;Zeiger auf Datenziel
+             0001C6 xxxx       
+ 1673  659   0001C8 1804 xxxx   	MOVW	IO_DATA_CTR,IO_CTR	;Anzahl Bytes - 1
+             0001CC xxxx       
+ 1674  660   0001CE 1Cxx xx10   	BSET	CML_FLAGS,_GET_DATA_FLAG;Daten senden
+ 1675  661                      					;
+ 1676  662   0001D2 86A9        	LDAA	#0-'W'			;
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1677  663   0001D4 06xx xx     	JMP	CMD_DECODE1		;
+ 1678  664                      					;
+ 1679  665                      ;
+ 1680  666                      ;begin 20.01.2011
+ 1681  667          0000 0000    if fCalibration == _true
+ 1696  682                       endif
+ 1697  683                      ;end
+ 1698  684                      ;
+ 1699  685                      					;
+ 1700  686                      ;-----------------------------------------------------------------------------
+ 1701  687                      ;CMD_EXECUTE prüft, welche Aktion innerhalb eines RS232-Kommandos als
+ 1702  688                      ;nächstes ausgeführt werden muss und verzweigt entsprechend.
+ 1703  689                      ;
+ 1704  690                      ;Eingangsparameter:	CML_FLAGS,_TX_FLAG
+ 1705  691                      ;			CML_FLAGS,_RX_FLAG
+ 1706  692                      ;			CML_FLAGS,_COMLINE_ERROR
+ 1707  693                      ;			IO_PTR
+ 1708  694                      ;			IO_CTR
+ 1709  695                      ;Ausgangsparameter:     CML_FLAGS,_TX_FLAG
+ 1710  696                      ;			CML_FLAGS,_RX_FLAG
+ 1711  697                      ;			CML_FLAGS,_COMLINE_ERROR
+ 1712  698                      ;			IO_PTR
+ 1713  699                      ;			IO_CTR
+ 1714  700                      ;veränderte Register:	CCR, A, B, X, Y, R[0..3,8,10]
+ 1715  701                      ;-----------------------------------------------------------------------------
+ 1716  702                      					;
+ 1717  703                      CMD_EXECUTE:
+ 1718  704   0001D7 1Exx xx20   	BRSET	CML_FLAGS,_PUT_DATA_FLAG,CMD_EXECUTE1
+             0001DB 08         
+ 1719  705   0001DC 1Exx xx10   	BRSET	CML_FLAGS,_GET_DATA_FLAG,CMD_EXECUTE2
+             0001E0 09         
+ 1720  706   0001E1 06xx xx     	JMP	CMD_EXECUTE3		;
+ 1721  707                      					;
+ 1722  708                      CMD_EXECUTE1:
+ 1723  709   0001E4 16xx xx     	JSR	PUT_DATA_HANDLE		;Daten senden
+ 1724  710   0001E7 06xx xx     	JMP	CMD_EXECUTE3		;
+ 1725  711                      					;
+ 1726  712                      CMD_EXECUTE2:
+ 1727  713   0001EA 16xx xx     	JSR	GET_DATA_HANDLE		;Daten empfangen
+ 1728  714                      					;
+ 1729  715                      					;
+ 1730  716                      CMD_EXECUTE3:
+ 1731  717   0001ED 16xx xx     	JSR	CHK_CMD_STATUS		;prüfen, ob Kommando fertig bearbeitet
+ 1732  718   0001F0 3D          	RTS				;
+ 1733  719                      					;
+ 1734  720                      ;-----------------------------------------------------------------------------
+ 1735  721                      ;PUT_DATA_HANDLE gibt ein Zeichen an der RS232-Schnittstelle aus.
+ 1736  722                      ;
+ 1737  723                      ;Eingangsparameter:	CML_FLAGS,_TX_FLAG
+ 1738  724                      ;			CML_FLAGS,_COMLINE_ERROR
+ 1739  725                      ;			CML_FLAGS,_COMLINE_TRIG
+ 1740  726                      ;			IO_PTR
+ 1741  727                      ;			IO_CTR
+ 1742  728                      ;			TX_TIMEOUT
+ 1743  729                      ;Ausgangsparameter:     CML_FLAGS,_COMLINE_TRIG
+ 1744  730                      ;			CML_FLAGS,_COMLINE_FLAG
+ 1745  731                      ;			CML_FLAGS,_PUT_DATA_FLAG
+ 1746  732                      ;			IO_PTR
+ 1747  733                      ;			IO_CTR
+ 1748  734                      ;			TX_TIMEOUT
+ 1749  735                      ;veränderte Register:	CCR, A, B, X
+ 1750  736                      ;-----------------------------------------------------------------------------
+ 1751  737                      					;
+ 1752  738                      PUT_DATA_HANDLE:
+ 1753  739   0001F1 1Fxx xx01   	BRCLR	CML_FLAGS,_TX_FLAG,PUT_DATA_HANDLE1
+             0001F5 03         
+ 1754  740   0001F6 06xx xx     	JMP	PUT_DATA_HANDLE9	;wenn _TX_FLAG rückgesetzt
+ 1755  741                      PUT_DATA_HANDLE1:
+ 1756  742   0001F9 1Fxx xx04   	BRCLR	CML_FLAGS,_COMLINE_ERROR,PUT_DATA_HANDLE2
+             0001FD 03         
+ 1757  743   0001FE 06xx xx     	JMP	PUT_DATA_HANDLE9	;und _COMLINE_ERROR rückgesetzt
+ 1758  744                      					;dann
+ 1759  745                      PUT_DATA_HANDLE2:
+ 1760  746   000201 FExx xx     	LDX	IO_PTR			;
+ 1761  747   000204 A600        	LDAA	0,X			;  Zeichen aus internem Speicher lesen
+ 1762  748   000206 08          	INX				;  Zeiger incrementieren
+ 1763  749   000207 7Exx xx     	STX	IO_PTR			;
+ 1764  750   00020A 7Axx xx     	STAA	TX_BUFFER		;  Zeichen merken
+ 1765  751   00020D 16xx xx     	JSR	SCI_WRITE8		;  und ausgeben
+ 1766  752   000210 1Cxx xx01   	BSET	CML_FLAGS,_TX_FLAG	;  Ausgabeflag setzen
+ 1767  753   000214 CCxx xx     	LDD	#TX_TIMEOUT_CT		;
+ 1768  754   000217 7Cxx xx     	STD	TX_TIMEOUT		;  Echo-Timeout auf Startwert
+ 1769  755   00021A FCxx xx     	LDD	IO_CTR			;
+ 1770  756   00021D 8300 01     	SUBD	#1			;  Anzahl decrementieren
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1771  757   000220 7Cxx xx     	STD	IO_CTR			;  wenn alle Zeichen übertragen,
+ 1772  758   000223 2411        	BCC	PUT_DATA_HANDLE9	;  dann
+ 1773  759   000225 1Dxx xx20   	BCLR	CML_FLAGS,_PUT_DATA_FLAG;    Übertragung beenden
+ 1774  760   000229 1Fxx xx80   	BRCLR	CML_FLAGS,_COMLINE_TRIG,PUT_DATA_HANDLE9
+             00022D 08         
+ 1775  761   00022E 1Cxx xx40   	BSET	CML_FLAGS,_COMLINE_FLAG	;    wenn _COMLINE_TRIG gesetzt,
+ 1776  762   000232 1Dxx xx80   	BCLR	CML_FLAGS,_COMLINE_TRIG	;    dann _COMLINE_FLAG setzen
+ 1777  763                      					;
+ 1778  764                      PUT_DATA_HANDLE9:
+ 1779  765   000236 3D          	RTS				;
+ 1780  766                      					;
+ 1781  767                      ;-----------------------------------------------------------------------------
+ 1782  768                      ;GET_DATA_HANDLE empfängt ein Zeichen von der RS232-Schnittstelle und
+ 1783  769                      ;schreibt es ins EEPROM, DATA-FLASH oder RAM.
+ 1784  770                      ;
+ 1785  771                      ;Eingangsparameter:	CML_FLAGS,_RX_FLAG
+ 1786  772                      ;			CML_FLAGS,_COMLINE_ERROR
+ 1787  773                      ;			IO_PTR
+ 1788  774                      ;			IO_CTR
+ 1789  775                      ;			RX_TIMEOUT
+ 1790  776                      ;Ausgangsparameter:     CML_FLAGS,_RX_FLAG
+ 1791  777                      ;			CML_FLAGS,_GET_DATA_FLAG
+ 1792  778                      ;			IO_PTR
+ 1793  779                      ;			IO_CTR
+ 1794  780                      ;			RX_TIMEOUT
+ 1795  781                      ;veränderte Register:	CCR, A, B, Y, R[0,6..7]
+ 1796  782                      ;-----------------------------------------------------------------------------
+ 1797  783                      					;
+ 1798  784                      GET_DATA_HANDLE:
+ 1799  785   000237 1Exx xx02   	BRSET	CML_FLAGS,_RX_FLAG,GET_DATA_HANDLE1
+             00023B 03         
+ 1800  786   00023C 06xx xx     	JMP	GET_DATA_HANDLE9	;wenn _RX_FLAG gesetzt
+ 1801  787                      GET_DATA_HANDLE1:
+ 1802  788   00023F 1Fxx xx04   	BRCLR	CML_FLAGS,_COMLINE_ERROR,GET_DATA_HANDLE2
+             000243 03         
+ 1803  789   000244 06xx xx     	JMP	GET_DATA_HANDLE9	;und _COMLINE_ERROR rückgesetzt
+ 1804  790                      					;dann
+ 1805  791                      GET_DATA_HANDLE2:
+ 1806  792   000247 FDxx xx     	LDY	IO_PTR			;
+ 1807  793   00024A 8Dxx xx     	CPY	#B_EEPROM		;
+ 1808  794   00024D 2517        	BLO	GET_DATA_HANDLE2a	;
+ 1809  795   00024F 8Dxx xx     	CPY	#T_EEPROM		;
+ 1810  796   000252 2212        	BHI	GET_DATA_HANDLE2a	;
+ 1811  797   000254 7D10 06     	STY	R6			;  wenn Zieladresse im EEPROM-Bereich,
+ 1812  798   000257 180C xxxx   	MOVB	RX_BUFFER,R0		;  dann
+             00025B 1000       
+ 1813  799   00025D 16xx xx     	JSR	FTS_WRITE8		;    Zeichen ins EEPROM programmieren
+ 1814  800   000260 B6xx xx     	LDAA	RX_BUFFER		;
+ 1815  801   000263 06xx xx     	JMP	GET_DATA_HANDLE2d	;
+ 1816  802                      					;
+ 1817  803                      GET_DATA_HANDLE2a:
+ 1818  804   000266 FDxx xx     	LDY	IO_PTR			;
+ 1819  805   000269 8Dxx xx     	CPY	#B_RAM			;
+ 1820  806   00026C 250D        	BLO	GET_DATA_HANDLE2b	;
+ 1821  807   00026E 8Dxx xx     	CPY	#T_RAM			;
+ 1822  808   000271 2208        	BHI	GET_DATA_HANDLE2b	;  sonst wenn Zieladresse im RAM-Bereich,
+ 1823  809   000273 B6xx xx     	LDAA	RX_BUFFER		;  dann
+ 1824  810   000276 6A40        	STAA	0,Y			;    Zeichen im RAM ablegen
+ 1825  811   000278 06xx xx     	JMP	GET_DATA_HANDLE2d	;
+ 1826  812                      					;
+ 1827  813                      GET_DATA_HANDLE2b:
+ 1828  814                      ;
+ 1829  815                      ;begin 20.01.2011
+ 1830  816          0000 0000    if fCalibration
+ 1841  827                       endif
+ 1842  828                      ;end
+ 1843  829                      ;
+ 1844  830                      					;
+ 1845  831                      GET_DATA_HANDLE2c:
+ 1846  832   00027B B6xx xx     	LDAA	RX_BUFFER		;  sonst Schreiben nicht möglich!
+ 1847  833   00027E 41          	COMA				;  Echo invertieren
+ 1848  834                      ;
+ 1849  835                      ;begin 20.01.2011
+ 1850  836   00027F 7Axx xx     	STAA	RX_BUFFER		;  und zwischenspeichern
+ 1851  837                      ;end
+ 1852  838                      ;
+ 1853  839                      					;
+ 1854  840                      GET_DATA_HANDLE2d:
+ 1855  841                      ;
+ 1856  842                      ;begin 20.01.2011
+ 1857  843                      ;end
+ 1858  844                      ;
+ 1859  845   000282 FDxx xx     	LDY	IO_PTR			;
+ 1860  846   000285 02          	INY				;  Zeiger incrementieren
+s12c_COMLINE  Copyright (C) 2005-2015, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2010
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1861  847   000286 7Dxx xx     	STY	IO_PTR			;
+ 1862  848   000289 CCxx xx     	LDD	#RX_TIMEOUT_CT		;
+ 1863  849   00028C 7Cxx xx     	STD	RX_TIMEOUT		;  Empfangs-Timeout auf Startwert
+ 1864  850   00028F 1Dxx xx02   	BCLR	CML_FLAGS,_RX_FLAG	;  _RX_FLAG rücksetzen
+ 1865  851   000293 FCxx xx     	LDD	IO_CTR			;
+ 1866  852   000296 8300 01     	SUBD	#1			;  Anzahl decrementieren
+ 1867  853   000299 7Cxx xx     	STD	IO_CTR			;  wenn alle Zeichen empfangen,
+ 1868  854                      ;
+ 1869  855                      ;begin 20.01.2011
+ 1870  856   00029C 2407        	BCC	GET_DATA_HANDLE8	;  dann
+ 1871  857   00029E 16xx xx     	JSR	FTS_FLASH		;    ggf. EEPROM neu programmieren
+ 1872  858   0002A1 1Dxx xx10   	BCLR	CML_FLAGS,_GET_DATA_FLAG;    Datenempfang beenden
+ 1873  859                      					;
+ 1874  860                      GET_DATA_HANDLE8:
+ 1875  861   0002A5 B6xx xx     	LDAA	RX_BUFFER		;
+ 1876  862   0002A8 16xx xx     	JSR	SCI_WRITE8		;  Echo senden
+ 1877  863                      ;end
+ 1878  864                      ;
+ 1879  865                      					;
+ 1880  866                      GET_DATA_HANDLE9:
+ 1881  867                      ;
+ 1882  868                      ;begin 28.12.2014
+ 1883  869   0002AB 3D          	RTS				;
+ 1884  870                      ;end
+ 1885  871                      ;
+ 1886  872                      					;
+ 1887  873                      ;-----------------------------------------------------------------------------
+ 1888  874                      ;CHK_CMD_STATUS untersucht den ordnungsgemäßen Abschluss eines Kommandos
+ 1889  875                      ;und deaktiviert dann das _CMD_MODE_FLAG.
+ 1890  876                      ;
+ 1891  877                      ;Eingangsparameter:	CML_FLAGS._PUT_DATA_FLAG
+ 1892  878                      ;			CML_FLAGS._GET_DATA_FLAG
+ 1893  879                      ;			CML_FLAGS._COMLINE_ERROR
+ 1894  880                      ;Ausgangsparameter:     CML_FLAGS._CMD_MODE_FLAG
+ 1895  881                      ;			CML_FLAGS._PUT_DATA_FLAG
+ 1896  882                      ;			CML_FLAGS._GET_DATA_FLAG
+ 1897  883                      ;			CML_FLAGS._COMLINE_ERROR
+ 1898  884                      ;veränderte Register:	CCR, A, X, Y
+ 1899  885                      ;-----------------------------------------------------------------------------
+ 1900  886                      					;
+ 1901  887                      CHK_CMD_STATUS:
+ 1902  888   0002AC 1Exx xx20   	BRSET	CML_FLAGS,_PUT_DATA_FLAG,CHK_CMD_STATUS1
+             0002B0 09         
+ 1903  889   0002B1 1Exx xx10   	BRSET	CML_FLAGS,_GET_DATA_FLAG,CHK_CMD_STATUS1
+             0002B5 04         
+ 1904  890   0002B6 1Dxx xx08   	BCLR	CML_FLAGS,_CMD_MODE_FLAG;
+ 1905  891                      					;
+ 1906  892                      CHK_CMD_STATUS1:
+ 1907  893   0002BA 1Fxx xx04   	BRCLR	CML_FLAGS,_COMLINE_ERROR,CHK_CMD_STATUS9
+             0002BE 0A         
+ 1908  894   0002BF B6xx xx     	LDAA	CML_FLAGS		;wenn COMLINE_ERROR,
+ 1909  895   0002C2 8440        	ANDA	#_COMLINE_FLAG		;dann
+ 1910  896   0002C4 36          	PSHA				;  CML_FLAGS._COMLINE_FLAG retten
+ 1911  897   0002C5 16xx xx     	JSR	COMLINE_RESET		;  Kommandoausführung abbrechen
+ 1912  898   0002C8 32          	PULA				;  CML_FLAGS._COMLINE_FLAG restaurieren
+ 1913  899                      					;
+ 1914  900                      CHK_CMD_STATUS9:
+ 1915  901   0002C9 3D          	RTS				;
+ 1916  902                      					;
+ 1917  903   0002CA FFFF FFFF   	dcb.b	6, 0FFh			;
+             0002CE FFFF       
+ 1918  904   0002D0 3F          	SWI				;
+ 1919  905                      					;
+ 1920  906                      ;------------------------------------------------------------------------------

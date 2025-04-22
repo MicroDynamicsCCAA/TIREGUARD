@@ -1,0 +1,319 @@
+s12c_DS1722_s  Copyright (C) 2005-2012, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_DS1722_s.sfr"
+ 1037    3                      	title	"s12c_DS1722_s  Copyright (C) 2005-2012, micro dynamics GmbH"
+ 1038    4                      ;------------------------------------------------------------------------------
+ 1039    5                      ;Module:	s12c_DS1722_s.asm
+ 1040    6                      ;
+ 1041    7                      ;Copyright:	(C) 2005-2012, micro dynamics GmbH
+ 1042    8                      ;Author(s):	Michael Frank
+ 1043    9                      ;Update:	06.01.2012
+ 1044   10                      ;
+ 1045   11                      ;Description:	Funktionen für den Zugriff auf das serielle Digital-Thermometer
+ 1046   12                      ;		vom Typ DALLAS Semiconductor DS1722.
+ 1047   13                      ;		Das Thermometer-Bauelement wird im 3-Wire Modus betrieben.
+ 1048   14                      ;		Das bedeutet, dass Daten vom Bauelement jeweils mit steigender
+ 1049   15                      ;		Flanke des SCLK-Taktes gelesen und mit dessen fallender Flanke
+ 1050   16                      ;		geschrieben werden.
+ 1051   17                      ;
+ 1052   18                      ;		SingleChip-Version ohne MSB-Businterface
+ 1053   19                      ;
+ 1054   20                      ;Folgende Bezeichner sind in s12c_DS1722_s.sfr zu definieren:
+ 1055   21                      ;
+ 1056   22                      ;Switches:	fEnabled
+ 1057   23                      ;
+ 1058   24                      ;Bits:		_MISO
+ 1059   25                      ;		_MOSI
+ 1060   26                      ;		_SCLK
+ 1061   27                      ;		_CE
+ 1062   28                      ;
+ 1063   29                      ;Ports:		MISO_DIR
+ 1064   30                      ;		MISO_PORT
+ 1065   31                      ;		MOSI_DIR
+ 1066   32                      ;		MOSI_PORT
+ 1067   33                      ;		SCLK_DIR
+ 1068   34                      ;		SCLK_PORT
+ 1069   35                      ;		CE_DIR
+ 1070   36                      ;		CE_PORT
+ 1071   37                      ;------------------------------------------------------------------------------
+ 1072   38                      ;Revision History:	Original Version  07.05
+ 1073   39                      ;
+ 1074   40                      ;06.01.2012	über fEnabled selektierbarer aktiver CE-Pegel	
+ 1075   41                      ;
+ 1076   42                      ;08.11.2006	Anpassung an MC9S12C128
+ 1077   43                      ;------------------------------------------------------------------------------
+ 1078   44                      					;
+ 1079   45                      ;------------------------------------------------------------------------------
+ 1080   46                      ;Publics
+ 1081   47                      ;------------------------------------------------------------------------------
+ 1082   48                      					;
+ 1083   49                      	xdef	SDT_RESET		;Code
+ 1084   50                      	xdef	SDT_READ_CONFIG		;Code
+ 1085   51                      	xdef	SDT_READ_VALUE		;Code
+ 1086   52                      	xdef	SDT_WRITE_CONFIG	;Code
+ 1087   53                      					;
+ 1088   54                      ;------------------------------------------------------------------------------
+ 1089   55                      ;Variables and Constants
+ 1090   56                      ;------------------------------------------------------------------------------
+ 1091   57                      					;
+ 1092   58          0000 0000   CMD_READ_CONFIG:	equ	00h	;
+ 1093   59          0000 0001   CMD_READ_VALUE_LOW:	equ	01h	;
+ 1094   60          0000 0002   CMD_READ_VALUE_HIGH:	equ	02h	;
+ 1095   61          0000 0080   CMD_WRITE_CONFIG:	equ	80h	;
+ 1096   62                      					;
+ 1097   63                      					;
+ 1098   64                      .text:		section
+ 1099   65                      					;
+ 1100   66                      ;//////////////////////////////////////////////////////////////////////////////
+ 1101   67                      ;SREAD liest Daten seriell aus dem Digital-Thermometer.
+ 1102   68                      ;
+ 1103   69                      ;Die Taktfrequenz beträgt ca. 1,0 MHz bei 24,0 MHz Bustakt.
+ 1104   70                      ;Das Bauelement erlaubt maximal 5 MHz bei 2,65..5,5 V.
+ 1105   71                      ;
+ 1106   72                      ;Eingangsparameter:	R3		Anzahl zu übertragender bits
+ 1107   73                      ;Ausgangsparameter:	A		gelesene Daten, linksbündig
+ 1108   74                      ;veränderte Register:	CCR
+ 1109   75                      ;//////////////////////////////////////////////////////////////////////////////
+ 1110   76                      					;
+ 1111   77                      SREAD:
+ 1112   78   000000 86FF        	LDAA	#0FFh			;Ergebnis fegen
+ 1113   79                      					;
+ 1114   80                      SREAD1:
+ 1115   81   000002 1D02 5020   	BCLR	SCLK_PORT,_SCLK		;Takt auf '0' zur Übernahme des bits
+ 1116   82   000006 A7          	NOP				;
+ 1117   83   000007 A7          	NOP				;
+ 1118   84   000008 A7          	NOP				;warten, bis bit gültig ist
+s12c_DS1722_s  Copyright (C) 2005-2012, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1119   85   000009 A7          	NOP				;
+ 1120   86   00000A A7          	NOP				;
+ 1121   87   00000B A7          	NOP				;
+ 1122   88   00000C 44          	LSRA				;Daten um ein bit nach rechts schieben
+ 1123   89   00000D 1F02 5004   	BRCLR	MISO_PORT,_MISO,SREAD2	;wenn bit gesetzt
+             000011 04         
+ 1124   90   000012 8A80        	ORAA	#10000000b		;dann '1' in gelesene Daten eintragen
+ 1125   91   000014 2002        	BRA	SREAD3			;
+ 1126   92                      SREAD2:
+ 1127   93   000016 847F        	ANDA	#01111111b		;sonst '0' in gelesene Daten eintragen
+ 1128   94                      SREAD3:
+ 1129   95   000018 1C02 5020   	BSET	SCLK_PORT,_SCLK		;Takt auf '1'
+ 1130   96   00001C 7310 03     	DEC	R3			;
+ 1131   97   00001F 26E1        	BNE	SREAD1			;
+ 1132   98   000021 3D          	RTS				;
+ 1133   99                      					;
+ 1134  100                      ;//////////////////////////////////////////////////////////////////////////////
+ 1135  101                      ;SWRITE schreibt Daten seriell in das Digital-Thermometer.
+ 1136  102                      ;
+ 1137  103                      ;Die Taktfrequenz beträgt ca. 1,0 MHz bei 24,0 MHz Bustakt.
+ 1138  104                      ;Das Bauelement erlaubt maximal 5 MHz bei 2,65..5,5 V.
+ 1139  105                      ;
+ 1140  106                      ;Eingangsparameter:	R3		Anzahl zu übertragender bits
+ 1141  107                      ;			A		zu schreibende Daten, rechtsbündig
+ 1142  108                      ;Ausgangsparameter:	keine
+ 1143  109                      ;veränderte Register:	CCR
+ 1144  110                      ;//////////////////////////////////////////////////////////////////////////////
+ 1145  111                      					;
+ 1146  112                      SWRITE:
+ 1147  113   000022 44          	LSRA				;Datenbit ins CARRY-Flag schieben
+ 1148  114   000023 1D02 5020   	BCLR	SCLK_PORT,_SCLK		;Takt auf '0'
+ 1149  115   000027 2406        	BCC	SWRITE1			;wenn CARRY
+ 1150  116   000029 1C02 5010   	BSET	MOSI_PORT,_MOSI		;dann Sendeleitung auf '1'
+ 1151  117   00002D 2005        	BRA	SWRITE2			;
+ 1152  118                      SWRITE1:
+ 1153  119   00002F 1D02 5010   	BCLR	MOSI_PORT,_MOSI		;sonst Sendeleitung auf '0'
+ 1154  120   000033 A7          	NOP				;
+ 1155  121                      SWRITE2:
+ 1156  122   000034 1C02 5020   	BSET	SCLK_PORT,_SCLK		;Takt auf '1' zur Übernahme des bits
+ 1157  123   000038 7310 03     	DEC	R3			;
+ 1158  124   00003B 26E5        	BNE	SWRITE			;
+ 1159  125   00003D 3D          	RTS				;
+ 1160  126                      					;
+ 1161  127                      ;------------------------------------------------------------------------------
+ 1162  128                      ;SUBMIT_COMMAND übergibt ein Kommando an das Digital-Thermometer.
+ 1163  129                      ;
+ 1164  130                      ;Eingangsparameter:	A		Kommando rechtsbündig
+ 1165  131                      ;Ausgangsparameter:	keine
+ 1166  132                      ;veränderte Register:	CCR, R3
+ 1167  133                      ;------------------------------------------------------------------------------
+ 1168  134                      					;
+ 1169  135                      SUBMIT_COMMAND:
+ 1170  136   00003E 180B 0810   	MOVB	#8,R3			;
+             000042 03         
+ 1171  137   000043 16xx xx     	JSR	SWRITE			;
+ 1172  138   000046 3D          	RTS				;
+ 1173  139                      					;
+ 1174  140                      ;------------------------------------------------------------------------------
+ 1175  141                      ;SEND_DATA übergibt ein Datenbyte an das Digital-Thermometer.
+ 1176  142                      ;
+ 1177  143                      ;Eingangsparameter:	A		Datenwort
+ 1178  144                      ;Ausgangsparameter:	keine
+ 1179  145                      ;veränderte Register:	CCR, R3
+ 1180  146                      ;------------------------------------------------------------------------------
+ 1181  147                      					;
+ 1182  148                      SEND_DATA:
+ 1183  149   000047 180B 0810   	MOVB	#8,R3			;
+             00004B 03         
+ 1184  150   00004C 16xx xx     	JSR	SWRITE			;
+ 1185  151   00004F 3D          	RTS				;
+ 1186  152                      					;
+ 1187  153                      ;------------------------------------------------------------------------------
+ 1188  154                      ;RECEIVE_DATA liest ein Datenbyte aus dem Digital-Thermometer.
+ 1189  155                      ;
+ 1190  156                      ;Eingangsparameter:	keine
+ 1191  157                      ;Ausgangsparameter:	A		Datenwort
+ 1192  158                      ;veränderte Register:	CCR, R3
+ 1193  159                      ;------------------------------------------------------------------------------
+ 1194  160                      					;
+ 1195  161                      RECEIVE_DATA:
+ 1196  162   000050 180B 0810   	MOVB	#8,R3			;
+             000054 03         
+ 1197  163   000055 16xx xx     	JSR	SREAD			;
+ 1198  164   000058 3D          	RTS				;
+s12c_DS1722_s  Copyright (C) 2005-2012, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1199  165                      					;
+ 1200  166                      ;//////////////////////////////////////////////////////////////////////////////
+ 1201  167                      ;Public: SDT_RESET bringt Daten- und Taktleitungen in Grundstellung.
+ 1202  168                      ;
+ 1203  169                      ;Eingangsparameter:	keine
+ 1204  170                      ;Ausgangsparameter:	keine
+ 1205  171                      ;veränderte Register:	CCR
+ 1206  172                      ;//////////////////////////////////////////////////////////////////////////////
+ 1207  173                      					;
+ 1208  174                      SDT_RESET:
+ 1209  175   000059 1C02 5208   	BSET	CE_DIR,_CE		;CE-Pin auf Ausgang schalten
+ 1210  176                      
+ 1211  177          0000 0001    if fEnabled == _high
+ 1212  178   00005D 1D02 5008   	BCLR	CE_PORT,_CE		;_CE:		Out = 0 : Bauteil deaktivieren
+ 1213  179                       else
+ 1215  181                       endif
+ 1216  182                      					;
+ 1217  183   000061 1C02 5220   	BSET	SCLK_DIR,_SCLK		;SCLK-Pin auf Ausgang schalten
+ 1218  184   000065 1D02 5020   	BCLR	SCLK_PORT,_SCLK		;SCLK:		Out= 0
+ 1219  185   000069 1C02 5210   	BSET	MOSI_DIR,_MOSI		;MOSI-Pin auf Ausgang schalten
+ 1220  186   00006D 1D02 5010   	BCLR	MOSI_PORT,_MOSI		;MOSI:		Out= 0
+ 1221  187   000071 1D02 5204   	BCLR	MISO_DIR,_MISO		;MISO-Pin auf Eingang schalten
+ 1222  188                      					;MISO:		In
+ 1223  189   000075 3D          	RTS				;
+ 1224  190                      					;
+ 1225  191                      ;//////////////////////////////////////////////////////////////////////////////
+ 1226  192                      ;Public: SDT_READ_CONFIG liest die Konfigurationdaten aus dem Thermometer.
+ 1227  193                      ;
+ 1228  194                      ;Eingangsparameter:	keine
+ 1229  195                      ;Ausgangsparameter:	R0		Byte mit aktuellen Konfigurationsdaten
+ 1230  196                      ;veränderte Register:	CCR, A, R3
+ 1231  197                      ;//////////////////////////////////////////////////////////////////////////////
+ 1232  198                      					;
+ 1233  199                      SDT_READ_CONFIG:
+ 1234  200   000076 8600        	LDAA	#CMD_READ_CONFIG	;
+ 1235  201                      					;
+ 1236  202          0000 0001    if fEnabled == _high
+ 1237  203   000078 1C02 5008   	BSET	CE_PORT,_CE		;Bauteil selektieren
+ 1238  204                       else
+ 1240  206                       endif
+ 1241  207                      					;
+ 1242  208   00007C 16xx xx     	JSR	SUBMIT_COMMAND		;
+ 1243  209   00007F 16xx xx     	JSR	RECEIVE_DATA		;Datenbyte lesen
+ 1244  210   000082 7A10 00     	STAA	R0			;
+ 1245  211                      					;
+ 1246  212          0000 0001    if fEnabled == _high
+ 1247  213   000085 1D02 5008   	BCLR	CE_PORT,_CE		;Bauteil deaktivieren
+ 1248  214                       else
+ 1250  216                       endif
+ 1251  217                      					;
+ 1252  218   000089 3D          	RTS				;
+ 1253  219                      					;
+ 1254  220                      ;//////////////////////////////////////////////////////////////////////////////
+ 1255  221                      ;Public: SDT_READ_VALUE liest den aktuellen Messwert aus dem Thermometer.
+ 1256  222                      ;
+ 1257  223                      ;Eingangsparameter:	keine
+ 1258  224                      ;Ausgangsparameter:	R0/R1		Datenwort
+ 1259  225                      ;veränderte Register:	CCR, A, R3
+ 1260  226                      ;//////////////////////////////////////////////////////////////////////////////
+ 1261  227                      					;
+ 1262  228                      SDT_READ_VALUE:
+ 1263  229   00008A 8601        	LDAA	#CMD_READ_VALUE_LOW	;
+ 1264  230                      					;
+ 1265  231          0000 0001    if fEnabled == _high
+ 1266  232   00008C 1C02 5008   	BSET	CE_PORT,_CE		;Bauteil selektieren
+ 1267  233                       else
+ 1269  235                       endif
+ 1270  236                      					;
+ 1271  237   000090 16xx xx     	JSR	SUBMIT_COMMAND		;
+ 1272  238   000093 16xx xx     	JSR	RECEIVE_DATA		;Datenbyte lesen
+ 1273  239   000096 7A10 01     	STAA	R1			;
+ 1274  240                      					;
+ 1275  241          0000 0001    if fEnabled == _high
+ 1276  242   000099 1D02 5008   	BCLR	CE_PORT,_CE		;Bauteil deaktivieren
+ 1277  243                       else
+ 1279  245                       endif
+ 1280  246                      					;
+ 1281  247   00009D 8602        	LDAA	#CMD_READ_VALUE_HIGH	;
+ 1282  248                      					;
+ 1283  249          0000 0001    if fEnabled == _high
+ 1284  250   00009F 1C02 5008   	BSET	CE_PORT,_CE		;Bauteil selektieren
+ 1285  251                       else
+ 1287  253                       endif
+ 1288  254                      					;
+s12c_DS1722_s  Copyright (C) 2005-2012, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1289  255   0000A3 16xx xx     	JSR	SUBMIT_COMMAND		;
+ 1290  256   0000A6 16xx xx     	JSR	RECEIVE_DATA		;Datenbyte lesen
+ 1291  257   0000A9 7A10 00     	STAA	R0			;
+ 1292  258                      					;
+ 1293  259          0000 0001    if fEnabled == _high
+ 1294  260   0000AC 1D02 5008   	BCLR	CE_PORT,_CE		;Bauteil deaktivieren
+ 1295  261                       else
+ 1297  263                       endif
+ 1298  264                      					;
+ 1299  265   0000B0 3D          	RTS				;
+ 1300  266                      					;
+ 1301  267                      ;//////////////////////////////////////////////////////////////////////////////
+ 1302  268                      ;Public: SDT_WRITE_CONFIG schreibt neue Konfigurationsdaten in das Thermometer.
+ 1303  269                      ;
+ 1304  270                      ;Eingangsparameter:	R0		Byte mit neuen Konfigurationsdaten
+ 1305  271                      ;Ausgangsparameter:	keine
+ 1306  272                      ;veränderte Register:	CCR, A, R3
+ 1307  273                      ;//////////////////////////////////////////////////////////////////////////////
+ 1308  274                      					;
+ 1309  275                      SDT_WRITE_CONFIG:
+ 1310  276   0000B1 8680        	LDAA	#CMD_WRITE_CONFIG	;
+ 1311  277                      					;
+ 1312  278          0000 0001    if fEnabled == _high
+ 1313  279   0000B3 1C02 5008   	BSET	CE_PORT,_CE		;Bauteil selektieren
+ 1314  280                       else
+ 1316  282                       endif
+ 1317  283                      					;
+ 1318  284   0000B7 16xx xx     	JSR	SUBMIT_COMMAND		;
+ 1319  285   0000BA B610 00     	LDAA	R0			;
+ 1320  286   0000BD 16xx xx     	JSR	SEND_DATA		;Konfigurationsdaten übertragen
+ 1321  287                      					;
+ 1322  288          0000 0001    if fEnabled == _high
+ 1323  289   0000C0 1D02 5008   	BCLR	CE_PORT,_CE		;Bauteil deaktivieren
+ 1324  290                       else
+ 1326  292                       endif
+ 1327  293                      					;
+ 1328  294   0000C4 3D          	RTS				;
+ 1329  295                      					;
+ 1330  296   0000C5 FFFF FFFF   	dcb.b	6, 0FFh			;
+             0000C9 FFFF       
+ 1331  297   0000CB 3F          	SWI				;
+ 1332  298                      					;
+ 1333  299                      ;------------------------------------------------------------------------------

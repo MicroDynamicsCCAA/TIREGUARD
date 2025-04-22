@@ -1,0 +1,149 @@
+s12c_74153  Copyright (C) 2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_74153.sfr"
+ 1018    3                      	title	"s12c_74153  Copyright (C) 2007, micro dynamics GmbH"
+ 1019    4                      ;------------------------------------------------------------------------------
+ 1020    5                      ;Module:	s12c_74153.asm
+ 1021    6                      ;
+ 1022    7                      ;Copyright:	(C) 2007, micro dynamics GmbH
+ 1023    8                      ;Author(s):	Michael Frank
+ 1024    9                      ;Update:	26.11.2007
+ 1025   10                      ;
+ 1026   11                      ;Description:	Funktionen für den Zugriff auf den LIN-Empfangsmultiplexer
+ 1027   12                      ;		vom Typ 74HC153.
+ 1028   13                      ;
+ 1029   14                      ;		SingleChip-Version ohne MSB-Businterface
+ 1030   15                      ;
+ 1031   16                      ;Folgende Bezeichner sind in s12c_74153.sfr zu definieren:
+ 1032   17                      ;
+ 1033   18                      ;Bits:		_A
+ 1034   19                      ;		_B
+ 1035   20                      ;
+ 1036   21                      ;Ports:		MUX_DIR
+ 1037   22                      ;		MUX_PORT
+ 1038   23                      ;------------------------------------------------------------------------------
+ 1039   24                      ;Revision History:	Original Version  11.07
+ 1040   25                      ;
+ 1041   26                      ;------------------------------------------------------------------------------
+ 1042   27                      					;
+ 1043   28                      ;------------------------------------------------------------------------------
+ 1044   29                      ;Publics
+ 1045   30                      ;------------------------------------------------------------------------------
+ 1046   31                      					;
+ 1047   32                      	xdef	MUX_RESET		;Code
+ 1048   33                      	xdef	MUX_UPDATE		;Code
+ 1049   34                      					;
+ 1050   35                      	xdef.b	E_MUX_INDEX		;Number
+ 1051   36                      					;
+ 1052   37                      ;------------------------------------------------------------------------------
+ 1053   38                      ;Variables and Constants
+ 1054   39                      ;------------------------------------------------------------------------------
+ 1055   40                      					;
+ 1056   41          FFFF FFFE   E_MUX_INDEX:	equ	-2		;
+ 1057   42                      					;
+ 1058   43                      .text:		section
+ 1059   44                      					;
+ 1060   45                      ;//////////////////////////////////////////////////////////////////////////////
+ 1061   46                      ;Public: MUX_RESET bringt Multiplexer-Steuerleitungen in Grundstellung.
+ 1062   47                      ;
+ 1063   48                      ;Eingangsparameter:	keine
+ 1064   49                      ;Ausgangsparameter:	keine
+ 1065   50                      ;veränderte Register:	CCR, A, Y
+ 1066   51                      ;//////////////////////////////////////////////////////////////////////////////
+ 1067   52                      					;
+ 1068   53                      MUX_RESET:
+ 1069   54   000000 CD02 42     	LDY	#MUX_DIR		;
+ 1070   55   000003 A640        	LDAA	0,Y			;
+ 1071   56   000005 8A60        	ORAA    #_A |_B			;CPU-Steuerleitungen sind Outputs
+ 1072   57   000007 6A40        	STAA	0,Y			;
+ 1073   58   000009 CD02 40     	LDY	#MUX_PORT		;
+ 1074   59   00000C A640        	LDAA	0,Y			;
+ 1075   60   00000E 849F        	ANDA    #~(_A | _B)		;Multiplexer in Zustand 0 schalten
+ 1076   61   000010 6A40        	STAA	0,Y			;
+ 1077   62   000012 3D          	RTS				;
+ 1078   63                      					;
+ 1079   64                      ;//////////////////////////////////////////////////////////////////////////////
+ 1080   65                      ;Public: MUX_UPDATE lädt neue Position in den Multiplexer-Baustein.
+ 1081   66                      ;
+ 1082   67                      ;Eingangsparameter:	A		neue Multiplexer-Position
+ 1083   68                      ;Ausgangsparameter:	A 		0	= ok
+ 1084   69                      ;			A 		<> 0	= Fehler
+ 1085   70                      ;veränderte Register:	CCR, B, Y
+ 1086   71                      ;//////////////////////////////////////////////////////////////////////////////
+ 1087   72                      					;
+ 1088   73                      MUX_UPDATE:
+ 1089   74   000013 8104        	CMPA	#LOW(MUX_JMP_TBL_CNT)	;wenn Index nicht im zulässigen Bereich,
+ 1090   75   000015 2504        	BLO	MUX_UPDATE1		;dann
+ 1091   76   000017 86FE        	LDAA	#E_MUX_INDEX		;  Fehler: ungültiger Index
+ 1092   77   000019 2046        	BRA	MUX_UPDATE9		;
+ 1093   78                      
+ 1094   79                      MUX_UPDATE1:
+ 1095   80   00001B 180E        	TAB				;
+ 1096   81   00001D 87          	CLRA				;
+ 1097   82   00001E 59          	LSLD				;Index * 2
+ 1098   83   00001F CDxx xx     	LDY	#MUX_JMP_TBL		;Basisadresse
+ 1099   84   000022 05EF        	JMP	[D,Y]			;Absprung in Unterprogramm
+s12c_74153  Copyright (C) 2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1100   85                      					;
+ 1101   86                      	even
+ 1102   87                      MUX_JMP_TBL:
+ 1103   88   000024 xxxx        	dc.w	MUX_STATE0		;
+ 1104   89   000026 xxxx        	dc.w	MUX_STATE1		;
+ 1105   90   000028 xxxx        	dc.w	MUX_STATE2		;
+ 1106   91   00002A xxxx        	dc.w	MUX_STATE3		;
+ 1107   92          0000 0004   MUX_JMP_TBL_CNT:	equ	(* - MUX_JMP_TBL) / 2
+ 1108   93                      					;
+ 1109   94                      MUX_STATE0:
+ 1110   95   00002C CD02 40     	LDY     #MUX_PORT		;
+ 1111   96   00002F A640        	LDAA	0,Y			;
+ 1112   97   000031 180E        	TAB				;
+ 1113   98   000033 849F        	ANDA	#~(_A | _B)		;A = 0, B = 0
+ 1114   99   000035 2023        	BRA	MUX_UPDATE7		;
+ 1115  100                      					;
+ 1116  101                      MUX_STATE1:
+ 1117  102   000037 CD02 40     	LDY     #MUX_PORT		;
+ 1118  103   00003A A640        	LDAA	0,Y			;
+ 1119  104   00003C 180E        	TAB				;
+ 1120  105   00003E 84BF        	ANDA	#~_B			;
+ 1121  106   000040 8A20        	ORAA	#_A			;A = 1, B = 0
+ 1122  107   000042 2016        	BRA	MUX_UPDATE7		;
+ 1123  108                      					;
+ 1124  109                      MUX_STATE2:
+ 1125  110   000044 CD02 40     	LDY     #MUX_PORT		;
+ 1126  111   000047 A640        	LDAA	0,Y			;
+ 1127  112   000049 180E        	TAB				;
+ 1128  113   00004B 84DF        	ANDA	#~_A			;
+ 1129  114   00004D 8A40        	ORAA	#_B			;A = 0, B = 1
+ 1130  115   00004F 2009        	BRA	MUX_UPDATE7		;
+ 1131  116                      					;
+ 1132  117                      MUX_STATE3:
+ 1133  118   000051 CD02 40     	LDY     #MUX_PORT		;
+ 1134  119   000054 A640        	LDAA	0,Y			;
+ 1135  120   000056 180E        	TAB				;
+ 1136  121   000058 8A60        	ORAA	#(_A | _B)		;A = 1, B = 1
+ 1137  122                      					;
+ 1138  123                      MUX_UPDATE7:
+ 1139  124   00005A 1817        	CBA				;wenn neue <> alter Position
+ 1140  125   00005C 2702        	BEQ	MUX_UPDATE8		;dann
+ 1141  126   00005E 6A40        	STAA	0,Y			;  neue Position einstellen
+ 1142  127                      MUX_UPDATE8:
+ 1143  128   000060 87          	CLRA				;ok, mit A = 0 zurück
+ 1144  129                      					;
+ 1145  130                      MUX_UPDATE9:
+ 1146  131   000061 3D          	RTS				;
+ 1147  132                      					;
+ 1148  133   000062 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000066 FFFF       
+ 1149  134   000068 3F          	SWI				;
+ 1150  135                      					;
+ 1151  136                      ;------------------------------------------------------------------------------

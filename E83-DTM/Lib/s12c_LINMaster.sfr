@@ -1,0 +1,32 @@
+	nolist
+;------------------------------------------------------------------------------
+;Module:	s12c_LINMaster.sfr
+;
+;Copyright: 	(C) 2005-2006, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	24.11.2006
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12c_LINMaster.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.05
+;
+;24.11.2006
+;08.11.2006	Anpassung an MC9S12C128
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;/////////////////////////////////////////////////////////////////////////////
+					;
+LIN_BD:		equ	SCI0BD		;LIN Baudrate Register
+					;
+LIN_CR1:	equ	SCI0CR1		;LIN Control Register 1
+LIN_CR2:	equ	SCI0CR2		;LIN Control Register 2
+LIN_SR1:	equ	SCI0SR1		;LIN Status Register 1
+LIN_SR2:	equ	SCI0SR2		;LIN Status Register 2
+					;
+LIN_DR:		equ	SCI0DRL		;LIN Data Register
+					;
+;------------------------------------------------------------------------------
+	list
+	end

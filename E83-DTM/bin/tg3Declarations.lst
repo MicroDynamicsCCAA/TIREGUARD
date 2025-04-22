@@ -1,0 +1,870 @@
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title 	"tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;TireGuard 3a	Betriebsprogramm 	S2.804.xx/y
+ 1018    6                      ;------------------------------------------------------------------------------
+ 1019    7                      ;Module:	tg3Declarations.asm
+ 1020    8                      ;
+ 1021    9                      ;Copyright:	(C) 2005-2013, micro dynamics GmbH
+ 1022   10                      ;Author(s):	Michael Frank
+ 1023   11                      ;Update:	02.07.2013
+ 1024   12                      ;
+ 1025   13                      ;Description:	Deklaration der globalen Konstanten und Variablen
+ 1026   14                      ;------------------------------------------------------------------------------
+ 1027   15                      ;Revision History:	Original Version  11.05
+ 1028   16                      ;
+ 1029   17                      ;02.07.2013	Version 2.60
+ 1030   18                      ;20.01.2011	Version 2.50
+ 1031   19                      ;05.07.2008	Version 2.10
+ 1032   20                      ;27.11.2007	Version 2.00
+ 1033   21                      ;
+ 1034   22                      ;24.11.2006	Version 1.00
+ 1035   23                      ;08.11.2006	Anpassung an MC9S12C128
+ 1036   24                      ;
+ 1037   25                      ;29.03.2006	Version 1.12
+ 1038   26                      ;21.02.2006	Version 1.11
+ 1039   27                      ;08.02.2006	Version 1.10
+ 1040   28                      ;11.12.2005	Version 1.00
+ 1041   29                      ;------------------------------------------------------------------------------
+ 1042   30                      					;
+ 1043   31                      ;------------------------------------------------------------------------------
+ 1044   32                      ;Publics
+ 1045   33                      ;------------------------------------------------------------------------------
+ 1046   34                      					;
+ 1047   35          0000 0000    ifne fDebug
+ 1053   41                       endif
+ 1054   42                      
+ 1055   43                      	xdef	B_FLASH			;roData
+ 1056   44                      	xdef	CAN0_CONFIG_TBL		;roData
+ 1057   45                      	xdef	CONFIG_TBL		;roData
+ 1058   46                      	xdef	LIN_IDENTIFIER_TBL	;roData
+ 1059   47                      	xdef	MSG_IDENTIFIER_TBL	;roData
+ 1060   48                      	xdef	MSG_CTR_TBL		;roData
+ 1061   49                      	xdef	MSG_RX_TBL		;roData
+ 1062   50                      	xdef	SW_IDENT		;roData
+ 1063   51                      	xdef	SW_VERSION		;roData
+ 1064   52                      	xdef	T_FLASH			;roData
+ 1065   53                      					;
+ 1066   54                      ;
+ 1067   55                      ;begin 20.01.2011
+ 1068   56                      	xdef	B_DATA_FLASH		;rwData
+ 1069   57                      	xdef	T_DATA_FLASH		;rwData
+ 1070   58                      ;end
+ 1071   59                      ;
+ 1072   60                      	xdef	B_EEPROM		;bssData
+ 1073   61                      ;
+ 1074   62                      ;begin 20.01.2011
+ 1075   63                      	xdef	E_BOARD_ID		;bssData
+ 1076   64                      ;end
+ 1077   65                      ;
+ 1078   66                      	xdef	HW_IDENT		;bssData
+ 1079   67                      	xdef	E_CRC_KEY		;bssData
+ 1080   68                      	xdef	E_CRC_CODE		;bssData
+ 1081   69                      	xdef	E_CONFIG_TBL		;bssData
+ 1082   70                      	xdef	E_ANALOG_COEFF_TBL	;bssData
+ 1083   71                      	xdef	E_BARO_PRESSURE		;bssData
+ 1084   72                      	xdef	E_DROP_REF		;bssData
+ 1085   73                      	xdef	E_DROP_PRESSURE		;bssData
+ 1086   74                      	xdef	E_FUN_MODE		;bssData
+ 1087   75                      	xdef	E_PRESSURE		;bssData
+ 1088   76                      	xdef	E_TEMPERATURE		;bssData
+ 1089   77                      	xdef	E_XP_REF		;bssData
+ 1090   78                      ;
+ 1091   79                      ;begin 20.01.2011
+ 1092   80                      	xdef	E_CONFIG_CRC		;bssData
+ 1093   81                      ;end
+ 1094   82                      ;
+ 1095   83                      	xdef	T_EEPROM		;bssData
+ 1096   84                      
+ 1097   85                      	xdef	BOR			;Data
+ 1098   86                      	xdef	TOR			;Data
+ 1099   87                      	xdef	B_RAM			;Data
+ 1100   88                      	xdef	BOV			;Data
+ 1101   89                      	xdef	ALARM			;Data
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1102   90                      	xdef	ALARM_CTR		;Data
+ 1103   91                      	xdef	ANALOG_BUF		;Data
+ 1104   92                      	xdef	ANALOG_FLAGS		;Data
+ 1105   93                      	xdef.b	_ADC_ERROR		;bitMask
+ 1106   94                      					;
+ 1107   95                      	xdef	ANALOG_RESULT_BUF	;Data
+ 1108   96                      	xdef	ANALOG_S1_BUF		;Data
+ 1109   97                      	xdef	BATTERY_VOLTAGE		;Data
+ 1110   98                      	xdef	CAN_BUF			;Data
+ 1111   99                      	xdef	CAN0_MSG0_BUF		;Data
+ 1112  100                      	xdef	CAN0_MSG1_BUF		;Data
+ 1113  101                      	xdef	CAN0_MSG2_BUF		;Data
+ 1114  102                      	xdef	CAN0_TIMEOUT_CTR	;Data
+ 1115  103                      	xdef	CAN0_RX_CTR		;Data
+ 1116  104                      	xdef	CHECK_WAIT_CTR		;Data
+ 1117  105                      					;
+ 1118  106                      	xdef	COMMUNICATE_FLAGS	;Data
+ 1119  107                      	xdef.b	_LOW_XP_TRIG		;bitMask
+ 1120  108                      	xdef.b	_LOW_XP_FLAG		;bitMask
+ 1121  109                      	xdef.b	_CAN_RFSH_TRIG		;bitMask
+ 1122  110                      					;
+ 1123  111                      	xdef	DROP_ALARM		;Data
+ 1124  112                      	xdef	LOOP_CTR		;Data
+ 1125  113                      	xdef	LOOP_FLAGS		;Data
+ 1126  114                      	xdef.b	_LOOP_OV		;bitMask
+ 1127  115                      	xdef.b	_LOOP_OV_CLEAR		;bitMask
+ 1128  116                      	xdef.b	_LOOP_TIMEOUT		;bitMask
+ 1129  117                      					;
+ 1130  118                      	xdef	LAST_RX_POS		;Data
+ 1131  119                      	xdef	LIN_ADC_ADDR		;Data
+ 1132  120                      	xdef	LIN_RX_CTR		;Data
+ 1133  121                      	xdef	MSG_RX_REC		;Data
+ 1134  122                      	xdef	MSG_S1_REC		;Data
+ 1135  123                      	xdef	MEAN_S1_BUF		;Data
+ 1136  124                      					;
+ 1137  125                      	xdef	OUTPUT_FLAGS		;Data
+ 1138  126                      	xdef.b	_ALARM_TOGGLE		;bitMask
+ 1139  127                      					;
+ 1140  128                      	xdef	SENSOR_CTR_REC		;Data
+ 1141  129                      ;
+ 1142  130                      ;begin 02.07.2013
+ 1143  131                      	xdef	TIRE_RFSH_CTR		;Data
+ 1144  132                      ;end
+ 1145  133                      ;
+ 1146  134                      	xdef	UNIT_TEMPERATURE	;Data
+ 1147  135                      	xdef	XP			;Data
+ 1148  136                      	xdef	TOV			;Data
+ 1149  137                      	xdef	BOS			;Data
+ 1150  138                      	xdef	TOS			;Data
+ 1151  139                      	xdef	T_RAM			;Data
+ 1152  140                      					;
+ 1153  141                      	xdef	ALARM_CT		;Number
+ 1154  142                      ;
+ 1155  143                      ;begin 20.11.2011
+ 1156  144                      	xdef.b	bt_TIREGUARD3A		;Number
+ 1157  145                      ;end
+ 1158  146                      ;
+ 1159  147                      	xdef.b	CONFIG_TBL_CNT		;Number
+ 1160  148                      					;
+ 1161  149                      	xdef	BD_38400_REL		;Number
+ 1162  150                      	xdef	BD_19200_REL		;Number
+ 1163  151                      	xdef	BD_9600_REL		;Number
+ 1164  152                      	xdef	BD_4800_REL		;Number
+ 1165  153                      	xdef	BD_2400_REL		;Number
+ 1166  154                      					;
+ 1167  155                      	xdef	BD_9600x4_REL		;Number
+ 1168  156                      	xdef	BD_4800x4_REL		;Number
+ 1169  157                      					;
+ 1170  158                      	xdef	BUS_CLK			;Number
+ 1171  159                      					;
+ 1172  160                      	xdef	CAN_BUF_CT		;Number
+ 1173  161                      	xdef	CAN0_RX_CT		;Number
+ 1174  162                      	xdef	CHECK_WAIT_CT		;Number
+ 1175  163                      	xdef	CODE_SIZE		;Number
+ 1176  164                      	xdef	DATA_SIZE		;Number
+ 1177  165                      					;
+ 1178  166                      ;
+ 1179  167                      ;begin 02.07.2013
+ 1180  168                      	xdef.b	TIRE_RFSH_CT		;Number
+ 1181  169                      ;end
+ 1182  170                      ;
+ 1183  171                      	xdef	MEAN_S1_BUF_CT		;Number
+ 1184  172                      	xdef	LIN_RX_CT		;Number
+ 1185  173                      					;
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1186  174                      	xdef.b	oIDENTIFIER		;Number
+ 1187  175                      	xdef.b	oTEMPERATURE		;Number
+ 1188  176                      	xdef.b	oPRESSURE		;Number
+ 1189  177                      					;
+ 1190  178                      ;
+ 1191  179                      ;begin 20.01.2011
+ 1192  180                      	xdef	RX_TIMEOUT_CT		;Number
+ 1193  181                      	xdef	TX_TIMEOUT_CT		;Number
+ 1194  182                      ;end
+ 1195  183                      ;
+ 1196  184                      	xdef	SENSOR_CT		;Number
+ 1197  185                      					;
+ 1198  186                      	xdef	HW_IDENT_CT		;Number
+ 1199  187                      	xdef	SW_IDENT_CT		;Number
+ 1200  188                      	xdef	SW_VERSION_CT		;Number
+ 1201  189                      	xdef	STACK_SIZE_CT		;Number
+ 1202  190                      	xdef	REGS_SIZE_CT		;Number
+ 1203  191                      	xdef	VAR_SIZE_CT		;Number
+ 1204  192                      	xdef.b	LOOP_CT			;Number
+ 1205  193                      	xdef	TICK_REL		;Number
+ 1206  194                      					;
+ 1207  195                      	xdef.b	C_ATD_PRSC		;Number
+ 1208  196                      	xdef.b	C_TSCR2			;Number
+ 1209  197                      	xdef.b	C_SYNR			;Number
+ 1210  198                      	xdef.b	C_REFDV			;Number
+ 1211  199                      	xdef.b	C_FTS_FCLKDIV		;Number
+ 1212  200                      					;
+ 1213  201                      ;//////////////////////////////////////////////////////////////////////////////
+ 1214  202                      ;Definition der Konstanten
+ 1215  203                      ;//////////////////////////////////////////////////////////////////////////////
+ 1216  204                      					;
+ 1217  205          0000 3E80   OSC_CLK:	equ	16000		;Quartztakt in kHz
+ 1218  206                      
+ 1219  207          0000 0001    ifne fUse_PLL
+ 1220  208          0000 5DC0   BUS_CLK:	equ	24000		;Bustakt in kHz mit PLL
+ 1221  209                       else
+ 1223  211                       endif
+ 1224  212                      					;
+ 1225  213                      					;Zeitangaben in ms
+ 1226  214          0000 000A   LOOPTIME:	equ	10		;Programmlaufzeit
+ 1227  215                      					;
+ 1228  216          0000 00C8   ALARM_PERIOD:	equ	200		;Blink-Periode der Alarm-LED
+ 1229  217                      ;begin 02.07.2013
+ 1230  218          0000 03E8   TIRE_RFSH_TIME: equ	1000		;Zeittakt für Identifier CAN-Ausgabe
+ 1231  219                      ;end
+ 1232  220                      ;
+ 1233  221                      					;
+ 1234  222                      ;
+ 1235  223                      ;begin 20.01.2011
+ 1236  224                      					;Zeitangaben in Sekunden
+ 1237  225          0000 001E   SENSOR_TIMEOUT:	equ	30		;Sensorempfangs-Zeitgrenze
+ 1238  226          0000 001E   CAN_TIMEOUT:	equ	30		;CAN-Empfangs-Zeitgrenze
+ 1239  227          0000 001E   LIN_TIMEOUT:	equ	30		;LIN-Empfangs-Zeitgrenze
+ 1240  228          0000 0003   RX_TIMEOUT:	equ	3		;Zeitgrenze für Comline-Echoempfang
+ 1241  229          0000 0003   TX_TIMEOUT:	equ	3		;Zeitgrenze für Comline-Datenempfang
+ 1242  230                      ;end
+ 1243  231                      ;
+ 1244  232                      ;
+ 1245  233          0000 0004   oIDENTIFIER:	equ	4		;
+ 1246  234          0000 0008   oPRESSURE:	equ	8		;
+ 1247  235          0000 0009   oTEMPERATURE:	equ	9		;
+ 1248  236          0000 000A   oBATTERY:	equ	10		;
+ 1249  237          0000 000B   oSTATUS:	equ	11		;
+ 1250  238          0000 000D   oMOVING:	equ	13		;
+ 1251  239                      					;
+ 1252  240          0000 003C   CHECK_WAITTIME:	equ	60		;Zeitabstand in Sekunden zwischen der
+ 1253  241                      					;Prüfung der Druckwertabfälle
+ 1254  242                      ;------------------------------------------------------------------------------
+ 1255  243                      ;abgeleitete Konstanten, die nicht geändert werden sollten
+ 1256  244                      ;------------------------------------------------------------------------------
+ 1257  245                      					;
+ 1258  246          0000 000A   ALARM_CT:	equ	ALARM_PERIOD / (LOOPTIME * 2)
+ 1259  247                      ;
+ 1260  248                      ;begin 02.07.2013
+ 1261  249          0000 0064   TIRE_RFSH_CT:	equ	TIRE_RFSH_TIME / LOOPTIME
+ 1262  250                      ;end
+ 1263  251                      ;
+ 1264  252          0000 0BB8   SENSOR_CT:	equ	SENSOR_TIMEOUT * 1000 / LOOPTIME
+ 1265  253          0000 0BB8   CAN0_RX_CT:	equ	CAN_TIMEOUT * 1000 / LOOPTIME
+ 1266  254          0000 0BB8   LIN_RX_CT:	equ	LIN_TIMEOUT * 1000 / LOOPTIME
+ 1267  255                      ;
+ 1268  256                      ;begin 20.01.2011
+ 1269  257          0000 012C   RX_TIMEOUT_CT:	equ	RX_TIMEOUT * 1000 / LOOPTIME
+ 1270  258          0000 012C   TX_TIMEOUT_CT:	equ	TX_TIMEOUT * 1000 / LOOPTIME
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1271  259                      ;end
+ 1272  260                      ;
+ 1273  261                      					;
+ 1274  262          0000 1770   CHECK_WAIT_CT:	equ	CHECK_WAITTIME * 1000 / LOOPTIME
+ 1275  263                      					;
+ 1276  264                      ;-----------------------------------------------------------------------------
+ 1277  265                      ;C_ATD_PRSC: DATA8	vorbereitet für das ATD Control Register 4
+ 1278  266                      ;			ATD Clock Prescaler
+ 1279  267                      ;Berechnungsvorschrift:
+ 1280  268                      ;C_ATD_PRSC:= BUS_CLK / ATD_CLK / 2 - 1
+ 1281  269                      ;mit 	BUS_CLK		Bustakt in kHz
+ 1282  270                      ;	ATD_CLOCK	AD-Wandler Takt in kHz, max. 2 MHz
+ 1283  271                      ;-----------------------------------------------------------------------------
+ 1284  272                      					;
+ 1285  273          0000 07D0   ATD_CLK:	equ	2000
+ 1286  274          0000 0005   C_ATD_PRSC:	equ	BUS_CLK / ATD_CLK / 2 - 1
+ 1287  275                      					;
+ 1288  276                      ;-----------------------------------------------------------------------------
+ 1289  277                      ;C_TSCR2: DATA8		vorbereitet für das Timer System Control Register 2
+ 1290  278                      ;CLK_PRESCALER:		Bustakt Vorteilerwert
+ 1291  279                      ;-----------------------------------------------------------------------------
+ 1292  280                      					;
+ 1293  281          0000 0000    if BUS_CLK < 16000
+ 1296  284                       else
+ 1297  285          0000 0004   C_TSCR2:	equ	00000100b	;No Interrupts, Free Running Counter, Prescaler = 16
+ 1298  286          0000 0010   CLK_PRESCALER:	equ	16		;Vorteiler = 16
+ 1299  287                       endif
+ 1300  288                      					;
+ 1301  289                      ;-----------------------------------------------------------------------------
+ 1302  290                      ;TICKTIME:
+ 1303  291                      ;LOOP_CT: DATA8		Anzahl der Ticks in einem Programmzyklus
+ 1304  292                      ;Berechnungsvorschrift:
+ 1305  293                      ;1. Schritt:
+ 1306  294                      ;TICKTIME ist so zu wählen, dass bei gegebener Programmlaufzeit LOOPTIME
+ 1307  295                      ;die Berechnung von LOOP_CT ein Ergebnis ohne Rest liefert.
+ 1308  296                      ;2. Schritt:
+ 1309  297                      ;TICK_CT:= LOOPTIME * 1000 / TICKTIME
+ 1310  298                      ;mit	LOOPTIME	Programmlaufzeit in ms
+ 1311  299                      ;-----------------------------------------------------------------------------
+ 1312  300                      					;
+ 1313  301          0000 01F4   TICKTIME:	equ	500		;
+ 1314  302          0000 0014   LOOP_CT:	equ	LOOPTIME * 1000 / TICKTIME
+ 1315  303                      
+ 1316  304                      ;-----------------------------------------------------------------------------
+ 1317  305                      ;TICK_REL: DATA16	Timer Startwert zur Festlegung der Programmlaufzeit
+ 1318  306                      ;Berechnungsvorschrift:
+ 1319  307                      ;TICK_REL:= BUS_CLK * TICKTIME / 1000 / CLK_PRESCALER
+ 1320  308                      ;mit	BUS_CLK		Bustakt in kHz
+ 1321  309                      ;	CLK_PRESCALER	Bustakt-Vorteiler
+ 1322  310                      ;	TICKTIME	Tickzeit in µs
+ 1323  311                      ;-----------------------------------------------------------------------------
+ 1324  312                      					;
+ 1325  313          0000 02EE   TICK_REL:	equ	BUS_CLK * TICKTIME / 1000 / CLK_PRESCALER
+ 1326  314                      					;
+ 1327  315                      ;-----------------------------------------------------------------------------
+ 1328  316                      ;C_SYNR: DATA8		PLLCLK Multiplikator
+ 1329  317                      ;C_REFDV: DATA8		PLLCLK Dividend
+ 1330  318                      ;Berechnungsvorschrift:
+ 1331  319                      ;PLLCLK:= OSC_CLK * (C_SYNR+1) / (REFDV+1)
+ 1332  320                      ;-----------------------------------------------------------------------------
+ 1333  321                      					;
+ 1334  322          0000 0001    ifne fUse_PLL				;
+ 1335  323          0000 0000      if BUS_CLK = 32000
+ 1338  326                         endif
+ 1339  327          0000 0001      if BUS_CLK = 24000
+ 1340  328          0000 0002   C_SYNR:		equ	2		;BUS_CLK = 24,0 MHz @ OSC_CLK = 16,0 MHz
+ 1341  329          0000 0001   C_REFDV:	equ	1		;
+ 1342  330                         endif
+ 1343  331          0000 0000      if BUS_CLK = 16000
+ 1346  334                         endif
+ 1347  335          0000 0000      if BUS_CLK = 12000
+ 1350  338                         endif
+ 1351  339                       else					;
+ 1354  342                       endif
+ 1355  343                      					;
+ 1356  344                      ;-----------------------------------------------------------------------------
+ 1357  345                      					;
+ 1358  346          0000 0001    if OSC_CLK > 12800
+ 1359  347          0000 0049   C_FTS_FCLKDIV:	equ	40h + ((OSC_CLK / 8) * (5 + 1 / BUS_CLK) / 1000) - 1
+ 1360  348                       else
+ 1362  350                       endif
+ 1363  351                      
+ 1364  352          0000 0027   BD_38400_REL:	equ	BUS_CLK * 1000 / (38400 * 16)
+ 1365  353          0000 004E   BD_19200_REL:	equ	BUS_CLK * 1000 / (19200 * 16)
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1366  354          0000 009C   BD_9600_REL:	equ	BUS_CLK * 1000 / (9600 * 16)
+ 1367  355          0000 0138   BD_4800_REL:	equ	BUS_CLK * 1000 / (4800 * 16)
+ 1368  356          0000 0271   BD_2400_REL:	equ	BUS_CLK * 1000 / (2400 * 16)
+ 1369  357                      					;
+ 1370  358          0000 0027   BD_9600x4_REL:	equ	BUS_CLK * 1000 / (9600 * 4 * CLK_PRESCALER)
+ 1371  359          0000 004E   BD_4800x4_REL:	equ	BUS_CLK * 1000 / (4800 * 4 * CLK_PRESCALER)
+ 1372  360                      					;
+ 1373  361                      ;/////////////////////////////////////////////////////////////////////////////
+ 1374  362                      ;Definition der Speicheradressen
+ 1375  363                      ;/////////////////////////////////////////////////////////////////////////////
+ 1376  364                      					;
+ 1377  365          0000 0400   B_EEPROM:	equ	00400h		;MC9S12C128
+ 1378  366          0000 0FFF   T_EEPROM:	equ	00FFFh		;
+ 1379  367                      					;
+ 1380  368          0000 1000   B_RAM:		equ	01000h		;
+ 1381  369          0000 1FFF   T_RAM:		equ	01FFFh		;
+ 1382  370          0000 1000   DATA_SIZE:	equ	(T_RAM - B_RAM) + 1
+ 1383  371                      					;
+ 1384  372          0000 3800   B_DATA_FLASH:	equ	03800h		;
+ 1385  373          0000 3FFF   T_DATA_FLASH:	equ	03FFFh		;
+ 1386  374                      					;
+ 1387  375          0000 4000   B_FLASH:	equ	04000h		;
+ 1388  376          0000 FFFF   T_FLASH:	equ	0FFFFh		;
+ 1389  377          0000 C000   CODE_SIZE:	equ	(T_FLASH - B_FLASH) + 1
+ 1390  378                      					;
+ 1391  379                      ;/////////////////////////////////////////////////////////////////////////////
+ 1392  380                      ;Definition der Board-Typen
+ 1393  381                      ;/////////////////////////////////////////////////////////////////////////////
+ 1394  382                      					;
+ 1395  383          0000 8043   bt_TIREGUARD3A:	equ	08043h		;TIREGUARD IIIa Reifenüberwachungsgerät
+ 1396  384                      					;
+ 1397  385                      ;==============================================================================
+ 1398  386                      ;Datendefinitionen im internen Flash-EEPROM Codespeicher
+ 1399  387                      ;==============================================================================
+ 1400  388                      					;
+ 1401  389                      .rodata:	section
+ 1402  390                      					;
+ 1403  391   000000 5449 5245   SW_IDENT:	dc.b	"TIREGUARD IIIa  " ;jede Zeile umfasst 16 Zeichen
+             000004 4755 4152  
+             000008 4420 4949  
+             00000C 4961 2020  
+ 1404  392   000010 436F 7079   		dc.b	"Copyright ©     " ; (C) = [Alt] + 0169
+             000014 7269 6768  
+             000018 7420 A920  
+             00001C 2020 2020  
+ 1405  393   000020 3230 3035   		dc.b	"2005-2013,      "
+             000024 2D32 3031  
+             000028 332C 2020  
+             00002C 2020 2020  
+ 1406  394   000030 6D69 6372   		dc.b	"micro dynamics® " ; (R) = [Alt] + 0174
+             000034 6F20 6479  
+             000038 6E61 6D69  
+             00003C 6373 AE20  
+ 1407  395   000040 476D 6248   		dc.b	"GmbH, CCAA      "
+             000044 2C20 4343  
+             000048 4141 2020  
+             00004C 2020 2020  
+ 1408  396   000050 5332 2E38   SW_VERSION:	dc.b	"S2.804.26/A,    " ;das Komma muss(!) angefügt werden
+             000054 3034 2E32  
+             000058 362F 412C  
+             00005C 2020 2020  
+ 1409  397   000060 3032 2E30   		dc.b	"02.07.2013      "
+             000064 372E 3230  
+             000068 3133 2020  
+             00006C 2020 2020  
+ 1410  398          0000 0020   SW_VERSION_CT:	equ	* - SW_VERSION
+ 1411  399          0000 0070   SW_IDENT_CT:	equ	* - SW_IDENT
+ 1412  400                      					;
+ 1413  401                      ;==============================================================================
+ 1414  402                      ;
+ 1415  403                      ;Beginn der programmierbaren Werte
+ 1416  404                      ;
+ 1417  405                      ;==============================================================================
+ 1418  406                      					;
+ 1419  407                      CONFIG_TBL:
+ 1420  408                      					;
+ 1421  409                      ;------------------------------------------------------------------------------
+ 1422  410                      ;TEMPERATURE maximal zulässige Temperatur
+ 1423  411                      ;
+ 1424  412                      ;Skalierfaktor	1.0
+ 1425  413                      ;Offset		0
+ 1426  414                      ;------------------------------------------------------------------------------
+ 1427  415                      					;
+ 1428  416                      TEMPERATURE:
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1429  417   000070 78          		dc.b   120		;120 °C
+ 1430  418                      					;
+ 1431  419                      ;------------------------------------------------------------------------------
+ 1432  420                      ;PRESSURE minimal zulässiger absoluter Reifendruck
+ 1433  421                      ;
+ 1434  422                      ;Skalierfaktor	0.025
+ 1435  423                      ;Offset		0
+ 1436  424                      ;------------------------------------------------------------------------------
+ 1437  425                      					;
+ 1438  426                      PRESSURE:
+ 1439  427   000071 5B          		dc.b   91		;2,275 bar ( = 1,3 bar @ 975 mbar )
+ 1440  428                      					;
+ 1441  429                      ;------------------------------------------------------------------------------
+ 1442  430                      ;DROP_PRESSURE absoluter Reifendruckwert fuer Druckabfall-Überwachung
+ 1443  431                      ;
+ 1444  432                      ;Skalierfaktor	0.025
+ 1445  433                      ;Offset		0
+ 1446  434                      ;------------------------------------------------------------------------------
+ 1447  435                      					;
+ 1448  436                      DROP_PRESSURE:
+ 1449  437   000072 6B          		dc.b  107		;2,675 bar ( = 1,7 bar @ 975 mbar )
+ 1450  438                      					;
+ 1451  439                      ;------------------------------------------------------------------------------
+ 1452  440                      ;DROP_REF maximal tolerierter Druckabfall / min
+ 1453  441                      ;
+ 1454  442                      ;Skalierfaktor	0.025
+ 1455  443                      ;Offset		0
+ 1456  444                      ;------------------------------------------------------------------------------
+ 1457  445                      					;
+ 1458  446                      DROP_REF:
+ 1459  447   000073 08          		dc.b   8		;0,2 bar / min
+ 1460  448                      					;
+ 1461  449                      ;------------------------------------------------------------------------------
+ 1462  450                      ;XP_REF untere Geschwindigkeitsgrenze fuer die Reifenüberwachung
+ 1463  451                      ;
+ 1464  452                      ;Skalierfaktor	0.1
+ 1465  453                      ;Offset		0
+ 1466  454                      ;------------------------------------------------------------------------------
+ 1467  455                      					;
+ 1468  456                      XP_REF:
+ 1469  457   000074 0000        		dc.w	0		;0 km/h ( = Geschwindigkeitsmaskierung ausschalten )
+ 1470  458                      					;
+ 1471  459                      ;-----------------------------------------------------------------------------
+ 1472  460                      ;Reserved
+ 1473  461                      ;-----------------------------------------------------------------------------
+ 1474  462                      					;
+ 1475  463   000076 0000 0000   		dc.l	0		;
+ 1476  464   00007A FFFF FFFF   		dc.l	0FFFFFFFFh	;
+ 1477  465                      					;
+ 1478  466                      ;
+ 1479  467                      ;begin 02.07.2013
+ 1480  468                      ;-----------------------------------------------------------------------------
+ 1481  469                      ;FUN_MODE legt die Betriebsweise des Gerätes fest.
+ 1482  470                      ;
+ 1483  471                      ;bit 0		: Alarm-LEDs		0  im Alarmfall LEDs dauernd einschalten
+ 1484  472                      ;		:			1  Alarmblinken
+ 1485  473                      ;bit 1..3	: reserviert
+ 1486  474                      ;bit 4		: Identifier CAN-Output	0  Identifier an CAN ausgeben
+ 1487  475                      ;		:			1  keine Identifier CAN-Ausgabe
+ 1488  476                      ;bit 5..7	: reserviert
+ 1489  477                      ;-----------------------------------------------------------------------------
+ 1490  478                      					;
+ 1491  479                      FUN_MODE:
+ 1492  480   00007E 01          		dc.b	00000001b	;Alarmblinken, Identifier CAN-Ausgabe
+ 1493  481                      ;end
+ 1494  482                      ;
+ 1495  483                      					;
+ 1496  484                      ;-----------------------------------------------------------------------------
+ 1497  485                      ;BARO_PRESSURE Umgebungsluftdruck
+ 1498  486                      ;
+ 1499  487                      ;Skalierfaktor	0.025
+ 1500  488                      ;Offset		0
+ 1501  489                      ;-----------------------------------------------------------------------------
+ 1502  490                      					;
+ 1503  491                      BARO_PRESSURE:
+ 1504  492   00007F 27          		dc.b   39		;975 mbar
+ 1505  493                      					;
+ 1506  494                      ;------------------------------------------------------------------------------
+ 1507  495                      ;x_COEFF_TBL enthält Urdaten für die Mittelwertberechnung.
+ 1508  496                      ;Die Tabelle umfasst je einen Eintrag für einen Eingang.
+ 1509  497                      ;
+ 1510  498                      ;Der Tabellenwert liefert die Anzahl der Eingangswerte, über die gemittelt
+ 1511  499                      ;wird.
+ 1512  500                      ;------------------------------------------------------------------------------
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1513  501                      					;
+ 1514  502                      ANALOG_COEFF_TBL:
+ 1515  503   000080 00          		dc.b	0		;Batteriespannung
+ 1516  504                      					;
+ 1517  505          0000 0011   CONFIG_TBL_CNT:	equ	(* - CONFIG_TBL)
+ 1518  506                      					;
+ 1519  507                      ;==============================================================================
+ 1520  508                      ;
+ 1521  509                      ;Ende der programmierbaren Werte
+ 1522  510                      ;
+ 1523  511                      ;==============================================================================
+ 1524  512                      					;
+ 1525  513                      ;-----------------------------------------------------------------------------
+ 1526  514                      ;Einstellungen fuer den CAN-Controller
+ 1527  515                      ;-----------------------------------------------------------------------------
+ 1528  516                      					;
+ 1529  517                      CAN0_CONFIG_TBL:			;1 Mbit/s @16MHz Quartz TireGuard <==> Messtechnik
+ 1530  518                      					;
+ 1531  519                      ;Config
+ 1532  520   000081 80          	 	dc.b	10000000b	;CANxCTL1: MSCAN enable, Oscillator Clock, Normal Operation
+ 1533  521   000082 01          		dc.b	00000001b	;CANxBTR0: SJW=1, Prescaler=2
+ 1534  522   000083 23          		dc.b	00100011b	;CANxBTR1: SAMP=0, TSEG2=3, TSEG1=4
+ 1535  523                      					;
+ 1536  524   000084 20          		dc.b	00100000b	;CANxIDAC: acht 8-bit Akzeptanzfilter
+ 1537  525                      					;
+ 1538  526                      ;Descriptors
+ 1539  527   000085 DE88        		dc.w	0DE88h		;Descriptor 0	6F4h, 8 Bytes, senden
+ 1540  528   000087 DEA8        		dc.w	0DEA8H		;Descriptor 1	6F5h, 8 Bytes, senden
+ 1541  529   000089 DB20        		dc.w	0DB20h		;Descriptor 2	6D9h, 7 Bytes, empfangen
+ 1542  530                      ;
+ 1543  531                      ;begin 02.07.2013
+ 1544  532   00008B DE48        		dc.w	0DE48H		;Descriptor 3	6F2h, 8 Bytes, senden
+ 1545  533   00008D DE68        		dc.w	0DE68h		;Descriptor 4	6F3h, 8 Bytes, senden
+ 1546  534                      ;end
+ 1547  535                      ;
+ 1548  536   00008F FFE0        		dc.w	0FFE0h		;Descriptor 5
+ 1549  537   000091 FFE0        		dc.w	0FFE0h		;Descriptor 6
+ 1550  538   000093 FFE0        		dc.w	0FFE0h		;Descriptor 7
+ 1551  539                      					;
+ 1552  540                      LIN_IDENTIFIER_TBL:
+ 1553  541   000095 xxxx        		dc.w	LIN_ID_FL
+ 1554  542   000097 xxxx        		dc.w	LIN_ID_FR
+ 1555  543   000099 xxxx        		dc.w	LIN_ID_RL
+ 1556  544   00009B xxxx        		dc.w	LIN_ID_RR
+ 1557  545                      					;
+ 1558  546                      MSG_IDENTIFIER_TBL:
+ 1559  547   00009D xxxx        		dc.w	MSG_ID_FL
+ 1560  548   00009F xxxx        		dc.w	MSG_ID_FR
+ 1561  549   0000A1 xxxx        		dc.w	MSG_ID_RL
+ 1562  550   0000A3 xxxx        		dc.w	MSG_ID_RR
+ 1563  551                      					;
+ 1564  552                      MSG_CTR_TBL:
+ 1565  553   0000A5 xxxx        		dc.w	MSG_CTR_FL
+ 1566  554   0000A7 xxxx        		dc.w	MSG_CTR_FR
+ 1567  555   0000A9 xxxx        		dc.w	MSG_CTR_RL
+ 1568  556   0000AB xxxx        		dc.w	MSG_CTR_RR
+ 1569  557                      					;
+ 1570  558                      MSG_RX_TBL:
+ 1571  559   0000AD xxxx        		dc.w	MSG_RX_BUF_FL
+ 1572  560   0000AF xxxx        		dc.w	MSG_RX_BUF_FR
+ 1573  561   0000B1 xxxx        		dc.w	MSG_RX_BUF_RL
+ 1574  562   0000B3 xxxx        		dc.w	MSG_RX_BUF_RR
+ 1575  563                      					;
+ 1576  564                      ;==============================================================================
+ 1577  565                      ;Speicherplatzbelegung im internen EEPROM
+ 1578  566                      ;==============================================================================
+ 1579  567                      					;
+ 1580  568                      .bss:		section
+ 1581  569                      					;
+ 1582  570                      		align	1024
+ 1583  571                      HW_IDENT:
+ 1584  572                      					;
+ 1585  573                      ;------------------------------------------------------------------------------
+ 1586  574                      ;Der nachfolgende Identifier beschreibt die TireGuard 2 Hardware-Konfiguration.
+ 1587  575                      ;
+ 1588  576                      ; ! Die Reihenfolge der Werte darf nicht verändert werden !
+ 1589  577                      ;
+ 1590  578   000000             E_BOARD_ID:	ds.l	1		;DATA32:
+ 1591  579                      					;
+ 1592  580          0000 0004   HW_IDENT_CT:	equ	* - HW_IDENT
+ 1593  581                      					;
+ 1594  582                      ;------------------------------------------------------------------------------
+ 1595  583                      					;
+ 1596  584                      E_CRC_KEY:
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1597  585   000004             		ds.l	1		;DATA32: Erkennungsschlüssel
+ 1598  586                      E_CRC_CODE:
+ 1599  587   000008             		ds.w	1		;DATA16: CRC16-Prüfcode
+ 1600  588                      					;
+ 1601  589                      ;------------------------------------------------------------------------------
+ 1602  590                      					;
+ 1603  591                      E_CONFIG_TBL:
+ 1604  592                      					;extern programmierbare Werte
+ 1605  593                      					;
+ 1606  594                      E_TEMPERATURE:
+ 1607  595   00000A             		ds.b	1		;
+ 1608  596                      E_PRESSURE:
+ 1609  597   00000B             		ds.b	1		;
+ 1610  598                      E_DROP_PRESSURE:
+ 1611  599   00000C             		ds.b	1		;
+ 1612  600                      E_DROP_REF:
+ 1613  601   00000D             		ds.b	1		;
+ 1614  602                      E_XP_REF:
+ 1615  603   00000E             		ds.w	1		;
+ 1616  604                      E_RESERVED:
+ 1617  605   000010             		ds.l	2		;
+ 1618  606                      E_FUN_MODE:
+ 1619  607   000018             		ds.b	1		;
+ 1620  608                      E_BARO_PRESSURE:
+ 1621  609   000019             		ds.b	1		;
+ 1622  610                      E_ANALOG_COEFF_TBL:
+ 1623  611   00001A             		ds.b	1		;
+ 1624  612                      					;
+ 1625  613                      ;
+ 1626  614                      ;begin 20.01.2011
+ 1627  615                      ;		ds.b	HW_IDENT + 1022 - *
+ 1628  616   00001B             		even
+ 1629  617                      E_CONFIG_CRC:
+ 1630  618   00001C             		ds.w	1		;DATA16: CRC16-Prüfcode
+ 1631  619                      ;end
+ 1632  620                      ;
+ 1633  621                      					;
+ 1634  622                      ;==============================================================================
+ 1635  623                      ;Speicherplatzbelegung im internen RAM
+ 1636  624                      ;==============================================================================
+ 1637  625                      					;
+ 1638  626                      .regs:		section			;
+ 1639  627                      					;
+ 1640  628                      BOR:
+ 1641  629                      		even
+ 1642  630   000000             REGS:		ds.b	32		;32 Bytes globale Register R[0..31]
+ 1643  631                      
+ 1644  632                      TOR:
+ 1645  633          0000 0020   REGS_SIZE_CT:	equ	TOR - BOR
+ 1646  634                      					;
+ 1647  635                      .data:		section			;
+ 1648  636                      					;
+ 1649  637                      BOV:					;Beginn der Systemvariablen
+ 1650  638                      					;
+ 1651  639                      ;------------------------------------------------------------------------------
+ 1652  640                      ;Analogeingänge
+ 1653  641                      
+ 1654  642   000000             ANALOG_FLAGS:	ds.b	1		;DATA8:
+ 1655  643                      ;
+ 1656  644          0000 0002   _ADC_ERROR:	equ	bit1		;
+ 1657  645                      ;
+ 1658  646                      ;
+ 1659  647                      ;
+ 1660  648                      ;
+ 1661  649                      ;
+ 1662  650                      ;
+ 1663  651                      					;
+ 1664  652   000001             		even
+ 1665  653   000002             CAL_LOCK_CTR:	ds.w	1		;DATA16:
+ 1666  654                      					;
+ 1667  655   000004             ANALOG_BUF:	ds.w	1		;1*DATA16: Analog-Messergebnisse
+ 1668  656                      ANALOG_RESULT_BUF:			;1*DATA16: Analogwerte
+ 1669  657                      BATTERY_VOLTAGE:
+ 1670  658   000006             		ds.w	1		;DATA16: Batteriespannung
+ 1671  659                      					;
+ 1672  660                      UNIT_TEMPERATURE:
+ 1673  661   000008             		ds.w	1		;DATA16: Gerätetemperatur
+ 1674  662                      					;
+ 1675  663   00000A             XP:		ds.w	1		;DATA16: Fahrgeschwindigkeit
+ 1676  664                      					;
+ 1677  665                      ;------------------------------------------------------------------------------
+ 1678  666                      ;Modul OUTPUT
+ 1679  667                      					;
+ 1680  668   00000C             OUTPUT_FLAGS:	ds.b	1		;DATA8:
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1681  669                      ;
+ 1682  670                      ;
+ 1683  671                      ;
+ 1684  672                      ;
+ 1685  673                      ;
+ 1686  674                      ;
+ 1687  675                      ;
+ 1688  676          0000 0080   _ALARM_TOGGLE:	equ	bit7		;
+ 1689  677                      					;
+ 1690  678   00000D             ALARM_CTR:	ds.b	1		;
+ 1691  679                      					;
+ 1692  680                      ;------------------------------------------------------------------------------
+ 1693  681                      ;Modul LIN
+ 1694  682                      					;
+ 1695  683   00000E             LAST_RX_POS:	ds.b	1		;DATA8:
+ 1696  684                      					;
+ 1697  685   00000F             		even
+ 1698  686   000010             LIN_RX_CTR:	ds.w	1		;DATA16:
+ 1699  687                      					;
+ 1700  688                      ;------------------------------------------------------------------------------
+ 1701  689                      ;Modul COMMUNICATE
+ 1702  690                      					;
+ 1703  691                      COMMUNICATE_FLAGS:
+ 1704  692   000012             		ds.b	1		;DATA8:
+ 1705  693          0000 0001   _LOW_XP_TRIG:	equ	bit0
+ 1706  694          0000 0002   _LOW_XP_FLAG:	equ	bit1
+ 1707  695                      ;
+ 1708  696                      ;
+ 1709  697          0000 0010   _CAN_RFSH_TRIG:	equ	bit4
+ 1710  698                      ;
+ 1711  699                      ;
+ 1712  700                      ;
+ 1713  701                      					;
+ 1714  702   000013             		even
+ 1715  703          0000 0014   CAN_BUF:	equ	*
+ 1716  704                      					;
+ 1717  705                      					;
+ 1718  706                      CAN0_MSG0_BUF:
+ 1719  707   000014             		ds.b	8		;8 Bytes: Messdaten
+ 1720  708                      CAN0_MSG1_BUF:
+ 1721  709   00001C             		ds.b	8		;
+ 1722  710                      CAN0_MSG2_BUF:
+ 1723  711   000024             		ds.b	8		;
+ 1724  712                      					;
+ 1725  713          0000 0018   CAN_BUF_CT:	equ	(* - CAN_BUF)
+ 1726  714                      					;
+ 1727  715                      CAN0_TIMEOUT_CTR:
+ 1728  716   00002C             		ds.b	1		;DATA8:
+ 1729  717                      					;
+ 1730  718   00002D             CAN0_RX_CTR:	ds.w	1		;DATA16:
+ 1731  719                      					;
+ 1732  720   00002F             		even
+ 1733  721   000030             SENSOR_CTR_REC:	ds.w	4		;4*DATA16
+ 1734  722                      					;
+ 1735  723   000038             ALARM:		ds.b	1		;DATA8:
+ 1736  724   000039             DROP_ALARM:	ds.b	1		;DATA8:
+ 1737  725                      					;
+ 1738  726   00003A             CHECK_WAIT_CTR:	ds.w	1		;DATA16: Zeitzähler für Prüf-Zeitraster
+ 1739  727                      					;
+ 1740  728          0000 003C   LIN_IDENTIFIER_REC: equ	*
+ 1741  729                      					;
+ 1742  730   00003C             LIN_ID_FL:	ds.l	1		;DATA32:
+ 1743  731   000040             LIN_ID_FR:	ds.l	1		;DATA32:
+ 1744  732   000044             LIN_ID_RL:	ds.l	1		;DATA32:
+ 1745  733   000048             LIN_ID_RR:	ds.l	1		;DATA32:
+ 1746  734                      					;
+ 1747  735          0000 004C   MSG_CTR_REC:	equ	*
+ 1748  736                      					;
+ 1749  737   00004C             MSG_CTR_FL:	ds.b	1		;DATA8:
+ 1750  738   00004D             MSG_CTR_FR:	ds.b	1		;DATA8:
+ 1751  739   00004E             MSG_CTR_RL:	ds.b	1		;DATA8:
+ 1752  740   00004F             MSG_CTR_RR:	ds.b	1		;DATA8:
+ 1753  741                      					;
+ 1754  742                      		even
+ 1755  743          0000 0050   MSG_RX_REC:	equ	*
+ 1756  744                      					;
+ 1757  745   000050             MSG_RX_BUF_FL:	ds.b	24		;DATA
+ 1758  746   000068             MSG_RX_BUF_FR:	ds.b	24		;DATA
+ 1759  747   000080             MSG_RX_BUF_RL:	ds.b	24		;DATA
+ 1760  748   000098             MSG_RX_BUF_RR:	ds.b	24		;DATA
+ 1761  749                      					;
+ 1762  750                      		even
+ 1763  751          0000 00B0   MSG_IDENTIFIER_REC: equ	*
+ 1764  752                      					;
+tg3Declarations  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1765  753   0000B0             MSG_ID_FL:	ds.l	1		;DATA32:
+ 1766  754   0000B4             MSG_ID_FR:	ds.l	1		;DATA32:
+ 1767  755   0000B8             MSG_ID_RL:	ds.l	1		;DATA32:
+ 1768  756   0000BC             MSG_ID_RR:	ds.l	1		;DATA32:
+ 1769  757                      					;
+ 1770  758                      		even
+ 1771  759          0000 00C0   MSG_S1_REC:	equ	*
+ 1772  760                      					;
+ 1773  761   0000C0             MSG_S1_BUF_FL:	ds.b	24		;DATA
+ 1774  762   0000D8             MSG_S1_BUF_FR:	ds.b	24		;DATA
+ 1775  763   0000F0             MSG_S1_BUF_RL:	ds.b	24		;DATA
+ 1776  764   000108             MSG_S1_BUF_RR:	ds.b	24		;DATA
+ 1777  765                      					;
+ 1778  766                      		even
+ 1779  767   000120             LIN_ADC_ADDR:	ds.w	1		;DATA16:
+ 1780  768                      					;
+ 1781  769                      ;------------------------------------------------------------------------------
+ 1782  770                      ;sonstige Variable
+ 1783  771                      					;
+ 1784  772          0000 0122   MEAN_S1_BUF:	equ	*
+ 1785  773   000122             ANALOG_S1_BUF:	ds.b	3*3		;3*DATA24
+ 1786  774          0000 0009   MEAN_S1_BUF_CT:	equ	(* - MEAN_S1_BUF)
+ 1787  775                      					;
+ 1788  776   00012B             LOOP_CTR:	ds.b	1		;DATA8: Zähler für Programmzykluszeit
+ 1789  777   00012C             LOOP_FLAGS:	ds.b	1		;DATA8:
+ 1790  778                      ;
+ 1791  779                      ;
+ 1792  780                      ;
+ 1793  781          0000 0008   _LOOP_OV:	equ	bit3		;1, wenn Programmzyklus 'verschluckt' wurde
+ 1794  782          0000 0010   _LOOP_OV_CLEAR:	equ	bit4		;1, wenn _LOOP_OV rückgesetzt werden soll
+ 1795  783                      ;
+ 1796  784                      ;
+ 1797  785          0000 0080   _LOOP_TIMEOUT:	equ	bit7		;1, wenn Programmzyklus beendet ist
+ 1798  786                      ;
+ 1799  787                      ;begin 02.07.2013
+ 1800  788                      TIRE_RFSH_CTR:
+ 1801  789   00012D             		ds.b	1		;DATA8: Zähler für Identifier-Ausgabezykluszeit
+ 1802  790                      ;end
+ 1803  791                      ;
+ 1804  792                      					;
+ 1805  793          0000 0000    ifne fDebug
+ 1812  800                       endif
+ 1813  801                      
+ 1814  802                      TOV:
+ 1815  803                      
+ 1816  804          0000 012E   VAR_SIZE_CT:	equ	TOV - BOV
+ 1817  805                      
+ 1818  806                      		even
+ 1819  807   00012E             BOS:		ds.b	0100h		;256 Bytes Stack
+ 1820  808                      TOS:					;Anfangswert des Stackpointers
+ 1821  809                      
+ 1822  810          0000 0100   STACK_SIZE_CT:	equ	TOS - BOS
+ 1823  811                      					;
+ 1824  812                      ;------------------------------------------------------------------------------

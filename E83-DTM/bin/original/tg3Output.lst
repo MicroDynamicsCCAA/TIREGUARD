@@ -1,0 +1,141 @@
+tg3Output  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	title	"tg3Output  Copyright (C) 2005-2006, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;TireGuard 3	Betriebsprogramm
+  985    5                      ;------------------------------------------------------------------------------
+  986    6                      ;Module:	tg3Output.asm
+  987    7                      ;
+  988    8                      ;Copyright:	(C) 2005-2006, micro dynamics GmbH
+  989    9                      ;Author(s):	Michael Frank
+  990   10                      ;Update:	24.11.2006
+  991   11                      ;
+  992   12                      ;Description:	Das Programmmodul OUTPUT steuert die Alarm-LED an.
+  993   13                      ;------------------------------------------------------------------------------
+  994   14                      ;Revision History:	Original Version  11.05
+  995   15                      ;
+  996   16                      ;24.11.2006	Version 1.00
+  997   17                      ;08.11.2006	Anpassung an 9s12c128
+  998   18                      ;------------------------------------------------------------------------------
+  999   19                      					;
+ 1000   20                      ;------------------------------------------------------------------------------
+ 1001   21                      ;Externals
+ 1002   22                      ;------------------------------------------------------------------------------
+ 1003   23                      					;
+ 1004   24                      	xref	SCI_TX_STATUS		;Code
+ 1005   25                      					;
+ 1006   26                      	xref	E_FUN_MODE		;bssData
+ 1007   27                      					;
+ 1008   28                      	xref	ALARM			;Data
+ 1009   29                      	xref	ALARM_CTR		;Data
+ 1010   30                      	xref	DROP_ALARM		;Data
+ 1011   31                      	xref	OUTPUT_FLAGS		;Data
+ 1012   32                      	xref.b	_ALARM_TOGGLE		;bitMask
+ 1013   33                      					;
+ 1014   34                      	xref.b	ALARM_CT		;Number
+ 1015   35                      					;
+ 1016   36                      ;------------------------------------------------------------------------------
+ 1017   37                      ;Publics
+ 1018   38                      ;------------------------------------------------------------------------------
+ 1019   39                      					;
+ 1020   40                      	xdef	OUTPUT			;Code
+ 1021   41                      					;
+ 1022   42                      ;//////////////////////////////////////////////////////////////////////////////
+ 1023   43                      ;Hardware dependent constants
+ 1024   44                      ;//////////////////////////////////////////////////////////////////////////////
+ 1025   45                      					;
+ 1026   46          0000 0240   LED_PORT:	equ	PTT		;
+ 1027   47          0000 0002   _LED_BIT:	equ	bit1		;
+ 1028   48                      					;
+ 1029   49                      .text:		section
+ 1030   50                      					;
+ 1031   51                      ;==============================================================================
+ 1032   52                      ;OUTPUT Modul-Einsprung
+ 1033   53                      ;==============================================================================
+ 1034   54                      					;
+ 1035   55                      OUTPUT:
+ 1036   56   000000 16xx xx     	JSR	ALARM_CTR_UPDATE	;Blinktakt für Alarm-LED
+ 1037   57   000003 16xx xx     	JSR	UPDATE_LED		;
+ 1038   58   000006 3D          	RTS				;
+ 1039   59                      					;
+ 1040   60   000007 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00000B FFFF       
+ 1041   61   00000D 3F          	SWI				;
+ 1042   62                      					;
+ 1043   63                      ;------------------------------------------------------------------------------
+ 1044   64                      ;ALARM_CTR_UPDATE gibt den Blinktakt für die Alarm-LED vor.
+ 1045   65                      ;
+ 1046   66                      ;Eingangsparameter:	ALARM_CTR
+ 1047   67                      ;			ALARM_CT
+ 1048   68                      ;			OUTPUT_FLAGS._ALARM_TOGGLE
+ 1049   69                      ;Ausgangsparameter:	ALARM_CTR
+ 1050   70                      ;			PUTPUT_FLAGS._ALARM_TOGGLE
+ 1051   71                      ;veränderte Register:	CCR
+ 1052   72                      ;------------------------------------------------------------------------------
+ 1053   73                      					;
+ 1054   74                      ALARM_CTR_UPDATE:
+ 1055   75   00000E B6xx xx     	LDAA	ALARM_CTR		;wenn ALARM_CTR noch nicht abgelaufen
+ 1056   76   000011 2708        	BEQ	ALARM_CTR_UPDATE1	;dann
+ 1057   77   000013 81xx        	CMPA	#ALARM_CT		;  prüfen, ob Wert im zulässigen Bereich
+ 1058   78   000015 2204        	BHI	ALARM_CTR_UPDATE1	;
+ 1059   79   000017 43          	DECA				;  ALARM_CTR decrementieren
+ 1060   80   000018 06xx xx     	JMP	ALARM_CTR_UPDATE2	;
+ 1061   81                      					;
+ 1062   82                      ALARM_CTR_UPDATE1:
+ 1063   83   00001B B6xx xx     	LDAA	OUTPUT_FLAGS		;sonst
+tg3Output  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1064   84   00001E 88xx        	EORA	#_ALARM_TOGGLE		;  _ALARM_TOGGLE umschalten
+ 1065   85   000020 7Axx xx     	STAA	OUTPUT_FLAGS		;
+ 1066   86   000023 86xx        	LDAA	#ALARM_CT		;  ALARM_CTR auf Startwert setzen
+ 1067   87                      					;
+ 1068   88                      ALARM_CTR_UPDATE2:
+ 1069   89   000025 7Axx xx     	STAA	ALARM_CTR		;
+ 1070   90   000028 3D          	RTS				;
+ 1071   91                      					;
+ 1072   92                      ;------------------------------------------------------------------------------
+ 1073   93                      ;UPDATE_LED steuert die Alarm-LED an.
+ 1074   94                      ;
+ 1075   95                      ;Eingangsparameter:	ALARM
+ 1076   96                      ;			DROP_ALARM
+ 1077   97                      ;			E_FUN_MODE
+ 1078   98                      ;Ausgangsparameter:	LEDsOUT
+ 1079   99                      ;veraenderte Register:	CCR, A, B
+ 1080  100                      ;------------------------------------------------------------------------------
+ 1081  101                      					;
+ 1082  102                      UPDATE_LED:
+ 1083  103   000029 16xx xx     	JSR	SCI_TX_STATUS		;
+ 1084  104   00002C 261F        	BNE	UPDATE_LED3		;wenn keine serielle Datenausgabe aktiv,
+ 1085  105                      
+ 1086  106   00002E B6xx xx     	LDAA	ALARM			;dann
+ 1087  107   000031 BAxx xx     	ORAA	DROP_ALARM		;
+ 1088  108   000034 2713        	BEQ	UPDATE_LED2		;
+ 1089  109   000036 B6xx xx     	LDAA	E_FUN_MODE		;  wenn E_FUN_MODE.0 = 1
+ 1090  110   000039 8401        	ANDA	#00000001b		;  dann
+ 1091  111   00003B 2705        	BEQ	UPDATE_LED1		;    Lampe blinkend einschalten
+ 1092  112   00003D 1Exx xxxx   	BRSET	OUTPUT_FLAGS,_ALARM_TOGGLE,UPDATE_LED2
+             000041 07         
+ 1093  113                      UPDATE_LED1:
+ 1094  114   000042 1C02 4002   	BSET	LED_PORT,_LED_BIT	;
+ 1095  115   000046 06xx xx     	JMP	UPDATE_LED3		;
+ 1096  116                      					;
+ 1097  117                      UPDATE_LED2:
+ 1098  118   000049 1D02 4002   	BCLR	LED_PORT,_LED_BIT	;
+ 1099  119                      					;
+ 1100  120                      UPDATE_LED3:
+ 1101  121   00004D 3D          	RTS				;
+ 1102  122                      					;
+ 1103  123   00004E FFFF FFFF   	dcb.b	6, 0FFh			;
+             000052 FFFF       
+ 1104  124   000054 3F          	SWI				;
+ 1105  125                      					;
+ 1106  126                      ;------------------------------------------------------------------------------

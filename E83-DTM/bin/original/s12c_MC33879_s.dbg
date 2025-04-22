@@ -1,0 +1,121 @@
+	include	"s12c_128.sfr"
+	include	"s12c_MC33879_s.sfr"
+	title	"s12c_MC33879_s  Copyright (C) 2006, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12c_MC33879.asm
+;
+;Copyright:	(C) 2006, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	24.11.2006
+;
+;Description:	Funktionen für den Zugriff auf den seriellen Achtfach-Lasttreiber
+;		vom Typ Freescale MC33879.
+;
+;		SingleChip-Version ohne MSB-Businterface
+;
+;Folgende Bezeichner sind in s12c_MC33879_s.sfr zu definieren:
+;
+;Bits:		_MISO
+;		_MOSI
+;		_SCLK
+;		_CS
+;
+;Ports:		MISO_DIR
+;		MISO_PORT
+;		MOSI_DIR
+;		MOSI_PORT
+;		SCLK_DIR
+;		SCLK_PORT
+;		CS_DIR
+;		CS_PORT
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.06
+;
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;Publics
+;------------------------------------------------------------------------------
+					;
+	xdef	PWS_RESET		;Code
+	xdef	PWS_UPDATE		;Code
+					;
+.text:		section
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;SWRITE schreibt neue Zustände für die acht Schaltausgänge und liest den
+;Fehlerstatus des Bauelementes (MSB first).
+;
+;Die Taktfrequenz beträgt ca. 1,0 MHz bei 24,0 MHz Bustakt.
+;Der Hersteller des Bauelementes empfiehlt 4 MHz bei 3,1..5,5 V.
+;
+;Eingangsparameter:	D		zu schreibende Daten
+;Ausgangsparameter:	D		Fehlerstatus
+;			SCLK_PORT._SCLK	0
+;veränderte Register:	CCR, R3
+;//////////////////////////////////////////////////////////////////////////////
+					;
+SWRITE:
+	BCLR	SCLK_PORT,_SCLK		;Takt auf '0'
+	BCLR	CS_PORT,_CS		;Bauteil selektieren
+	MOVB	#16,R3			;bit-Zähler auf Startwert
+SWRITE1:
+	BSET	SCLK_PORT,_SCLK		;Takt auf '1' zur Übernahme des zu lesenden bits
+	LSLD				;Daten um ein bit nach links schieben
+	BCC	SWRITE2			;wenn CARRY
+	BSET	MOSI_PORT,_MOSI		;dann Sendeleitung auf '1'
+	BRA	SWRITE3			;
+SWRITE2:
+	BCLR	MOSI_PORT,_MOSI		;sonst Sendeleitung auf '0'
+	NOP				;
+SWRITE3:
+	BRCLR	MISO_PORT,_MISO,SWRITE4	;wenn zu lesendes bit gesetzt
+	ORAB	#00000001b		;dann '1' in gelesene Daten eintragen
+	BRA	SWRITE5			;
+SWRITE4:
+	ANDB	#11111110b		;sonst '0' in gelesene Daten eintragen
+SWRITE5:
+	BCLR	SCLK_PORT,_SCLK 	;Takt auf '0' zur Übernahme des zu schreibenden bits
+	DEC	R3			;weiter,
+	BNE	SWRITE1			;  bis alle bits übertragen
+	BSET	CS_PORT,_CS		;danach Bauteil deaktivieren
+	RTS				;
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Public: PWS_RESET bringt Daten- und Taktleitungen in Grundstellung.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	keine
+;veränderte Register:	CCR
+;//////////////////////////////////////////////////////////////////////////////
+					;
+PWS_RESET:
+	BSET	CS_DIR,_CS		;CS-Pin auf Ausgang schalten
+	BSET	CS_PORT,_CS		;CS:		Out= 1
+					;
+	BSET	SCLK_DIR,_SCLK		;SCLK-Pin auf Ausgang schalten
+	BCLR	SCLK_PORT,_SCLK		;SCLK:		Out= 0
+	BSET	MOSI_DIR,_MOSI		;MOSI-Pin auf Ausgang schalten
+	BCLR	MOSI_PORT,_MOSI		;MOSI:		Out= 0
+	BCLR	MISO_DIR,_MISO		;MISO-Pin auf Eingang schalten
+					;MISO:		In
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: PWS_UPDATE lädt neue Schalt-Zustände in den Treiber-Baustein.
+;
+;Eingangsparameter:	R0/R1		Schalt- und Überwachungskommando
+;Ausgangsparameter:	R0/R1		letzter Fehlerstatus
+;veränderte Register:	CCR, A, B, R3
+;------------------------------------------------------------------------------
+					;
+PWS_UPDATE:
+	LDD	R0			;
+	JSR	SWRITE			;Kommando ausführen
+	STD	R0			;
+	RTS				;
+					;
+	dcb.b	6, 0FFh			;
+	SWI				;
+					;
+;------------------------------------------------------------------------------

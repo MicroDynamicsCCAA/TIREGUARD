@@ -1,0 +1,710 @@
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                       	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title	"tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;TireGuard 3a 	Betriebsprogramm
+ 1018    6                      ;------------------------------------------------------------------------------
+ 1019    7                      ;Module:	tg3Reset.asm
+ 1020    8                      ;
+ 1021    9                      ;Copyright:	(C) 2005-2011, micro dynamics GmbH
+ 1022   10                      ;Author(s):	Michael Frank
+ 1023   11                      ;Update:	20.01.2011
+ 1024   12                      ;
+ 1025   13                      ;Description:	Das Programmmodul RESET wird einmalig unmittelbar nach dem
+ 1026   14                      ;		Einschalten durchlaufen. Es führt die Grundinitialisierungen
+ 1027   15                      ;		aller Peripheriekonponenten aus.
+ 1028   16                      ;------------------------------------------------------------------------------
+ 1029   17                      ;Revision History:	Original Version  11.05
+ 1030   18                      ;
+ 1031   19                      ;20.01.2011	Version 2.50
+ 1032   20                      ;20.01.2011	Prüfsummen durch CRC16-Prüfcode ersetzt
+ 1033   21                      ;		CRC-16/CCITT-FALSE durch CRC-16/CCITT (KERMIT) ersetzt
+ 1034   22                      ;27.11.2007	Version 2.00
+ 1035   23                      ;27.11.2007	Ergänzungen für LIN-Empfangsmultiplexer
+ 1036   24                      ;
+ 1037   25                      ;24.11.2006	Version 1.00
+ 1038   26                      ;08.11.2006	Anpassung an MC9S12C128
+ 1039   27                      ;
+ 1040   28                      ;08.02.2006	Programmspeicher-, Datenspeicher- und CPU-Test hinzugefügt
+ 1041   29                      ;09.12.2005
+ 1042   30                      ;------------------------------------------------------------------------------
+ 1043   31                      					;
+ 1044   32                      ;------------------------------------------------------------------------------
+ 1045   33                      ;Externals
+ 1046   34                      ;------------------------------------------------------------------------------
+ 1047   35                      					;
+ 1048   36                      	xref	CAN_RESET		;Code
+ 1049   37                      
+ 1050   38                      	xref	COMLINE_RESET		;Code
+ 1051   39                      ;
+ 1052   40                      ;begin 20.01.2011
+ 1053   41                      	xref	CREATE_KERMIT		;Code
+ 1054   42                      ;end
+ 1055   43                      ;
+ 1056   44                      	xref	DISABLE_INTERRUPTS	;Code
+ 1057   45                      	xref	DIV3232U		;Code
+ 1058   46                      	xref	FTS_COPY		;Code
+ 1059   47                      	xref	FTS_FLASH		;Code
+ 1060   48                      	xref	FTS_RESET		;Code
+ 1061   49                      	xref	FTS_WRITE8		;Code
+ 1062   50                      	xref	FTS_WRITE16		;Code
+ 1063   51                      	xref	LIN_START		;Code
+ 1064   52                      	xref	MUX_RESET		;Code
+ 1065   53                      	xref	PWS_RESET		;Code
+ 1066   54                      	xref	PWS_UPDATE		;Code
+ 1067   55                      	xref	SDT_RESET		;Code
+ 1068   56                      	xref	SDT_READ_CONFIG		;Code
+ 1069   57                      	xref	SDT_WRITE_CONFIG	;Code
+ 1070   58                      ;
+ 1071   59                      ;begin 20.01.2011
+ 1072   60                      	xref	VERIFY_KERMIT		;Code
+ 1073   61                      ;end
+ 1074   62                      ;
+ 1075   63                      	xref	WATCHDOG_INIT		;Code
+ 1076   64                      					;
+ 1077   65                      	xref	B_FLASH			;roData
+ 1078   66                      	xref	CAN0_CONFIG_TBL		;roData
+ 1079   67                      	xref	CONFIG_TBL		;roData
+ 1080   68                      					;
+ 1081   69                      ;
+ 1082   70                      ;begin 20.01.2011
+ 1083   71                      	xref	E_BOARD_ID		;bssData
+ 1084   72                      	xref	HW_IDENT		;bssData
+ 1085   73                      ;end
+ 1086   74                      ;
+ 1087   75                      	xref	E_CONFIG_TBL		;bssData
+ 1088   76                      ;
+ 1089   77                      ;begin 20.01.2011
+ 1090   78                      	xref	E_CONFIG_CRC		;bssData
+ 1091   79                      ;end
+ 1092   80                      ;
+ 1093   81                      	xref	E_CRC_CODE		;bssData
+ 1094   82                      	xref	E_CRC_KEY		;bssData
+ 1095   83                      					;
+ 1096   84                      	xref	B_RAM			;Data
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1097   85                      	xref	CAN_BUF			;Data
+ 1098   86                      	xref	LIN_ADC_ADDR		;Data
+ 1099   87                      	xref	LIN_ADC_BUF		;Data
+ 1100   88                      	xref	MEAN_S1_BUF		;Data
+ 1101   89                      					;
+ 1102   90                      ;
+ 1103   91                      ;begin 20.01.2011
+ 1104   92                      	xref	bt_TIREGUARD3A		;Number
+ 1105   93                      ;end
+ 1106   94                      ;
+ 1107   95                      	xref	CAN_BUF_CT		;Number
+ 1108   96                      	xref.b	CONFIG_TBL_CNT		;Number
+ 1109   97                      	xref	CODE_SIZE		;Number
+ 1110   98                      	xref	DATA_SIZE		;Number
+ 1111   99                      	xref.b	MEAN_S1_BUF_CT		;Number
+ 1112  100                      	xref	TICK_REL		;Number
+ 1113  101                      	xref.b	C_SYNR			;Number
+ 1114  102                      	xref.b	C_REFDV			;Number
+ 1115  103                      					;
+ 1116  104                      ;------------------------------------------------------------------------------
+ 1117  105                      ;Publics
+ 1118  106                      ;------------------------------------------------------------------------------
+ 1119  107                      					;
+ 1120  108                      	xdef	RESET			;Code
+ 1121  109                      					;
+ 1122  110                      .text:		section
+ 1123  111                      					;
+ 1124  112                      ;==============================================================================
+ 1125  113                      ;RESET Modul-Einsprung
+ 1126  114                      ;==============================================================================
+ 1127  115                      					;
+ 1128  116                      RESET:
+ 1129  117   000000 1410        	SEI				;Interrupts sperren
+ 1130  118   000002 16xx xx     	JSR	RESET_CLOCK		;
+ 1131  119   000005 16xx xx     	JSR	RESET_PORTS		;
+ 1132  120   000008 16xx xx     	JSR	RESET_FLASH		;
+ 1133  121   00000B 16xx xx     	JSR	CHK_CODE_MEM		;
+ 1134  122   00000E 262F        	BNE	RESET1			;
+ 1135  123   000010 16xx xx     	JSR	CHK_DATA_MEM		;
+ 1136  124   000013 262A        	BNE	RESET1			;
+ 1137  125   000015 16xx xx     	JSR	CHK_CPU			;
+ 1138  126   000018 2625        	BNE	RESET1			;
+ 1139  127   00001A 16xx xx     	JSR	RESET_COMLINES		;
+ 1140  128   00001D 16xx xx     	JSR	RESET_CAN		;
+ 1141  129   000020 16xx xx     	JSR	RESET_LIN		;
+ 1142  130   000023 16xx xx     	JSR	RESET_SENSORS		;
+ 1143  131   000026 16xx xx     	JSR	RESET_POWER		;
+ 1144  132   000029 16xx xx     	JSR	RESET_MUX		;
+ 1145  133   00002C 16xx xx     	JSR	RESET_PARAMS		;
+ 1146  134   00002F 16xx xx     	JSR	RESET_INTERRUPTS	;
+ 1147  135   000032 16xx xx     	JSR	PREPARE_SYSTEM		;
+ 1148  136   000035 10EF        	CLI				;globale Interruptfreigabe
+ 1149  137   000037 3D          	RTS				;
+ 1150  138                      					;
+ 1151  139   000038 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00003C FFFF       
+ 1152  140   00003E 3F          	SWI				;
+ 1153  141                      					;
+ 1154  142                      RESET1:
+ 1155  143   00003F 20FE        	BRA	RESET1			;
+ 1156  144                      					;
+ 1157  145   000041 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000045 FFFF       
+ 1158  146   000047 3F          	SWI				;
+ 1159  147                      					;
+ 1160  148                      ;------------------------------------------------------------------------------
+ 1161  149                      ;CHK_CODE_MEM bildet den CRC16-Prüfcode des Programmspeichers.
+ 1162  150                      ;Wenn der Erkennungsschlüssel nocht nicht vorhanden ist, wird der CRC16-Prüfcode
+ 1163  151                      ;neu gebildet und zusammen mit dem Erkennungsschlüssel im EEPROM abgelegt.
+ 1164  152                      ;Das ist nach dem erstmaligen Programmstart nach der Neuprogrammierung der Fall.
+ 1165  153                      ;Ansonsten wird nur der Prüfcode neu gebildet und mit dem im EEPROM gespeicherten
+ 1166  154                      ;verglichen.
+ 1167  155                      ;Eingangsparameter:	E_CRC_KEY
+ 1168  156                      ;			E_CRC_CODE
+ 1169  157                      ;Ausgangsparameter:	E_CRC_KEY
+ 1170  158                      ;			E_CRC_CODE
+ 1171  159                      ;			A		0	= ok
+ 1172  160                      ;					<> 0	= Programmcode inkonsistent
+ 1173  161                      ;veränderte Register:	CCR, B, X, Y, R[0..11]
+ 1174  162                      ;------------------------------------------------------------------------------
+ 1175  163                      					;
+ 1176  164   000048 55AA 8118   CRC_KEY:	dc.l	55AA8118h	;
+ 1177  165                      					;
+ 1178  166          0000 0004   CRC_KEY_CNT:	equ	(* - CRC_KEY)
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1179  167                      					;
+ 1180  168                      CHK_CODE_MEM:
+ 1181  169   00004C FCxx xx     	LDD	E_CRC_KEY+0		;
+ 1182  170   00004F BCxx xx     	CPD	CRC_KEY+0		;
+ 1183  171   000052 2608        	BNE	CHK_CODE_MEM1		;
+ 1184  172   000054 FCxx xx     	LDD	E_CRC_KEY+2		;
+ 1185  173   000057 BCxx xx     	CPD	CRC_KEY+2		;
+ 1186  174   00005A 272C        	BEQ	CHK_CODE_MEM2		;wenn E_CRC_KEY noch nicht programmiert,
+ 1187  175                      					;
+ 1188  176                      CHK_CODE_MEM1:
+ 1189  177   00005C CExx xx     	LDX	#B_FLASH		;dann
+ 1190  178   00005F 1803 xxxx   	MOVW	#CODE_SIZE,R2		;
+             000063 1002       
+ 1191  179                      ;
+ 1192  180                      ;begin 20.01.2011
+ 1193  181   000065 16xx xx     	JSR	CREATE_KERMIT		;  CRC-Code neu berechnen
+ 1194  182                      ;end
+ 1195  183                      ;
+ 1196  184   000068 1803 xxxx   	MOVW	#E_CRC_CODE,R6		;
+             00006C 1006       
+ 1197  185   00006E 16xx xx     	JSR	FTS_WRITE16		;  und im EEPROM speichern
+ 1198  186   000071 1803 xxxx   	MOVW	#CRC_KEY,R4		;
+             000075 1004       
+ 1199  187   000077 1803 xxxx   	MOVW	#E_CRC_KEY,R6		;
+             00007B 1006       
+ 1200  188   00007D 180B 0410   	MOVB	#CRC_KEY_CNT,R3		;
+             000081 03         
+ 1201  189   000082 16xx xx     	JSR	FTS_COPY		;  Erkennungsschlüssel im EEPROM speichern
+ 1202  190   000085 16xx xx     	JSR	FTS_FLASH		;
+ 1203  191                      					;
+ 1204  192                      CHK_CODE_MEM2:
+ 1205  193   000088 CExx xx     	LDX	#B_FLASH		;
+ 1206  194   00008B 1803 xxxx   	MOVW	#CODE_SIZE,R2		;
+             00008F 1002       
+ 1207  195                      ;
+ 1208  196                      ;begin 20.01.2011
+ 1209  197   000091 16xx xx     	JSR	CREATE_KERMIT		;
+ 1210  198   000094 1804 xxxx   	MOVW	E_CRC_CODE,R0		;CRC-Code verifizieren
+             000098 1000       
+ 1211  199   00009A 16xx xx     	JSR	VERIFY_KERMIT		;Prüfungsergebnis wird in A geliefert
+ 1212  200                      ;end
+ 1213  201                      ;
+ 1214  202   00009D 3D          	RTS				;
+ 1215  203                      					;
+ 1216  204                      ;------------------------------------------------------------------------------
+ 1217  205                      ;CHK_DATA_MEM prüft den Schreib-/Lesespeicher der CPU auf Funktionsfähigkeit.
+ 1218  206                      ;Die Prüfung verändert den Speicherinhalt nicht.
+ 1219  207                      ;Eingangsparameter:	keine
+ 1220  208                      ;Ausgangsparameter:	A		0	= ok
+ 1221  209                      ;					<> 0	= Fehler im RAM-Speicher
+ 1222  210                      ;veränderte Register:	CCR, B, X, Y, R0
+ 1223  211                      ;------------------------------------------------------------------------------
+ 1224  212                      					;
+ 1225  213                      CHK_DATA_MEM:
+ 1226  214   00009E CExx xx     	LDX	#B_RAM			;
+ 1227  215   0000A1 CDxx xx     	LDY	#DATA_SIZE		;Datenspeicher Bytezähler
+ 1228  216                      					;
+ 1229  217                      CHK_DATA_MEM1:
+ 1230  218   0000A4 A600        	LDAA	0,X			;Speicherplatzinhalt lesen
+ 1231  219   0000A6 180E        	TAB				;und merken
+ 1232  220   0000A8 41          	COMA				;Wert complementieren
+ 1233  221   0000A9 6A00        	STAA	0,X			;und in Speicherplatz schreiben
+ 1234  222   0000AB 86FF        	LDAA	#0FFh			;Datenbus umladen
+ 1235  223   0000AD A600        	LDAA	0,X			;Speicherplatzinhalt lesen
+ 1236  224   0000AF 7A10 00     	STAA	R0			;und in Register R0 ablegen
+ 1237  225   0000B2 180F        	TBA				;
+ 1238  226   0000B4 B810 00     	EORA	R0			;neuer Wert XOR originaler Wert
+ 1239  227   0000B7 81FF        	CMPA	#0FFh			;
+ 1240  228   0000B9 2609        	BNE	CHK_DATA_MEM8		;wenn ok,
+ 1241  229   0000BB 6B00        	STAB	0,X			;dann
+ 1242  230   0000BD 08          	INX				;  weiter, bis gesamter RAM-Speicher geprüft
+ 1243  231   0000BE 0436 E3     	DBNE	Y,CHK_DATA_MEM1		;
+ 1244  232   0000C1 87          	CLRA				;
+ 1245  233   0000C2 2002        	BRA	CHK_DATA_MEM9		;  ok, mit A = 0 zurück
+ 1246  234                      					;
+ 1247  235                      CHK_DATA_MEM8:
+ 1248  236   0000C4 86FF        	LDAA	#0FFh			;sonst
+ 1249  237                      					;  Fehler passiert
+ 1250  238                      CHK_DATA_MEM9:
+ 1251  239   0000C6 3D          	RTS				;
+ 1252  240                      					;
+ 1253  241                      ;------------------------------------------------------------------------------
+ 1254  242                      ;CHK_CPU prüft die Funktion der CPU. Hierzu wird eine 32/32 bit Division
+ 1255  243                      ;durchgeführt und das Ergebnis auf Richtigkeit untersucht.
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1256  244                      ;Eingangsparameter:	keine
+ 1257  245                      ;Ausgangsparameter:	A		0	= ok
+ 1258  246                      ;					<> 0	= CPU-Fehler
+ 1259  247                      ;veränderte Register:	CCR, B, X, Y, R[0..7,20..23]
+ 1260  248                      ;------------------------------------------------------------------------------
+ 1261  249                      					;
+ 1262  250                      CHK_CPU:
+ 1263  251   0000C7 1803 00AA   	MOVW	#00AAh,R0		;Dividend = AA55AA
+             0000CB 1000       
+ 1264  252   0000CD 1803 55AA   	MOVW	#55AAh,R2		;
+             0000D1 1002       
+ 1265  253   0000D3 1803 0055   	MOVW	#0055h,R4		;Divisor = 552AD5
+             0000D7 1004       
+ 1266  254   0000D9 1803 2AD5   	MOVW	#2AD5h,R6		;
+             0000DD 1006       
+ 1267  255   0000DF 16xx xx     	JSR	DIV3232U		;
+ 1268  256   0000E2 FC10 04     	LDD	R4			;
+ 1269  257   0000E5 8C00 00     	CPD	#0			;
+ 1270  258   0000E8 261B        	BNE	CHK_CPU8		;
+ 1271  259   0000EA FC10 06     	LDD	R6			;
+ 1272  260   0000ED 8C00 00     	CPD	#0			;
+ 1273  261   0000F0 2613        	BNE	CHK_CPU8		;wenn Rest = 0,
+ 1274  262   0000F2 FC10 00     	LDD	R0			;
+ 1275  263   0000F5 8C00 00     	CPD	#0			;
+ 1276  264   0000F8 260B        	BNE	CHK_CPU8		;
+ 1277  265   0000FA FC10 02     	LDD	R2			;
+ 1278  266   0000FD 8C00 02     	CPD	#2			;
+ 1279  267   000100 2603        	BNE	CHK_CPU8		;und Ergebnis = 2,
+ 1280  268   000102 87          	CLRA				;dann
+ 1281  269   000103 2002        	BRA	CHK_CPU9		;  ok, mit A = 0 zurück
+ 1282  270                      					;
+ 1283  271                      CHK_CPU8:
+ 1284  272   000105 86FF        	LDAA	#0FFh			;sonst
+ 1285  273                      					;  Fehler passiert
+ 1286  274                      CHK_CPU9:
+ 1287  275   000107 3D          	RTS				;
+ 1288  276                      					;
+ 1289  277                      ;------------------------------------------------------------------------------
+ 1290  278                      ;RESET_CLOCK stellt die PLL für den gewünschten Bustakt ein und schaltet den
+ 1291  279                      ;Takt von direktem Oszillatortakt auf PLL-Takt um.
+ 1292  280                      ;Eingangsparameter:	keine
+ 1293  281                      ;Ausgangsparameter:	keine
+ 1294  282                      ;veränderte Register:	CCR
+ 1295  283                      ;------------------------------------------------------------------------------
+ 1296  284                      					;
+ 1297  285                      RESET_CLOCK:
+ 1298  286   000108 4D39 80     	BCLR	CLKSEL,_PLLSEL		;sicherstellen, dass Oszillatortakt eingeschaltet ist
+ 1299  287   00010B 180B F100   	MOVB	#11110001b,PLLCTL	;
+             00010F 3A         
+ 1300  288                      					;
+ 1301  289          0000 0001    ifne fUse_PLL
+ 1302  290   000110 180B xx00   	MOVB	#C_SYNR,SYNR		;PLL_CLK = OSC_CLK * (SYNR+1) / (REFDV+1)
+             000114 34         
+ 1303  291   000115 180B xx00   	MOVB	#C_REFDV,REFDV		;und warten, bis PLL eingeschwungen ist
+             000119 35         
+ 1304  292                      RESET_CLOCK1:
+ 1305  293   00011A 4F37 08FC   	BRCLR	CRGFLG,_LOCK,RESET_CLOCK1
+ 1306  294                      					;
+ 1307  295   00011E 180B 8000   	MOVB	#10000000b,CLKSEL	;Bustakt auf PLL-Takt umschalten
+             000122 39         
+ 1308  296                       else
+ 1310  298                       endif
+ 1311  299                      					;
+ 1312  300   000123 3D          	RTS				;
+ 1313  301                      					;
+ 1314  302                      ;------------------------------------------------------------------------------
+ 1315  303                      ;RESET_PORTS bringt die MCU-Ports in Grundstellung.
+ 1316  304                      ;Eingangsparameter:	keine
+ 1317  305                      ;Ausgangsparameter:	keine
+ 1318  306                      ;veränderte Register:	CCR
+ 1319  307                      ;------------------------------------------------------------------------------
+ 1320  308                      					;
+ 1321  309                      RESET_PORTS:
+ 1322  310   000124 180B FF00   	MOVB	#11111111b,PUCR		;
+             000128 0C         
+ 1323  311   000129 180B 0000   	MOVB	#00000000b,RDRIV	;
+             00012D 0D         
+ 1324  312   00012E 180B 0002   	MOVB	#00000000b,MODRR	;
+             000132 47         
+ 1325  313                      					;Port A:
+ 1326  314   000133 180B 0000   	MOVB	#00000000b,DDRA		;bit.[0]	In: - not connected -
+             000137 02         
+ 1327  315                      	;				;bit.[1..7]	In: - unavailable -
+ 1328  316   000138 180B 0000   	MOVB	#00000000b,PORTA	;
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             00013C 00         
+ 1329  317                      					;Port B:
+ 1330  318   00013D 180B 0000   	MOVB	#00000000b,DDRB		;bit.[0..3]	In: - unavailable -
+             000141 03         
+ 1331  319                      	;				;bit.[4]	In: - not connected -
+ 1332  320                      	;				;bit.[5..7]	In: - unavailable -
+ 1333  321   000142 180B 0000   	MOVB	#00000000b,PORTB	;
+             000146 01         
+ 1334  322                      					;Port E:
+ 1335  323   000147 180B 1000   	MOVB	#00010000b,PEAR		;all pins general purpose I/O
+             00014B 0A         
+ 1336  324   00014C 180B 0000   	MOVB	#00000000b,DDRE		;bit.[0..7]	In: - not connected -
+             000150 09         
+ 1337  325   000151 180B FF00   	MOVB	#11111111b,PORTE	;
+             000155 08         
+ 1338  326                      					;Port K:
+ 1339  327   000156 180B 0000   	MOVB	#00000000b,DDRK		;bit.[0..7]	In: - not connected -
+             00015A 33         
+ 1340  328   00015B 180B FF00   	MOVB	#11111111b,PORTK	;
+             00015F 32         
+ 1341  329                      					;Port T
+ 1342  330   000160 180B F202   	MOVB	#11110010b,DDRT		;bit.[0..1]	In: Soft-SCI1
+             000164 42         
+ 1343  331                      	;				;bit.[1]	Out: Warnlamp
+ 1344  332                      	;				;bit.[2..3]	In: - not connected -
+ 1345  333                      	;				;bit.[4]	Out: MC33879._CE = 1
+ 1346  334                      	;				;bit.[5..6]	Out: LIN-RX-Multiplexer
+ 1347  335                      	;				;bit.[7]	Out: Working = 0
+ 1348  336   000165 180B 0002   	MOVB	#00000000b,RDRT		;
+             000169 43         
+ 1349  337   00016A 180B FF02   	MOVB	#11111111b,PERT		;
+             00016E 44         
+ 1350  338   00016F 180B 0002   	MOVB	#00000000b,PPST		;
+             000173 45         
+ 1351  339   000174 180B 1302   	MOVB	#00010011b,PTT		;Warnlampe einschalten!
+             000178 40         
+ 1352  340                      					;Port S:
+ 1353  341   000179 180B 0202   	MOVB	#00000010b,DDRS		;bit.[0..1]	In: SCI0
+             00017D 4A         
+ 1354  342                      	;				;bit.[2..3]	In: - not connected -
+ 1355  343                      	;				;bit.[4..7]	In: - unavailable -
+ 1356  344   00017E 180B 0002   	MOVB	#00000000b,RDRS		;
+             000182 4B         
+ 1357  345   000183 180B FF02   	MOVB	#11111111b,PERS		;
+             000187 4C         
+ 1358  346   000188 180B 0002   	MOVB	#00000000b,PPSS		;
+             00018C 4D         
+ 1359  347   00018D 180B 0002   	MOVB	#00000000b,WOMS		;
+             000191 4E         
+ 1360  348   000192 180B 0F02   	MOVB	#00001111b,PTS		;
+             000196 48         
+ 1361  349                      					;Port M:
+ 1362  350   000197 180B 3802   	MOVB	#00111000b,DDRM		;bit.[0..1]	I/O: MSCAN0
+             00019B 52         
+ 1363  351                      	;				;bit.[2]	In: SPI0._MISO
+ 1364  352                      	;				;bit.[3]	Out: DS1722._CE = 0
+ 1365  353                      	;				;bit.[4..5]	Out: SPI0._MOSI,_SCLK
+ 1366  354                      	;				;bit.[6..7]	In: - unavailable -
+ 1367  355   00019C 180B 0002   	MOVB	#00000000b,RDRM		;
+             0001A0 53         
+ 1368  356   0001A1 180B FF02   	MOVB	#11111111b,PERM		;
+             0001A5 54         
+ 1369  357   0001A6 180B 0002   	MOVB	#00000000b,PPSM		;
+             0001AA 55         
+ 1370  358   0001AB 180B 0002   	MOVB	#00000000b,WOMM		;
+             0001AF 56         
+ 1371  359   0001B0 180B 3702   	MOVB	#00110111b,PTM		;
+             0001B4 50         
+ 1372  360                      					;Port P:
+ 1373  361   0001B5 180B 0002   	MOVB	#00000000b,DDRP		;bit.[0..4]	In: - unavailable -
+             0001B9 5A         
+ 1374  362                      	;				;bit.[5]	In: - not connected -
+ 1375  363                      	;				;bit.[6..7]	In: - unavailable -
+ 1376  364   0001BA 180B 0002   	MOVB	#00000000b,RDRP		;
+             0001BE 5B         
+ 1377  365   0001BF 180B FF02   	MOVB	#11111111b,PERP		;
+             0001C3 5C         
+ 1378  366   0001C4 180B 0002   	MOVB	#00000000b,PPSP		;
+             0001C8 5D         
+ 1379  367   0001C9 180B 0002   	MOVB	#00000000b,PIEP		;
+             0001CD 5E         
+ 1380  368   0001CE 180B FF02   	MOVB	#11111111b,PIFP		;
+             0001D2 5F         
+ 1381  369   0001D3 180B 2002   	MOVB	#00100000b,PTP		;
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             0001D7 58         
+ 1382  370                      					;Port J:
+ 1383  371   0001D8 180B 0002   	MOVB	#00000000b,DDRJ		;bit.[0..5]	In: - unavailable -
+             0001DC 6A         
+ 1384  372                      	;				;bit.[6..7]	In: - not connected -
+ 1385  373   0001DD 180B 0002   	MOVB	#00000000b,RDRJ		;
+             0001E1 6B         
+ 1386  374   0001E2 180B FF02   	MOVB	#11111111b,PERJ		;
+             0001E6 6C         
+ 1387  375   0001E7 180B 0002   	MOVB	#00000000b,PPSJ		;
+             0001EB 6D         
+ 1388  376   0001EC 180B 0002   	MOVB	#00000000b,PIEJ		;
+             0001F0 6E         
+ 1389  377   0001F1 180B FF02   	MOVB	#11111111b,PIFJ		;
+             0001F5 6F         
+ 1390  378   0001F6 180B C002   	MOVB	#11000000b,PTJ		;
+             0001FA 68         
+ 1391  379   0001FB 3D          	RTS				;
+ 1392  380                      					;
+ 1393  381                      ;------------------------------------------------------------------------------
+ 1394  382                      ;RESET_FLASH bringt die FLASH-Speicher Programmierfunktion in Grundstellung.
+ 1395  383                      ;
+ 1396  384                      ;Eingangsparameter:	keine
+ 1397  385                      ;Ausgangsparameter:	keine
+ 1398  386                      ;veränderte Register:	CCR, A, B, X, Y
+ 1399  387                      ;------------------------------------------------------------------------------
+ 1400  388                      					;
+ 1401  389                      RESET_FLASH:
+ 1402  390   0001FC 16xx xx     	JSR	FTS_RESET		;FLASH-Speicher Programmierfunktion in Grundstellung
+ 1403  391   0001FF 3D          	RTS				;
+ 1404  392                      					;
+ 1405  393                      ;------------------------------------------------------------------------------
+ 1406  394                      ;RESET_CAN konfiguriert das CAN-Modul MSCAN0.
+ 1407  395                      ;
+ 1408  396                      ;Eingangsparameter:	keine
+ 1409  397                      ;Ausgangsparameter:	keine
+ 1410  398                      ;veränderte Register:	CCR, A, B, X, Y, R[0,4..5]
+ 1411  399                      ;------------------------------------------------------------------------------
+ 1412  400                      					;
+ 1413  401                      RESET_CAN:
+ 1414  402   000200 180B 0010   	MOVB	#0,R0			;Index = 0: MSCAN0
+             000204 00         
+ 1415  403   000205 1803 xxxx   	MOVW	#CAN0_CONFIG_TBL,R4	;
+             000209 1004       
+ 1416  404   00020B 16xx xx     	JSR	CAN_RESET		;MSCAN0 in Grundstellung
+ 1417  405                      					;
+ 1418  406   00020E CDxx xx     	LDY	#CAN_BUF		;
+ 1419  407   000211 87          	CLRA				;
+ 1420  408   000212 CExx xx     	LDX	#CAN_BUF_CT		;
+ 1421  409                      RESET_CAN1:
+ 1422  410   000215 6A70        	STAA	1,Y+			;CAN-Empfangsregister auf Null setzen
+ 1423  411   000217 0435 FB     	DBNE	X,RESET_CAN1		;
+ 1424  412   00021A 3D          	RTS				;
+ 1425  413                      					;
+ 1426  414                      ;------------------------------------------------------------------------------
+ 1427  415                      ;RESET_LIN konfiguriert und startet den LIN-Master.
+ 1428  416                      ;
+ 1429  417                      ;Eingangsparameter:	keine
+ 1430  418                      ;Ausgangsparameter:	keine
+ 1431  419                      ;veränderte Register:	CCR, A, R[0..2]
+ 1432  420                      ;------------------------------------------------------------------------------
+ 1433  421                      					;
+ 1434  422                      RESET_LIN:
+ 1435  423   00021B 16xx xx     	JSR	LIN_START		;LIN-Master in Grundstellung
+ 1436  424   00021E 3D          	RTS				;
+ 1437  425                      					;
+ 1438  426                      ;------------------------------------------------------------------------------
+ 1439  427                      ;RESET_COMLINES konfiguriert die serielle Kommunikationsschnittstelle
+ 1440  428                      ;SCI0.
+ 1441  429                      ;
+ 1442  430                      ;Eingangsparameter:	keine
+ 1443  431                      ;Ausgangsparameter:	keine
+ 1444  432                      ;veränderte Register:	CCR, A
+ 1445  433                      ;------------------------------------------------------------------------------
+ 1446  434                      					;
+ 1447  435                      RESET_COMLINES:
+ 1448  436   00021F 16xx xx     	JSR	COMLINE_RESET		;serielle PC-Schnittstelle in Grundstellung
+ 1449  437   000222 3D          	RTS				;
+ 1450  438                      					;
+ 1451  439                      ;------------------------------------------------------------------------------
+ 1452  440                      ;RESET_SENSORS konfiguriert Sensor-Schnittstellen.
+ 1453  441                      ;
+ 1454  442                      ;Eingangsparameter:	keine
+ 1455  443                      ;Ausgangsparameter:	keine
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1456  444                      ;veränderte Register:	CCR, A, Y, R[0,3]
+ 1457  445                      ;------------------------------------------------------------------------------
+ 1458  446                      					;
+ 1459  447                      RESET_SENSORS:
+ 1460  448   000223 16xx xx     	JSR	SDT_RESET		;3-Draht Schnittstelle SPI0 in Grundstellung
+ 1461  449                      					;
+ 1462  450   000226 16xx xx     	JSR	SDT_READ_CONFIG		;DS1722 Thermometer mit 3-Draht Schnittstelle
+ 1463  451   000229 180B E810   	MOVB	#11101000b,R0		;12-bit Auflösung, kontinuierliche Messungen
+             00022D 00         
+ 1464  452   00022E 16xx xx     	JSR	SDT_WRITE_CONFIG	;
+ 1465  453   000231 3D          	RTS				;
+ 1466  454                      					;
+ 1467  455                      ;------------------------------------------------------------------------------
+ 1468  456                      ;RESET_POWER konfiguriert die serielle Lasttreiber-Schnittstelle.
+ 1469  457                      ;
+ 1470  458                      ;Eingangsparameter:	R0/R1
+ 1471  459                      ;Ausgangsparameter:	keine
+ 1472  460                      ;veränderte Register:	CCR, A
+ 1473  461                      ;------------------------------------------------------------------------------
+ 1474  462                      					;
+ 1475  463                      RESET_POWER:
+ 1476  464   000232 16xx xx     	JSR	PWS_RESET		;3-Draht Schnittstelle SPI0 in Grundstellung
+ 1477  465                      					;
+ 1478  466   000235 1803 FF00   	MOVW	#0FF00h,R0		;
+             000239 1000       
+ 1479  467   00023B 16xx xx     	JSR	PWS_UPDATE		;
+ 1480  468   00023E 1803 FF00   	MOVW	#0FF00h,R0		;
+             000242 1000       
+ 1481  469   000244 16xx xx     	JSR	PWS_UPDATE		;alle Ausgänge sperren
+ 1482  470   000247 3D          	RTS				;
+ 1483  471                      					;
+ 1484  472                      ;------------------------------------------------------------------------------
+ 1485  473                      ;RESET_MUX konfiguriert die serielle Lasttreiber-Schnittstelle.
+ 1486  474                      ;
+ 1487  475                      ;Eingangsparameter:	keine
+ 1488  476                      ;Ausgangsparameter:	keine
+ 1489  477                      ;veränderte Register:	CCR, A, Y
+ 1490  478                      ;------------------------------------------------------------------------------
+ 1491  479                      					;
+ 1492  480                      RESET_MUX:
+ 1493  481   000248 16xx xx     	JSR	MUX_RESET		;LIN-Empfangsmultiplexer in Grundstellung
+ 1494  482   00024B 3D          	RTS				;
+ 1495  483                      					;
+ 1496  484                      ;------------------------------------------------------------------------------
+ 1497  485                      ;RESET_PARAMS prüft die Parameter im EEPROM auf Konsistenz. Wenn die Parameter
+ 1498  486                      ;ungültig sind, werden Standardwerte aus dem Flash-EPROM in das Parameter-EEPROM
+ 1499  487                      ;geschrieben.
+ 1500  488                      ;
+ 1501  489                      ;Eingangsparameter:	Prüfsumme im EEPROM
+ 1502  490                      ;Ausgangsparameter:	EEPROM Daten
+ 1503  491                      ;veränderte Register:	CCR, A, B, X, Y, R[0..13]
+ 1504  492                      ;------------------------------------------------------------------------------
+ 1505  493                      					;
+ 1506  494                      RESET_PARAMS:
+ 1507  495                      ;
+ 1508  496                      ;begin 20.01.2011
+ 1509  497                      					;
+ 1510  498                      ;------------------------------------------------------------------------------
+ 1511  499                      ;1. Teil: Allgemeine Konfiguration
+ 1512  500                      					;
+ 1513  501   00024C CExx xx     	LDX	#E_CONFIG_TBL		;Zeiger auf Parameter
+ 1514  502   00024F 1803 xxxx   	MOVW	#CONFIG_TBL_CNT,R2	;Anzahl Bytes
+             000253 1002       
+ 1515  503   000255 16xx xx     	JSR	CREATE_KERMIT		;
+ 1516  504   000258 1804 xxxx   	MOVW	E_CONFIG_CRC,R0		;originaler Prüfcode
+             00025C 1000       
+ 1517  505   00025E 16xx xx     	JSR	VERIFY_KERMIT		;wenn Prüfcode nicht in Ordnung,
+ 1518  506   000261 273A        	BEQ	RESET_PARAMS2		;dann
+ 1519  507                      					;
+ 1520  508   000263 1803 xxxx   	MOVW	#CONFIG_TBL,R4		;  Quelladresse
+             000267 1004       
+ 1521  509   000269 1803 xxxx   	MOVW	#E_CONFIG_TBL,R6	;  Zieladresse
+             00026D 1006       
+ 1522  510   00026F 1803 xxxx   	MOVW	#CONFIG_TBL_CNT,R2	;  Anzahl Bytes
+             000273 1002       
+ 1523  511                      RESET_PARAMS11:
+ 1524  512   000275 16xx xx     	JSR	FTS_COPY		;  Urkonfiguration schreiben
+ 1525  513   000278 F710 02     	TST	R2			;
+ 1526  514   00027B 2705        	BEQ	RESET_PARAMS12		;
+ 1527  515   00027D 7310 02     	DEC	R2			;
+ 1528  516   000280 20F3        	BRA	RESET_PARAMS11		;
+ 1529  517                      					;
+ 1530  518                      RESET_PARAMS12:
+ 1531  519   000282 16xx xx     	JSR	FTS_FLASH		;
+tg3Reset  Copyright (C) 2005-2011, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1532  520                      					;
+ 1533  521   000285 CExx xx     	LDX	#E_CONFIG_TBL		;  Prüfcode der programmierbaren Werte
+ 1534  522   000288 1803 xxxx   	MOVW	#CONFIG_TBL_CNT,R2	;
+             00028C 1002       
+ 1535  523   00028E 16xx xx     	JSR	CREATE_KERMIT		;  neu berechnen
+ 1536  524   000291 1803 xxxx   	MOVW	#E_CONFIG_CRC,R6	;
+             000295 1006       
+ 1537  525   000297 16xx xx     	JSR	FTS_WRITE16		;  und schreiben
+ 1538  526   00029A 16xx xx     	JSR	FTS_FLASH		;  EEPROM programmieren
+ 1539  527                      					;
+ 1540  528                      ;------------------------------------------------------------------------------
+ 1541  529                      ;2. Teil: Hardware Identcode
+ 1542  530                      					;
+ 1543  531                      RESET_PARAMS2:
+ 1544  532   00029D FCxx xx     	LDD	HW_IDENT		;
+ 1545  533   0002A0 8Cxx xx     	CPD	#bt_TIREGUARD3A		;wenn HW_IDENT nicht korrekt,
+ 1546  534   0002A3 270F        	BEQ	RESET_PARAMS3		;
+ 1547  535                      					;
+ 1548  536                      RESET_PARAMS21:
+ 1549  537   0002A5 1803 xxxx   	MOVW	#bt_TIREGUARD3A,R0	;dann
+             0002A9 1000       
+ 1550  538   0002AB 1803 xxxx   	MOVW	#E_BOARD_ID,R6		;  Board-Type eintragen
+             0002AF 1006       
+ 1551  539   0002B1 16xx xx     	JSR	FTS_WRITE16		;
+ 1552  540                      					;
+ 1553  541                      RESET_PARAMS3:
+ 1554  542                      ;end
+ 1555  543                      ;
+ 1556  544   0002B4 16xx xx     	JSR	FTS_FLASH		;ggf. EEPROM neu programmieren
+ 1557  545   0002B7 3D          	RTS				;
+ 1558  546                      					;
+ 1559  547                      ;------------------------------------------------------------------------------
+ 1560  548                      ;RESET_INTERRUPTS setzt das Interrupt-System auf Anfangswerte.
+ 1561  549                      ;
+ 1562  550                      ;Eingangsparameter:	keine
+ 1563  551                      ;Ausgangsparameter:	keine
+ 1564  552                      ;veränderte Register:	keine
+ 1565  553                      ;------------------------------------------------------------------------------
+ 1566  554                      					;
+ 1567  555                      RESET_INTERRUPTS:
+ 1568  556   0002B8 16xx xx     	JSR	DISABLE_INTERRUPTS	;nicht benutzte Interrupts sperren
+ 1569  557   0002BB 3D          	RTS				;
+ 1570  558                      					;
+ 1571  559                      ;------------------------------------------------------------------------------
+ 1572  560                      ;PREPARE_SYSTEM setzt einige weitere Systemvariablen auf Anfangswerte.
+ 1573  561                      ;
+ 1574  562                      ;Eingangsparameter:	keine
+ 1575  563                      ;Ausgangsparameter:	keine
+ 1576  564                      ;veränderte Register:	CCR, A, X, Y
+ 1577  565                      ;------------------------------------------------------------------------------
+ 1578  566                      					;
+ 1579  567                      PREPARE_SYSTEM:
+ 1580  568   0002BC CDxx xx     	LDY	#MEAN_S1_BUF		;
+ 1581  569   0002BF 8600        	LDAA	#0			;
+ 1582  570   0002C1 CExx xx     	LDX	#MEAN_S1_BUF_CT		;
+ 1583  571                      PREPARE_SYSTEM1:
+ 1584  572   0002C4 6A70        	STAA	1,Y+			;Mittelwertbildungs-Vorgeschichtswerte
+ 1585  573   0002C6 0435 FB     	DBNE	X,PREPARE_SYSTEM1	;auf Null setzen
+ 1586  574   0002C9 16xx xx     	JSR	WATCHDOG_INIT		;
+ 1587  575                      					;
+ 1588  576   0002CC CCxx xx     	LDD	#LIN_ADC_BUF		;Adresse der LIN-Antennen Störpegelwerte
+ 1589  577   0002CF 7Cxx xx     	STD	LIN_ADC_ADDR		;merken
+ 1590  578                      					;
+ 1591  579   0002D2 1803 0000   	MOVW	#0,TCNT			;Timer auf 0 setzen
+             0002D6 0044       
+ 1592  580   0002D8 1803 xxxx   	MOVW	#TICK_REL,TC7		;Ticker Reloadwert laden
+             0002DC 005E       
+ 1593  581   0002DE 3D          	RTS				;
+ 1594  582                      					;
+ 1595  583   0002DF FFFF FFFF   	dcb.b	6, 0FFh			;
+             0002E3 FFFF       
+ 1596  584   0002E5 3F          	SWI				;
+ 1597  585                      					;
+ 1598  586                      ;------------------------------------------------------------------------------

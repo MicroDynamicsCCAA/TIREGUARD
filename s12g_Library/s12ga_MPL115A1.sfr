@@ -1,0 +1,46 @@
+	nolist
+	title	"s12ga_MPL115.sfr  Copyright (C) 2011-2014, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_MPL115.sfr
+;
+;Copyright: 	(C) 2011-2014, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	30.11.2014
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12ga_MPL115A1.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  01.11
+;
+;30.11.2014	Angepasst für TIREGUARD 4
+;		Herkunft: s12xep_MPL115_s.sfr
+;
+;12.01.2011	Urfassung
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Bits
+;/////////////////////////////////////////////////////////////////////////////
+					;
+_MISO:		equ	bit4		;
+_MOSI:		equ	bit6		;
+_SCLK:		equ	bit7		;
+					;
+_CS:		equ	bit4		;
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;/////////////////////////////////////////////////////////////////////////////
+					;
+MISO_PORT:	equ	PTS		;
+MISO_DIR:	equ	DDRS		;
+MOSI_PORT:	equ	PTS		;
+MOSI_DIR:	equ	DDRS		;
+SCLK_PORT:	equ	PTS		;
+SCLK_DIR:	equ	DDRS		;
+					;
+CS_PORT:	equ	PTP		;
+CS_DIR:		equ	DDRP		;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

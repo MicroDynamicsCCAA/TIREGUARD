@@ -1,0 +1,122 @@
+tg3Scale  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include "s12c_128.sfr"
+  982    2                      	title	"tg3Scale  Copyright (C) 2005-2006, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;TireGuard 3	Betriebsprogramm
+  985    5                      ;------------------------------------------------------------------------------
+  986    6                      ;Module:	tg3Scale.asm
+  987    7                      ;
+  988    8                      ;Copyright: 	(C) 2005-2006, micro dynamics GmbH
+  989    9                      ;Author(s):	Michael Frank
+  990   10                      ;Update:	24.11.2006
+  991   11                      ;
+  992   12                      ;Description:	Bearbeitung der Rohdaten in Form von digitaler Filterung
+  993   13                      ;		analoger Signale.
+  994   14                      ;------------------------------------------------------------------------------
+  995   15                      ;Revision History:	Original Version  11.05
+  996   16                      ;
+  997   17                      ;24.11.2006	Version 1.00
+  998   18                      ;08.11.2006	Anpassung an MC9S12C128
+  999   19                      ;------------------------------------------------------------------------------
+ 1000   20                      					;
+ 1001   21                      ;------------------------------------------------------------------------------
+ 1002   22                      ;Externals
+ 1003   23                      ;------------------------------------------------------------------------------
+ 1004   24                      					;
+ 1005   25                      	xref	MEAN16			;Code
+ 1006   26                      					;
+ 1007   27                      	xref	E_ANALOG_COEFF_TBL	;bssData
+ 1008   28                      					;
+ 1009   29                      	xref	ANALOG_BUF		;Data
+ 1010   30                      	xref	ANALOG_RESULT_BUF	;Data
+ 1011   31                      	xref	ANALOG_S1_BUF		;Data
+ 1012   32                      					;
+ 1013   33                      ;------------------------------------------------------------------------------
+ 1014   34                      ;Publics
+ 1015   35                      ;------------------------------------------------------------------------------
+ 1016   36                      					;
+ 1017   37                      	xdef	SCALE			;Code
+ 1018   38                      					;
+ 1019   39                      .text:		section
+ 1020   40                      					;
+ 1021   41                      ;==============================================================================
+ 1022   42                      ;SCALE Modul-Einsprung
+ 1023   43                      ;==============================================================================
+ 1024   44                      					;
+ 1025   45                      SCALE:
+ 1026   46   000000 16xx xx     	JSR	SCALE_ANALOG		;
+ 1027   47   000003 3D          	RTS				;
+ 1028   48                      					;
+ 1029   49   000004 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000008 FFFF       
+ 1030   50   00000A 3F          	SWI				;
+ 1031   51                      					;
+ 1032   52                      ;------------------------------------------------------------------------------
+ 1033   53                      ;SCALE_ANALOG filtert ggf. die analogen Messwerte.
+ 1034   54                      ;
+ 1035   55                      ;Eingangsparameter:	ANALOG_BUF
+ 1036   56                      ;			ANALOG_S1_BUF
+ 1037   57                      ;			E_ANALOG_COEFF_TBL
+ 1038   58                      ;Ausgangsparameter:	ANALOG_RESULT_BUF
+ 1039   59                      ;			ANALOG_S1_BUF
+ 1040   60                      ;veränderte Register:	CCR, A, B, X, Y, R[0..1,3..7,10..27]
+ 1041   61                      ;------------------------------------------------------------------------------
+ 1042   62                      					;
+ 1043   63                      SCALE_ANALOG:
+ 1044   64   00000B 1803 xxxx   	MOVW	#ANALOG_BUF,R10		;Zeiger auf analoge Rohdaten
+             00000F 100A       
+ 1045   65   000011 1803 xxxx   	MOVW	#ANALOG_RESULT_BUF,R12	;Zeiger auf Ergebnisbuffer
+             000015 100C       
+ 1046   66                      
+ 1047   67   000017 1803 xxxx   	MOVW	#E_ANALOG_COEFF_TBL,R16	;Zeiger auf Mittelungskonstanten
+             00001B 1010       
+ 1048   68   00001D 1803 xxxx   	MOVW	#ANALOG_S1_BUF,R6	;Zeiger auf Vorgeschichtswerte
+             000021 1006       
+ 1049   69   000023 180B 0110   	MOVB	#1,R3			;maximal 1 Analogeingang
+             000027 03         
+ 1050   70                      					;
+ 1051   71                      SCALE_ANALOG1:
+ 1052   72   000028 FE10 0A     	LDX	R10			;
+ 1053   73   00002B 1805 3110   	MOVW	2,X+,R18		;Rohdatenwert nach R[18..19]
+             00002F 12         
+ 1054   74   000030 7E10 0A     	STX	R10			;
+ 1055   75                      					;
+ 1056   76   000033 FE10 10     	LDX	R16			;
+ 1057   77   000036 A630        	LDAA	1,X+			;
+tg3Scale  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1058   78   000038 7E10 10     	STX	R16			;
+ 1059   79   00003B 8100        	CMPA	#0			;wenn Mittelungskonstante > 0,
+ 1060   80   00003D 270C        	BEQ	SCALE_ANALOG2		;dann
+ 1061   81   00003F 7A10 00     	STAA	R0			;  Mittelungskonstante
+ 1062   82   000042 1803 1012   	MOVW	#R18,R4			;  Zeiger auf Eingangswert
+             000046 1004       
+ 1063   83                      					;  R[6..7] zeigt auf Vorgeschichtswert
+ 1064   84   000048 16xx xx     	JSR	MEAN16			;  Aufruf der Mittelungsfunktion
+ 1065   85                      SCALE_ANALOG2:
+ 1066   86   00004B FE10 06     	LDX	R6			;Zeiger auf Vorgeschichtswerte
+ 1067   87   00004E 1A03        	LEAX	3,X			;zum nächsten 24-bit Wert verschieben
+ 1068   88   000050 7E10 06     	STX	R6			;
+ 1069   89                      					;
+ 1070   90   000053 FD10 0C     	LDY	R12			;
+ 1071   91   000056 FC10 12     	LDD	R18			;
+ 1072   92   000059 6C71        	STD	2,Y+			;16-bit Ergebnis im Ergebnisbuffer ablegen
+ 1073   93   00005B 7D10 0C     	STY	R12			;
+ 1074   94   00005E 7310 03     	DEC	R3			;
+ 1075   95   000061 26C5        	BNE	SCALE_ANALOG1		;
+ 1076   96   000063 3D          	RTS				;
+ 1077   97                      					;
+ 1078   98   000064 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000068 FFFF       
+ 1079   99   00006A 3F          	SWI				;
+ 1080  100                      					;
+ 1081  101                      ;------------------------------------------------------------------------------

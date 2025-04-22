@@ -1,0 +1,44 @@
+	nolist
+	title	"s12c_SoftSPI.sfr  Copyright (C) 2009, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12c_SoftSPI.sfr
+;
+;Copyright: 	(C) 2009, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	24.05.2009
+;
+;Description:	Hardwarespezifische Definitionen das Modul s12c_SoftSPI.asm
+;
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  04.09
+;
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Bits
+;/////////////////////////////////////////////////////////////////////////////
+					;
+_MISO:		equ	bit2		;
+_MOSI:		equ	bit4		;
+_SCLK:		equ	bit5		;
+_CS:		equ	bit3		;
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;/////////////////////////////////////////////////////////////////////////////
+					;
+MISO_PORT:	equ	PTM		;
+MISO_DIR:	equ	DDRM		;
+MOSI_PORT:	equ	PTM		;
+MOSI_DIR:	equ	DDRM		;
+SCLK_PORT:	equ	PTM		;
+SCLK_DIR:	equ	DDRM		;
+CS_PORT:	equ	PTM		;
+CS_DIR:		equ	DDRM		;
+					;
+ADDR8_PORT:	equ	PTT		;
+ADDR8_DIR:	equ	DDRT		;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

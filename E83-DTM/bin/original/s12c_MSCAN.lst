@@ -1,0 +1,1244 @@
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	title	"s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;Module:	s12c_MSCAN.asm
+  985    5                      ;
+  986    6                      ;Copyright:	(C) 2005-2006, micro dynamics GmbH
+  987    7                      ;Author(s):	Michael Frank
+  988    8                      ;Update:	24.11.2006
+  989    9                      ;
+  990   10                      ;Description:	Funktionen für den Zugriff auf das prozessorinterne MSCAN-Modul
+  991   11                      ;		des Freescale MC9S12C128
+  992   12                      ;
+  993   13                      ;Dieses Programm-Modul wickelt den Informationsaustausch über ein CAN-Netz mit
+  994   14                      ;einem Basic-CAN MSCAN-Modul eines Microcontrollers aus der
+  995   15                      ;Freescale HCS12-Reihe ab.
+  996   16                      ;Über acht Messagepuffer können Kommunikationsobjekte gesendet, empfangen und 
+  997   17                      ;angefordert werden.
+  998   18                      ;Durch die Software steht die erweiterte Funktionalität eines Full-CAN Moduls
+  999   19                      ;zur Verfügung.
+ 1000   20                      ;------------------------------------------------------------------------------
+ 1001   21                      ;Beispiel für eine funktionsfähige Konfigurationstabelle zur Verwendung in der
+ 1002   22                      ;Funktion CAN_CONFIG:
+ 1003   23                      ;Die Reihenfolge der Werte ist fest vorgegeben und kann nicht verändert werden.
+ 1004   24                      ;
+ 1005   25                      ;CANX_CONFIG_TBL:			;500 kbit/s @16MHz Quartz
+ 1006   26                      ;					;
+ 1007   27                      ;1. Teil: Config
+ 1008   28                      ;
+ 1009   29                      ;Die vier Konfigurationsbytes sind entsprechend der Konventionen des msCAN-Modules
+ 1010   30                      ;zu ermitteln. Hierbei ist die entsprechende Freescale Dokumentation zu Rate
+ 1011   31                      ;zu ziehen.
+ 1012   32                      ;
+ 1013   33                      ;	dc.b	10000000b		;CANxCTL1: MSCAN enable, Oscillator Clock, Normal Operation
+ 1014   34                      ;	dc.b	00000011b		;CANxBTR0: SJW=1, Prescaler=4
+ 1015   35                      ;	dc.b	00100011b		;CANxBTR1: SAMP=0, TSEG2=3, TSEG1=4
+ 1016   36                      ;					;
+ 1017   37                      ;	dc.b	00100000b		;CANxIDAC: acht 8-bit Akzeptanzfilter
+ 1018   38                      ;					;
+ 1019   39                      ;2. Teil: Decriptors
+ 1020   40                      ;
+ 1021   41                      ;Die acht Deskriptoren setzen sich jeweils zusammen aus dem fünfmal nach links
+ 1022   42                      ;verschobenen (x20h) Botschafts-Identifier und der Anzahl Bytes der Botschaft,
+ 1023   43                      ;wenn diese gesendet werden soll. Bei zu empfangenden Botschaften ist als
+ 1024   44                      ;Byteanzahl stets Null anzugeben.
+ 1025   45                      ;Unbenutzte Deskriptoren sind auf 0FFE0h zu setzen.
+ 1026   46                      ;
+ 1027   47                      ;	dc.w	07F00h			;Descriptor 0	3F8h, ? Bytes, empfangen
+ 1028   48                      ;	dc.w	07F28h			;Descriptor 1	3F9h, 8 Bytes, senden
+ 1029   49                      ;	dc.w	0FFE0H			;Descriptor 2
+ 1030   50                      ;	dc.w	0FFE0H			;Descriptor 3
+ 1031   51                      ;	dc.w	0FFE0h			;Descriptor 4
+ 1032   52                      ;	dc.w	0FFE0h			;Descriptor 5
+ 1033   53                      ;	dc.w	0FFE0h			;Descriptor 6
+ 1034   54                      ;	dc.w	0FFE0h			;Descriptor 7
+ 1035   55                      ;					;
+ 1036   56                      ;------------------------------------------------------------------------------
+ 1037   57                      ;Revision History:	Original Version  01.05
+ 1038   58                      ;
+ 1039   59                      ;24.11.2006
+ 1040   60                      ;08.11.2006	Anpassung an MC9S12C128
+ 1041   61                      ;		nur ein MSCAN-Modul
+ 1042   62                      ;		Fehler in CAN_REQUEST korrigiert: 
+ 1043   63                      ;		Sprung nach CAN_REQUEST3 statt nach CAN_WRITE3
+ 1044   64                      ;
+ 1045   65                      ;03.04.2006	in CAN_STOP und CAN_START die Zeitgrenzen jetzt in Abhängigkeit
+ 1046   66                      ;		von BUS_CLK setzen
+ 1047   67                      ;17.07.2005	in CAN_STOP und CAN_START die Zeitgrenzen wesentlich vergrößert
+ 1048   68                      ;		CANx_STATUS Bytes neu hinzugefügt und in Funktionen CAN_INIT
+ 1049   69                      ;		sowie CAN_STATUS eingebaut
+ 1050   70                      ;------------------------------------------------------------------------------
+ 1051   71                      					;
+ 1052   72                      ;------------------------------------------------------------------------------
+ 1053   73                      ;Externals
+ 1054   74                      ;------------------------------------------------------------------------------
+ 1055   75                      					;
+ 1056   76                      	xref	BUS_CLK			;Number
+ 1057   77                      					;
+ 1058   78                      ;------------------------------------------------------------------------------
+ 1059   79                      ;Publics
+ 1060   80                      ;------------------------------------------------------------------------------
+ 1061   81                      					;
+ 1062   82                      	xdef	CAN_READ		;Code
+ 1063   83                      	xdef	CAN_REQUEST		;Code
+ 1064   84                      	xdef	CAN_RESET		;Code
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1065   85                      	xdef	CAN_STATUS		;Code
+ 1066   86                      	xdef	CAN_WRITE		;Code
+ 1067   87                      					;
+ 1068   88                      	xdef	CAN0_TX_INT		;Code
+ 1069   89                      	xdef	CAN0_RX_INT		;Code
+ 1070   90                      					;
+ 1071   91                      	xdef.b	_CAN_RXOK		;bitMask
+ 1072   92                      	xdef.b	_CAN_TXOK		;bitMask
+ 1073   93                      	xdef.b	_CAN_RXSTAT		;bitMask
+ 1074   94                      	xdef.b	_CAN_TXSTAT		;bitMask
+ 1075   95                      					;
+ 1076   96                      	xdef.b	E_CAN_TIMEOUT		;Number
+ 1077   97                      	xdef.b	E_CAN_INDEX		;Number
+ 1078   98                      	xdef.b	E_CAN_MESSAGE		;Number
+ 1079   99                      	xdef.b	E_CAN_LENGTH		;Number
+ 1080  100                      	xdef.b	E_CAN_NO_DATA		;Number
+ 1081  101                      					;
+ 1082  102                      ;------------------------------------------------------------------------------
+ 1083  103                      ;Variables and Constants
+ 1084  104                      ;------------------------------------------------------------------------------
+ 1085  105                      					;
+ 1086  106                      ;------------------------------------------------------------------------------
+ 1087  107                      ;Control Registers
+ 1088  108                      ;
+ 1089  109          0000 0000   CTL0:		equ	00h		;MSCAN	Control	Register 0
+ 1090  110          0000 0001   CTL1:		equ	01h		;MSCAN	Control	Register 1
+ 1091  111          0000 0002   BTR0:		equ	02h		;MSCAN	Bus Timing Register 0
+ 1092  112          0000 0003   BTR1:		equ	03h		;MSCAN	Bus Timing Register 1
+ 1093  113          0000 0004   RFLG:		equ	04h		;MSCAN	Receiver Flag Register
+ 1094  114          0000 0005   RIER:		equ	05h		;MSCAN	Receiver Interrupt Enable Register
+ 1095  115          0000 0006   TFLG:		equ	06h		;MSCAN	Transmitter Flag Register
+ 1096  116          0000 0007   TIER:		equ	07h		;MSCAN	Transmitter Interrupt Enable Register
+ 1097  117          0000 0008   TARQ:		equ	08h		;MSCAN	Transmitter Message Abort Request
+ 1098  118          0000 0009   TAAK:		equ	09h		;MSCAN	Transmitter Message Abort Acknowledge
+ 1099  119          0000 000A   TBSEL:		equ	0Ah		;MSCAN	Transmit Buffer	Selection
+ 1100  120          0000 000B   IDAC:		equ	0Bh		;MSCAN	Identifier Acceptance Control Register
+ 1101  121                      					;
+ 1102  122                      ;------------------------------------------------------------------------------
+ 1103  123                      ;Reserved
+ 1104  124                      ;
+ 1105  125                      ;					;
+ 1106  126                      ;					;
+ 1107  127                      					;
+ 1108  128                      ;------------------------------------------------------------------------------
+ 1109  129                      ;Error Counters
+ 1110  130                      ;
+ 1111  131          0000 000E   RXERR:		equ	0Eh		;MSCAN	Receive	Error Counter Register
+ 1112  132          0000 000F   TXERR:		equ	0Fh		;MSCAN	Transmit Error Counter Register
+ 1113  133                      					;
+ 1114  134                      ;------------------------------------------------------------------------------
+ 1115  135                      ;Identifier Filter
+ 1116  136                      ;
+ 1117  137          0000 0010   IDAR0:		equ	10h		;MSCAN	Identifier Acceptance Register 0
+ 1118  138          0000 0011   IDAR1:		equ	11h		;MSCAN	Identifier Acceptance Register 1
+ 1119  139          0000 0012   IDAR2:		equ	12h		;MSCAN	Identifier Acceptance Register 2
+ 1120  140          0000 0013   IDAR3:		equ	13h		;MSCAN	Identifier Acceptance Register 3
+ 1121  141          0000 0014   IDMR0:		equ	14h		;MSCAN	Identifier Mask	Register 0
+ 1122  142          0000 0015   IDMR1:		equ	15h		;MSCAN	Identifier Mask	Register 1
+ 1123  143          0000 0016   IDMR2:		equ	16h		;MSCAN	Identifier Mask	Register 2
+ 1124  144          0000 0017   IDMR3:		equ	17h		;MSCAN	Identifier Mask	Register 3
+ 1125  145                      					;
+ 1126  146          0000 0018   IDAR4:		equ	18h		;MSCAN	Identifier Acceptance Register 4
+ 1127  147          0000 0019   IDAR5:		equ	19h		;MSCAN	Identifier Acceptance Register 5
+ 1128  148          0000 001A   IDAR6:		equ	1Ah		;MSCAN	Identifier Acceptance Register 6
+ 1129  149          0000 001B   IDAR7:		equ	1Bh		;MSCAN	Identifier Acceptance Register 7
+ 1130  150          0000 001C   IDMR4:		equ	1Ch		;MSCAN	Identifier Mask	Register 4
+ 1131  151          0000 001D   IDMR5:		equ	1Dh		;MSCAN	Identifier Mask	Register 5
+ 1132  152          0000 001E   IDMR6:		equ	1Eh		;MSCAN	Identifier Mask	Register 6
+ 1133  153          0000 001F   IDMR7:		equ	1Fh		;MSCAN	Identifier Mask	Register 7
+ 1134  154                      					;
+ 1135  155                      ;------------------------------------------------------------------------------
+ 1136  156                      ;Receive Buffer
+ 1137  157                      ;
+ 1138  158          0000 0020   RXIDR0:		equ	20h		;MSCAN	Receive	Identifier Register 0
+ 1139  159          0000 0021   RXIDR1:		equ	21h		;MSCAN	Receive	Identifier Register 1
+ 1140  160          0000 0022   RXIDR2:		equ	22h		;MSCAN	Receive	Identifier Register 2
+ 1141  161          0000 0023   RXIDR3:		equ	23h		;MSCAN	Receive	Identifier Register 3
+ 1142  162          0000 0024   RXDSR0:		equ	24h		;MSCAN	Receive	Data Segment Register 0
+ 1143  163          0000 0025   RXDSR1:		equ	25h		;MSCAN	Receive	Data Segment Register 1
+ 1144  164          0000 0026   RXDSR2:		equ	26h		;MSCAN	Receive	Data Segment Register 2
+ 1145  165          0000 0027   RXDSR3:		equ	27h		;MSCAN	Receive	Data Segment Register 3
+ 1146  166          0000 0028   RXDSR4:		equ	28h		;MSCAN	Receive	Data Segment Register 4
+ 1147  167          0000 0029   RXDSR5:		equ	29h		;MSCAN	Receive	Data Segment Register 5
+ 1148  168          0000 002A   RXDSR6:		equ	2Ah		;MSCAN	Receive	Data Segment Register 6
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1149  169          0000 002B   RXDSR7:		equ	2Bh		;MSCAN	Receive	Data Segment Register 7
+ 1150  170          0000 002C   RXDLR:		equ	2Ch		;MSCAN	Receive	Data Length Register
+ 1151  171                      ;					;
+ 1152  172          0000 002E   RTSRH:		equ	2Eh		;MSCAN	Receive	Time Stamp Register High Byte
+ 1153  173          0000 002F   RTSRL:		equ	2Fh		;MSCAN	Receive	Time Stamp Register Low	Byte
+ 1154  174                      					;
+ 1155  175                      ;------------------------------------------------------------------------------
+ 1156  176                      ;Transmit Buffer
+ 1157  177                      ;
+ 1158  178          0000 0030   TXIDR0:		equ	30h		;MSCAN	Transmit Identifier Register 0
+ 1159  179          0000 0031   TXIDR1:		equ	31h		;MSCAN	Transmit Identifier Register 1
+ 1160  180          0000 0032   TXIDR2:		equ	32h		;MSCAN	Transmit Identifier Register 2
+ 1161  181          0000 0033   TXIDR3:		equ	33h		;MSCAN	Transmit Identifier Register 3
+ 1162  182          0000 0034   TXDSR0:		equ	34h		;MSCAN	Transmit Data Segment Register 0
+ 1163  183          0000 0035   TXDSR1:		equ	35h		;MSCAN	Transmit Data Segment Register 1
+ 1164  184          0000 0036   TXDSR2:		equ	36h		;MSCAN	Transmit Data Segment Register 2
+ 1165  185          0000 0037   TXDSR3:		equ	37h		;MSCAN	Transmit Data Segment Register 3
+ 1166  186          0000 0038   TXDSR4:		equ	38h		;MSCAN	Transmit Data Segment Register 4
+ 1167  187          0000 0039   TXDSR5:		equ	39h		;MSCAN	Transmit Data Segment Register 5
+ 1168  188          0000 003A   TXDSR6:		equ	3Ah		;MSCAN	Transmit Data Segment Register 6
+ 1169  189          0000 003B   TXDSR7:		equ	3Bh		;MSCAN	Transmit Data Segment Register 7
+ 1170  190          0000 003C   TXDLR:		equ	3Ch		;MSCAN	Transmit Data Length Register
+ 1171  191          0000 003D   TXTBPR:		equ	3Dh		;MSCAN	Transmit Buffer	Priority Register
+ 1172  192                      ;					;
+ 1173  193                      					;
+ 1174  194          FFFF FFFF   E_CAN_TIMEOUT:	equ	-1
+ 1175  195          FFFF FFFE   E_CAN_INDEX:	equ	-2
+ 1176  196          FFFF FFFD   E_CAN_MESSAGE:	equ	-3
+ 1177  197          FFFF FFFC   E_CAN_LENGTH:	equ	-4
+ 1178  198          FFFF FFFB   E_CAN_NO_DATA:	equ	-5
+ 1179  199                      					;
+ 1180  200          0000 0001   _CAN_TXOK:	equ	bit0		;1, wenn seit letzter Abfrage Botschaft erfolgreich gesendet
+ 1181  201          0000 0002   _CAN_RXOK:	equ	bit1		;1, wenn seit letzter Abfrage Botschaft korrekt empfangen
+ 1182  202          0000 000C   _CAN_TXSTAT:	equ	bit2 | bit3	;
+ 1183  203          0000 0030   _CAN_RXSTAT:	equ	bit4 | bit5	;
+ 1184  204                      ;
+ 1185  205                      ;
+ 1186  206                      					;
+ 1187  207                      .locals:	section
+ 1188  208                      					;
+ 1189  209                      ;------------------------------------------------------------------------------
+ 1190  210                      ;CAN0: Reihenfolge und Typen der Variablen dürfen nicht verändert werden!
+ 1191  211                      ;
+ 1192  212                      CAN0_VAR:
+ 1193  213                      					;
+ 1194  214                      CAN0_RRR:
+ 1195  215   000000             	ds.b	1			;Receive Ready Register
+ 1196  216                      					;
+ 1197  217                      CAN0_TRSR:
+ 1198  218   000001             	ds.b	1			;Transmit Request Set Register
+ 1199  219                      					;
+ 1200  220                      CAN0_DESCR0:
+ 1201  221   000002             	ds.w	1			;Descriptor 0
+ 1202  222                      CAN0_DESCR1:
+ 1203  223   000004             	ds.w	1			;Descriptor 1
+ 1204  224                      CAN0_DESCR2:
+ 1205  225   000006             	ds.w	1			;Descriptor 2
+ 1206  226                      CAN0_DESCR3:
+ 1207  227   000008             	ds.w	1			;Descriptor 3
+ 1208  228                      CAN0_DESCR4:
+ 1209  229   00000A             	ds.w	1			;Descriptor 4
+ 1210  230                      CAN0_DESCR5:
+ 1211  231   00000C             	ds.w	1			;Descriptor 5
+ 1212  232                      CAN0_DESCR6:
+ 1213  233   00000E             	ds.w	1			;Descriptor 6
+ 1214  234                      CAN0_DESCR7:
+ 1215  235   000010             	ds.w	1			;Descriptor 7
+ 1216  236                      					;
+ 1217  237                      CAN0_MSG0:
+ 1218  238   000012             	ds.b	8			;Message 0
+ 1219  239                      CAN0_MSG1:
+ 1220  240   00001A             	ds.b	8			;Message 1
+ 1221  241                      CAN0_MSG2:
+ 1222  242   000022             	ds.b	8			;Message 2
+ 1223  243                      CAN0_MSG3:
+ 1224  244   00002A             	ds.b	8			;Message 3
+ 1225  245                      CAN0_MSG4:
+ 1226  246   000032             	ds.b	8			;Message 4
+ 1227  247                      CAN0_MSG5:
+ 1228  248   00003A             	ds.b	8			;Message 5
+ 1229  249                      CAN0_MSG6:
+ 1230  250   000042             	ds.b	8			;Message 6
+ 1231  251                      CAN0_MSG7:
+ 1232  252   00004A             	ds.b	8			;Message 7
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1233  253                      					;
+ 1234  254                      CAN0_STATUS:
+ 1235  255   000052             	ds.b	1			;Status
+ 1236  256                      					;
+ 1237  257                      .text:		section
+ 1238  258                      					;
+ 1239  259                      ;------------------------------------------------------------------------------
+ 1240  260                      ;CAN0_TX_INT		CAN0 Sende-Interrupt
+ 1241  261                      ;
+ 1242  262                      ;Priorität:		normal
+ 1243  263                      ;Interruptquelle:	CAN0TFLG._TXE2 | _TXE1 | _TXE0
+ 1244  264                      ;Auslöser:              Transmitter Buffer Empty
+ 1245  265                      ;Initialisierung:	Module 's12_MSCAN'
+ 1246  266                      ;
+ 1247  267                      ;Eingangsparameter:	CAN0_TRSR
+ 1248  268                      ;Ausgangsparameter:	CAN0_TRSR
+ 1249  269                      ;			CAN0_STATUS._CAN_RXOK
+ 1250  270                      ;Laufzeit:		24 µs		@ 8 MHz
+ 1251  271                      ;------------------------------------------------------------------------------
+ 1252  272                      					;
+ 1253  273                      CAN0_TX_INT:
+ 1254  274   000000 FC10 00     	LDD	R0			;Register retten
+ 1255  275   000003 3B          	PSHD				;
+ 1256  276   000004 1Cxx xx01   	BSET	CAN0_STATUS,_CAN_TXOK	;
+ 1257  277                      					;
+ 1258  278   000008 B6xx xx     	LDAA	CAN0_TRSR		;wenn keine Transmit Request Flags gesetzt,
+ 1259  279   00000B 2608        	BNE     CAN0_TX_INT1		;dann
+ 1260  280   00000D 180B 0001   	MOVB	#0,CAN0TIER		;  Transmit Interrupts sperren
+             000011 47         
+ 1261  281   000012 06xx xx     	JMP	CAN0_TX_INT9		;
+ 1262  282                      					;
+ 1263  283                      CAN0_TX_INT1:
+ 1264  284   000015 C600        	LDAB	#0			;Ergebnis auf null
+ 1265  285   000017 8110        	CMPA	#16			;Transmit Request Flags in der Weise
+ 1266  286   000019 2506        	BLO	CAN0_TX_INT2		;analysieren, dass gesetzte Flags
+ 1267  287   00001B CB04        	ADDB	#4			;von links nach rechts abgearbeitet werden
+ 1268  288   00001D 44          	LSRA				;
+ 1269  289   00001E 44          	LSRA				;
+ 1270  290   00001F 44          	LSRA				;
+ 1271  291   000020 44          	LSRA				;
+ 1272  292                      CAN0_TX_INT2:
+ 1273  293   000021 840F        	ANDA	#00001111b		;
+ 1274  294   000023 8104        	CMPA	#4			;
+ 1275  295   000025 2504        	BLO	CAN0_TX_INT3		;
+ 1276  296   000027 CB02        	ADDB	#2			;
+ 1277  297   000029 44          	LSRA				;
+ 1278  298   00002A 44          	LSRA				;
+ 1279  299                      CAN0_TX_INT3:
+ 1280  300   00002B 8403        	ANDA	#00000011b		;
+ 1281  301   00002D 8102        	CMPA	#2			;
+ 1282  302   00002F 2502        	BLO	CAN0_TX_INT4		;
+ 1283  303   000031 CB01        	ADDB	#1			;
+ 1284  304                      CAN0_TX_INT4:
+ 1285  305   000033 7B10 00     	STAB	R0			;Nummer der nächsten auszugebenden Message
+ 1286  306                      					;
+ 1287  307   000036 B601 46     	LDAA	CAN0TFLG		;
+ 1288  308   000039 7A01 4A     	STAA	CAN0TBSEL		;
+ 1289  309   00003C B601 4A     	LDAA	CAN0TBSEL		;
+ 1290  310   00003F 7A10 01     	STAA	R1			;nächster freier Sendebuffer
+ 1291  311                      					;
+ 1292  312   000042 F610 00     	LDAB	R0			;Sendebuffer vorbereiten:
+ 1293  313   000045 58          	LSLB				;
+ 1294  314   000046 CExx xx     	LDX	#CAN0_DESCR0		;
+ 1295  315   000049 180D E501   	MOVB	B,X,CAN0TXIDR0		;11-bit Identifier eintragen
+             00004D 70         
+ 1296  316   00004E 52          	INCB				;
+ 1297  317   00004F A6E5        	LDAA	B,X			;
+ 1298  318   000051 84F0        	ANDA	#11110000b		;
+ 1299  319   000053 7A01 71     	STAA	CAN0TXIDR1		;
+ 1300  320   000056 A6E5        	LDAA	B,X			;
+ 1301  321   000058 840F        	ANDA	#00001111b		;
+ 1302  322   00005A 7A01 7C     	STAA	CAN0TXDLR		;Anzahl Bytes der Botschaft eintragen
+ 1303  323   00005D 2714        	BEQ	CAN0_TX_INT6		;wenn Anzahl Bytes > 0,
+ 1304  324                      					;
+ 1305  325   00005F F610 00     	LDAB	R0			;dann
+ 1306  326   000062 58          	LSLB				;
+ 1307  327   000063 58          	LSLB				;
+ 1308  328   000064 58          	LSLB				;
+ 1309  329   000065 CExx xx     	LDX	#CAN0_MSG0		;
+ 1310  330   000068 CD01 74     	LDY	#CAN0TXDSR0		;
+ 1311  331                      CAN0_TX_INT5:
+ 1312  332   00006B 180A E570   	MOVB	B,X,1,Y+		;  die eigentliche Botschaft eintragen
+ 1313  333   00006F 52          	INCB				;
+ 1314  334   000070 0430 F8     	DBNE	A,CAN0_TX_INT5		;
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1315  335                      					;
+ 1316  336                      CAN0_TX_INT6:
+ 1317  337   000073 7901 7D     	CLR	CAN0TXBPR		;Sendepriorität stets auf null setzen
+ 1318  338   000076 180C 1001   	MOVB	R1,CAN0TFLG		;Sendevorgang starten
+             00007A 0146       
+ 1319  339                      					;
+ 1320  340   00007C F610 00     	LDAB	R0			;
+ 1321  341   00007F 58          	LSLB				;
+ 1322  342   000080 58          	LSLB				;
+ 1323  343   000081 CExx xx     	LDX	#CAN0_TRSR_TBL		;
+ 1324  344   000084 EDE5        	LDY	B,X			;
+ 1325  345   000086 52          	INCB				;
+ 1326  346   000087 52          	INCB				;
+ 1327  347   000088 A6E5        	LDAA	B,X			;
+ 1328  348   00008A 41          	COMA				;
+ 1329  349   00008B A440        	ANDA	0,Y			; > CLEAR TRANSMIT REQUEST FLAG
+ 1330  350   00008D 6A40        	STAA	0,Y			;
+ 1331  351                      					;
+ 1332  352                      CAN0_TX_INT9:
+ 1333  353   00008F 3A          	PULD				;Register restaurieren
+ 1334  354   000090 7C10 00     	STD	R0			;
+ 1335  355   000093 0B          	RTI				;
+ 1336  356                      					;
+ 1337  357                      ;------------------------------------------------------------------------------
+ 1338  358                      ;CAN0_RX_INT		CAN0 Empfangs-Interrupt
+ 1339  359                      ;
+ 1340  360                      ;Priorität:		normal
+ 1341  361                      ;Interruptquelle:	CAN0RFLG._RXF
+ 1342  362                      ;Auslöser:              Receive Buffer Full
+ 1343  363                      ;Initialisierung:	Module 's12_MSCAN'
+ 1344  364                      ;
+ 1345  365                      ;Eingangsparameter:
+ 1346  366                      ;Ausgangsparameter:	CAN0_STATUS._CAN_RXOK
+ 1347  367                      ;Laufzeit:		28 µs		@ 8 MHz
+ 1348  368                      ;------------------------------------------------------------------------------
+ 1349  369                      					;
+ 1350  370                      CAN0_RX_INT:
+ 1351  371   000094 FC10 00     	LDD	R0			;Register retten
+ 1352  372   000097 3B          	PSHD				;
+ 1353  373   000098 1Cxx xx02   	BSET	CAN0_STATUS,_CAN_RXOK	;
+ 1354  374                      					;
+ 1355  375   00009C CExx xx     	LDX	#CAN0_DESCR0		;Basisadresse der Descriptoren
+ 1356  376   00009F C600        	LDAB	#0			;Message-Nummer auf null
+ 1357  377                      CAN0_RX_INT1:
+ 1358  378   0000A1 A600        	LDAA	0,X			;
+ 1359  379   0000A3 B101 60     	CMPA	CAN0RXIDR0		;
+ 1360  380   0000A6 2609        	BNE	CAN0_RX_INT2		;
+ 1361  381   0000A8 A601        	LDAA	1,X			;wenn Identifier der empfangenen Botschaft
+ 1362  382   0000AA 84E0        	ANDA	#11100000b		;gleich dem im Descriptor ist,
+ 1363  383   0000AC B101 61     	CMPA	CAN0RXIDR1		;dann
+ 1364  384   0000AF 270A        	BEQ	CAN0_RX_INT3		;  ist Message-Nummer gefunden
+ 1365  385                      					;
+ 1366  386                      CAN0_RX_INT2:
+ 1367  387   0000B1 1A02        	LEAX	2,X			;sonst
+ 1368  388   0000B3 52          	INCB				;  solange noch nicht mit sämtlichen
+ 1369  389   0000B4 C108        	CMPB	#8			;  Descriptoren verglichen,
+ 1370  390   0000B6 25E9        	BLO	CAN0_RX_INT1		;  Suche fortsetzen
+ 1371  391   0000B8 06xx xx     	JMP	CAN0_RX_INT9		;
+ 1372  392                      					;
+ 1373  393                      CAN0_RX_INT3:
+ 1374  394   0000BB 7B10 00     	STAB	R0			;Message-Nummer merken
+ 1375  395                      					;
+ 1376  396   0000BE A601        	LDAA	1,X			;
+ 1377  397   0000C0 84F0        	ANDA	#11110000b		;
+ 1378  398   0000C2 BA01 6C     	ORAA	CAN0RXDLR		;Message-Länge im Descriptor ergänzen
+ 1379  399   0000C5 6A01        	STAA	1,X			;
+ 1380  400                      					;
+ 1381  401   0000C7 B601 6C     	LDAA	CAN0RXDLR		;
+ 1382  402   0000CA 2714        	BEQ	CAN0_RX_INT5		;
+ 1383  403   0000CC F610 00     	LDAB	R0			;
+ 1384  404   0000CF 58          	LSLB				;
+ 1385  405   0000D0 58          	LSLB				;
+ 1386  406   0000D1 58          	LSLB				;
+ 1387  407   0000D2 CE01 64     	LDX	#CAN0RXDSR0		;
+ 1388  408   0000D5 CDxx xx     	LDY	#CAN0_MSG0		;
+ 1389  409                      CAN0_RX_INT4:
+ 1390  410   0000D8 180A 30ED   	MOVB	1,X+,B,Y		;die eigentliche Botschaft auslesen
+ 1391  411   0000DC 52          	INCB				;
+ 1392  412   0000DD 0430 F8     	DBNE	A,CAN0_RX_INT4		;
+ 1393  413                      					;
+ 1394  414                      CAN0_RX_INT5:
+ 1395  415   0000E0 F610 00     	LDAB	R0			;
+ 1396  416   0000E3 58          	LSLB				;
+ 1397  417   0000E4 58          	LSLB				;
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1398  418   0000E5 CExx xx     	LDX	#CAN0_RRR_TBL		;
+ 1399  419   0000E8 EDE5        	LDY	B,X			;
+ 1400  420   0000EA 52          	INCB				;
+ 1401  421   0000EB 52          	INCB				;
+ 1402  422   0000EC A6E5        	LDAA	B,X			;
+ 1403  423   0000EE 41          	COMA				;
+ 1404  424   0000EF AA40        	ORAA	0,Y			; > SET RECEIVE READY FLAG
+ 1405  425   0000F1 6A40        	STAA	0,Y			;
+ 1406  426                      					;
+ 1407  427                      CAN0_RX_INT9:
+ 1408  428   0000F3 180B 0101   	MOVB	#_RXF,CAN0RFLG		;Receive Buffer Full Flag rücksetzen
+             0000F7 44         
+ 1409  429                      					;
+ 1410  430   0000F8 3A          	PULD				;Register restaurieren
+ 1411  431   0000F9 7C10 00     	STD	R0			;
+ 1412  432   0000FC 0B          	RTI				;
+ 1413  433                      					;
+ 1414  434                      ;------------------------------------------------------------------------------
+ 1415  435                      ;CAN_CONFIG stellt die Betriebsart eines MSCAN-Moduls ein.
+ 1416  436                      ;
+ 1417  437                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1418  438                      ;			R4/R5		Zeiger auf Konfigurationsdaten
+ 1419  439                      ;Ausgangsparameter:	R4/R5		Zeiger auf Descriptor-Konfigurationsdaten
+ 1420  440                      ;veränderte Register:   CCR, A, B, X, Y
+ 1421  441                      ;------------------------------------------------------------------------------
+ 1422  442                      					;
+ 1423  443                      CAN_CONFIG:
+ 1424  444   0000FD B610 00     	LDAA	R0			;
+ 1425  445   000100 48          	LSLA				;Index * 2 liefert Zeiger in Tabelle
+ 1426  446   000101 CDxx xx     	LDY	#CANx_BASE_TBL		;
+ 1427  447   000104 EDEC        	LDY	A,Y			;MSCANx Register-Basisadresse
+ 1428  448   000106 FE10 04     	LDX	R4			;Zeiger auf Konfigurationsdaten
+ 1429  449                      					;
+ 1430  450   000109 180A 3041   	MOVB	1,X+,CTL1,Y		;
+ 1431  451   00010D 180A 3042   	MOVB	1,X+,BTR0,Y		;Konfigurationsdaten
+ 1432  452   000111 180A 3043   	MOVB	1,X+,BTR1,Y		;in den Registern ablegen
+ 1433  453   000115 180A 304B   	MOVB	1,X+,IDAC,Y		;
+ 1434  454                      					;
+ 1435  455   000119 7E10 04     	STX	R4			;Zeiger auf Descriptor-Konfigurationsdaten retten
+ 1436  456                      					;
+ 1437  457   00011C C600        	LDAB	#0			;
+ 1438  458                      					;
+ 1439  459   00011E A601        	LDAA	1,X			;
+ 1440  460   000120 840F        	ANDA	#00001111b		;wenn Anzahl Bytes > 0,
+ 1441  461   000122 2604        	BNE	CAN_CONFIG1a		;dann
+ 1442  462   000124 A631        	LDAA	2,X+			;  High Byte des Identifiers
+ 1443  463   000126 2004        	BRA	CAN_CONFIG1b		;
+ 1444  464                      CAN_CONFIG1a:
+ 1445  465   000128 86FF        	LDAA	#0FFh			;sonst
+ 1446  466   00012A 1A02        	LEAX	2,X			;  0FFh
+ 1447  467                      CAN_CONFIG1b:
+ 1448  468   00012C 6AE8 10     	STAA	IDAR0,Y			;  als Akzeptanzfilter eintragen
+ 1449  469   00012F 6BE8 14     	STAB	IDMR0,Y			;Aktzeptanzmaske stets auf null setzen
+ 1450  470                      					;
+ 1451  471   000132 A601        	LDAA	1,X			;
+ 1452  472   000134 840F        	ANDA	#00001111b		;
+ 1453  473   000136 2604        	BNE	CAN_CONFIG2a		;
+ 1454  474   000138 A631        	LDAA	2,X+			;
+ 1455  475   00013A 2004        	BRA	CAN_CONFIG2b		;
+ 1456  476                      CAN_CONFIG2a:
+ 1457  477   00013C 86FF        	LDAA	#0FFh			;
+ 1458  478   00013E 1A02        	LEAX	2,X			;
+ 1459  479                      CAN_CONFIG2b:
+ 1460  480   000140 6AE8 11     	STAA	IDAR1,Y			;
+ 1461  481   000143 6BE8 15     	STAB	IDMR1,Y			;
+ 1462  482                      					;
+ 1463  483   000146 A601        	LDAA	1,X			;
+ 1464  484   000148 840F        	ANDA	#00001111b		;
+ 1465  485   00014A 2604        	BNE	CAN_CONFIG3a		;
+ 1466  486   00014C A631        	LDAA	2,X+			;
+ 1467  487   00014E 2004        	BRA	CAN_CONFIG3b		;
+ 1468  488                      CAN_CONFIG3a:
+ 1469  489   000150 86FF        	LDAA	#0FFh			;
+ 1470  490   000152 1A02        	LEAX	2,X			;
+ 1471  491                      CAN_CONFIG3b:
+ 1472  492   000154 6AE8 12     	STAA	IDAR2,Y			;
+ 1473  493   000157 6BE8 16     	STAB	IDMR2,Y			;
+ 1474  494                      					;
+ 1475  495   00015A A601        	LDAA	1,X			;
+ 1476  496   00015C 840F        	ANDA	#00001111b		;
+ 1477  497   00015E 2604        	BNE	CAN_CONFIG4a		;
+ 1478  498   000160 A631        	LDAA	2,X+			;
+ 1479  499   000162 2004        	BRA	CAN_CONFIG4b		;
+ 1480  500                      CAN_CONFIG4a:
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1481  501   000164 86FF        	LDAA	#0FFh			;
+ 1482  502   000166 1A02        	LEAX	2,X			;
+ 1483  503                      CAN_CONFIG4b:
+ 1484  504   000168 6AE8 13     	STAA	IDAR3,Y			;
+ 1485  505   00016B 6BE8 17     	STAB	IDMR3,Y			;
+ 1486  506                      					;
+ 1487  507   00016E A601        	LDAA	1,X			;
+ 1488  508   000170 840F        	ANDA	#00001111b		;
+ 1489  509   000172 2604        	BNE	CAN_CONFIG5a		;
+ 1490  510   000174 A631        	LDAA	2,X+			;
+ 1491  511   000176 2004        	BRA	CAN_CONFIG5b		;
+ 1492  512                      CAN_CONFIG5a:
+ 1493  513   000178 86FF        	LDAA	#0FFh			;
+ 1494  514   00017A 1A02        	LEAX	2,X			;
+ 1495  515                      CAN_CONFIG5b:
+ 1496  516   00017C 6AE8 18     	STAA	IDAR4,Y			;
+ 1497  517   00017F 6BE8 1C     	STAB	IDMR4,Y			;
+ 1498  518                      					;
+ 1499  519   000182 A601        	LDAA	1,X			;
+ 1500  520   000184 840F        	ANDA	#00001111b		;
+ 1501  521   000186 2604        	BNE	CAN_CONFIG6a		;
+ 1502  522   000188 A631        	LDAA	2,X+			;
+ 1503  523   00018A 2004        	BRA	CAN_CONFIG6b		;
+ 1504  524                      CAN_CONFIG6a:
+ 1505  525   00018C 86FF        	LDAA	#0FFh			;
+ 1506  526   00018E 1A02        	LEAX	2,X			;
+ 1507  527                      CAN_CONFIG6b:
+ 1508  528   000190 6AE8 19     	STAA	IDAR5,Y			;
+ 1509  529   000193 6BE8 1D     	STAB	IDMR5,Y			;
+ 1510  530                      					;
+ 1511  531   000196 A601        	LDAA	1,X			;
+ 1512  532   000198 840F        	ANDA	#00001111b		;
+ 1513  533   00019A 2604        	BNE	CAN_CONFIG7a		;
+ 1514  534   00019C A631        	LDAA	2,X+			;
+ 1515  535   00019E 2004        	BRA	CAN_CONFIG7b		;
+ 1516  536                      CAN_CONFIG7a:
+ 1517  537   0001A0 86FF        	LDAA	#0FFh			;
+ 1518  538   0001A2 1A02        	LEAX	2,X			;
+ 1519  539                      CAN_CONFIG7b:
+ 1520  540   0001A4 6AE8 1A     	STAA	IDAR6,Y			;
+ 1521  541   0001A7 6BE8 1E     	STAB	IDMR6,Y			;
+ 1522  542                      					;
+ 1523  543   0001AA A601        	LDAA	1,X			;
+ 1524  544   0001AC 840F        	ANDA	#00001111b		;
+ 1525  545   0001AE 2604        	BNE	CAN_CONFIG8a		;
+ 1526  546   0001B0 A631        	LDAA	2,X+			;
+ 1527  547   0001B2 2004        	BRA	CAN_CONFIG8b		;
+ 1528  548                      CAN_CONFIG8a:
+ 1529  549   0001B4 86FF        	LDAA	#0FFh			;
+ 1530  550   0001B6 1A02        	LEAX	2,X			;
+ 1531  551                      CAN_CONFIG8b:
+ 1532  552   0001B8 6AE8 1B     	STAA	IDAR7,Y			;
+ 1533  553   0001BB 6BE8 1F     	STAB	IDMR7,Y			;
+ 1534  554                      					;
+ 1535  555   0001BE 3D          	RTS				;
+ 1536  556                      					;
+ 1537  557                      ;------------------------------------------------------------------------------
+ 1538  558                      ;CAN_DESCRIPTORS stellt die Betriebsart eines MSCAN-Moduls ein.
+ 1539  559                      ;
+ 1540  560                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1541  561                      ;			R4/R5		Zeiger auf Descriptorendaten
+ 1542  562                      ;Ausgangsparameter:	keine
+ 1543  563                      ;veränderte Register:   CCR, A, X, Y
+ 1544  564                      ;------------------------------------------------------------------------------
+ 1545  565                      					;
+ 1546  566                      CAN_DESCRIPTORS:
+ 1547  567   0001BF B610 00     	LDAA	R0			;
+ 1548  568   0001C2 48          	LSLA				;Index * 2 liefert Zeiger in Tabelle
+ 1549  569   0001C3 CDxx xx     	LDY	#CANx_VAR_TBL		;
+ 1550  570   0001C6 EDEC        	LDY	A,Y			;Zeiger auf Descriptoren
+ 1551  571   0001C8 FE10 04     	LDX	R4			;Zeiger auf Descriptor-Konfigurationsdaten
+ 1552  572                       					;
+ 1553  573   0001CB 1808 7000   	MOVB	#0,1,Y+			;Receive Ready Register auf null
+ 1554  574   0001CF 1808 7000   	MOVB	#0,1,Y+			;Transmit Request Set Register auf null
+ 1555  575                      					;
+ 1556  576   0001D3 8608        	LDAA	#8			;Anzahl der Descriptoren
+ 1557  577                      CAN_DESCRIPTORS1:
+ 1558  578   0001D5 1802 3171   	MOVW	2,X+,2,Y+		;Daten ablegen
+ 1559  579   0001D9 0430 F9     	DBNE	A,CAN_DESCRIPTORS1	;
+ 1560  580   0001DC 3D          	RTS				;
+ 1561  581                      					;
+ 1562  582                      ;------------------------------------------------------------------------------
+ 1563  583                      ;CAN_STOP unterbricht die CAN-Kommunikation.
+ 1564  584                      ;
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1565  585                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1566  586                      ;Ausgangsparameter:	A		0 	= ok
+ 1567  587                      ;					<> 0	= Fehler
+ 1568  588                      ;veränderte Register:   CCR, B, Y
+ 1569  589                      ;------------------------------------------------------------------------------
+ 1570  590                      					;
+ 1571  591                      CAN_STOP:
+ 1572  592   0001DD B610 00     	LDAA	R0			;
+ 1573  593   0001E0 48          	LSLA				;Index * 2 liefert Zeiger in Tabelle
+ 1574  594   0001E1 CDxx xx     	LDY	#CANx_BASE_TBL		;
+ 1575  595   0001E4 EDEC        	LDY	A,Y			;MSCANx Register-Basisadresse
+ 1576  596   0001E6 0C40 01     	BSET	CTL0,Y,_INITRQ		;CTL0._INITRQ setzen
+ 1577  597   0001E9 CCxx xx     	LDD	#BUS_CLK		;BUS_CLK / 8
+ 1578  598   0001EC 49          	LSRD				;
+ 1579  599   0001ED 49          	LSRD				;
+ 1580  600   0001EE 49          	LSRD				;liefert Zeitgrenze
+ 1581  601                      CAN_STOP1:
+ 1582  602   0001EF 0F41 0104   	BRCLR	CTL1,Y,_INITAK,CAN_STOP2;warten, bis CTL1._INITAK
+ 1583  603   0001F3 0E40 0108   	BRSET	CTL0,Y,_INITRQ,CAN_STOP3;und CTL0._INITRQ gesetzt
+ 1584  604                      CAN_STOP2:
+ 1585  605   0001F7 0434 F5     	DBNE	D,CAN_STOP1		;wenn Zeitgrenze erreicht,
+ 1586  606   0001FA 86FF        	LDAA	#E_CAN_TIMEOUT		;dann
+ 1587  607   0001FC 06xx xx     	JMP	CAN_STOP9		;  mit A = E_CAN_TIMEOUT zurück
+ 1588  608                      					;
+ 1589  609                      CAN_STOP3:
+ 1590  610   0001FF 87          	CLRA				;wenn ok, dann mit A = 0 zurück
+ 1591  611                      					;
+ 1592  612                      CAN_STOP9:
+ 1593  613   000200 3D          	RTS				;
+ 1594  614                      					;
+ 1595  615                      ;------------------------------------------------------------------------------
+ 1596  616                      ;CAN_START startet die CAN-Kommunikation.
+ 1597  617                      ;
+ 1598  618                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1599  619                      ;Ausgangsparameter:	A		0 	= ok
+ 1600  620                      ;					<> 0	= Fehler
+ 1601  621                      ;veränderte Register:   CCR, B, Y
+ 1602  622                      ;------------------------------------------------------------------------------
+ 1603  623                      					;
+ 1604  624                      CAN_START:
+ 1605  625   000201 B610 00     	LDAA	R0			;
+ 1606  626   000204 48          	LSLA				;Index * 2 liefert Zeiger in Tabelle
+ 1607  627   000205 CDxx xx     	LDY	#CANx_BASE_TBL		;
+ 1608  628   000208 EDEC        	LDY	A,Y			;MSCANx Register-Basisadresse
+ 1609  629   00020A 0D40 01     	BCLR	CTL0,Y,_INITRQ		;CTL0._INITRQ rücksetzen
+ 1610  630   00020D CCxx xx     	LDD	#BUS_CLK		;BUS_CLK / 8
+ 1611  631   000210 49          	LSRD				;
+ 1612  632   000211 49          	LSRD				;
+ 1613  633   000212 49          	LSRD				;liefert Zeitgrenze
+ 1614  634                      CAN_START1:
+ 1615  635   000213 0E41 0108   	BRSET	CTL1,Y,_INITAK,CAN_START2;warten, bis CTL1._INITAK rückgesetzt,
+ 1616  636   000217 0F40 1004   	BRCLR	CTL0,Y,_SYNCH,CAN_START2; CTL0._SYNCH gesetzt
+ 1617  637   00021B 0F40 0108   	BRCLR	CTL0,Y,_INITRQ,CAN_START3;und CTL0._INITRQ rückgesetzt
+ 1618  638                      CAN_START2:
+ 1619  639   00021F 0434 F1     	DBNE	D,CAN_START1		;wenn Zeitgrenze erreicht,
+ 1620  640   000222 86FF        	LDAA	#E_CAN_TIMEOUT		;dann
+ 1621  641   000224 06xx xx     	JMP	CAN_START9		;  Fehler: Timeout
+ 1622  642                      					;
+ 1623  643                      CAN_START3:
+ 1624  644   000227 B610 00     	LDAA	R0			;
+ 1625  645   00022A 48          	LSLA				;Index * 2 liefert Zeiger in Tabelle
+ 1626  646   00022B CDxx xx     	LDY	#CANx_STATUS_TBL	;
+ 1627  647   00022E EDEC        	LDY	A,Y			;
+ 1628  648   000230 1808 4000   	MOVB	#00000000b,0,Y		;CANx-Status rücksetzen
+ 1629  649   000234 CDxx xx     	LDY	#CANx_BASE_TBL		;
+ 1630  650   000237 EDEC        	LDY	A,Y			;MSCANx Register-Basisadresse
+ 1631  651                              				;
+ 1632  652   000239 1808 4401   	MOVB	#_RXF,RFLG,Y		;anhängige Empfangs-Interrupts quittieren
+ 1633  653   00023D 1808 4401   	MOVB	#_RXF,RFLG,Y		;
+ 1634  654   000241 1808 4401   	MOVB	#_RXF,RFLG,Y		;
+ 1635  655   000245 1808 4401   	MOVB	#_RXF,RFLG,Y		;
+ 1636  656   000249 1808 4401   	MOVB	#_RXF,RFLG,Y		;
+ 1637  657   00024D 1808 4501   	MOVB	#_RXFIE,RIER,Y		;Empfangs-Interrupts freigeben
+ 1638  658   000251 87          	CLRA				;wenn ok, dann mit A = 0 zurück
+ 1639  659                      					;
+ 1640  660                      CAN_START9:
+ 1641  661   000252 3D          	RTS				;
+ 1642  662                      					;
+ 1643  663                      ;------------------------------------------------------------------------------
+ 1644  664                      ;Public: CAN_RESET bringt ein MSCAN-Modul in Grundstellung und startet es.
+ 1645  665                      ;
+ 1646  666                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1647  667                      ;			R4/R5		Zeiger auf Konfigurationsdaten
+ 1648  668                      ;Ausgangsparameter:	A		0 	= ok
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1649  669                      ;					<> 0	= Fehler
+ 1650  670                      ;veränderte Register:   CCR, B, X, Y
+ 1651  671                      ;------------------------------------------------------------------------------
+ 1652  672                      					;
+ 1653  673                      CAN_RESET:
+ 1654  674                      ;
+ 1655  675                      ;begin 08.11.2006
+ 1656  676   000253 180B 0010   	MOVB	#0,R0			;Index stets = 0
+             000257 00         
+ 1657  677                      					;
+ 1658  678                      ;end
+ 1659  679                      ;
+ 1660  680   000258 B610 00     	LDAA	R0			;
+ 1661  681   00025B 8101        	CMPA	#LOW(CANx_BASE_TBL_CNT)	;wenn Index nicht im zulässigen Bereich,
+ 1662  682   00025D 2505        	BLO	CAN_RESET1		;dann
+ 1663  683   00025F 86FE        	LDAA	#E_CAN_INDEX		;  Fehler: ungültiger Index
+ 1664  684   000261 06xx xx     	JMP	CAN_RESET9		;
+ 1665  685                      					;
+ 1666  686                      CAN_RESET1:
+ 1667  687   000264 16xx xx     	JSR	CAN_STOP		;CAN-Controller anhalten
+ 1668  688   000267 2609        	BNE	CAN_RESET9		;wenn ok,
+ 1669  689   000269 16xx xx     	JSR	CAN_CONFIG		;dann
+ 1670  690   00026C 16xx xx     	JSR	CAN_DESCRIPTORS		;  CAN-Controller in Grundstellung bringen
+ 1671  691   00026F 16xx xx     	JSR	CAN_START		;  CAN-Controller starten
+ 1672  692                      					;
+ 1673  693                      CAN_RESET9:
+ 1674  694   000272 3D          	RTS				;
+ 1675  695                      					;
+ 1676  696                      ;------------------------------------------------------------------------------
+ 1677  697                      ;Public: CAN_STATUS liefert den Status eines MSCAN-Moduls.
+ 1678  698                      ;
+ 1679  699                      ;Definition des in A zurückgegebenen Status:
+ 1680  700                      ;
+ 1681  701                      ;bit0	_CAN_TXOK
+ 1682  702                      ;bit1	_CAN_RXOK
+ 1683  703                      ;bit2	_CAN_TXSTAT.0
+ 1684  704                      ;bit3	_CAN_TXSTAT.1
+ 1685  705                      ;bit4	_CAN_RXSTAT.0
+ 1686  706                      ;bit5	_CAN_RXSTAT.1
+ 1687  707                      ;bit6	- frei -
+ 1688  708                      ;bit7	- frei -
+ 1689  709                      ;
+ 1690  710                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1691  711                      ;Ausgangsparameter:	A		MSCAN-Modul Status
+ 1692  712                      ;veränderte Register:   CCR, B, X, Y
+ 1693  713                      ;------------------------------------------------------------------------------
+ 1694  714                      					;
+ 1695  715                      CAN_STATUS:
+ 1696  716                      ;
+ 1697  717                      ;begin 08.11.2006
+ 1698  718   000273 180B 0010   	MOVB	#0,R0			;Index stets = 0
+             000277 00         
+ 1699  719                      					;
+ 1700  720                      ;end
+ 1701  721                      ;
+ 1702  722   000278 B610 00     	LDAA	R0			;
+ 1703  723   00027B 8101        	CMPA	#LOW(CANx_BASE_TBL_CNT)	;wenn Index nicht im zulässigen Bereich,
+ 1704  724   00027D 2505        	BLO	CAN_STATUS1		;dann
+ 1705  725   00027F 86FE        	LDAA	#E_CAN_INDEX		;  Fehler: ungültiger Index
+ 1706  726   000281 06xx xx     	JMP	CAN_STATUS9		;
+ 1707  727                      					;
+ 1708  728                      CAN_STATUS1:
+ 1709  729   000284 48          	LSLA				;
+ 1710  730   000285 CDxx xx     	LDY	#CANx_BASE_TBL		;MSCANx Register-Basisadresse
+ 1711  731   000288 EDEC        	LDY	A,Y			;
+ 1712  732   00028A E644        	LDAB	RFLG,Y			;CANxRFLG-Register lesen
+ 1713  733   00028C C43C        	ANDB	#00111100b		;nur Receiver- und Transmitter-Statusbits übernehmen
+ 1714  734                      
+ 1715  735   00028E CDxx xx     	LDY	#CANx_STATUS_TBL	;CANx Status-Adresse
+ 1716  736   000291 EDEC        	LDY	A,Y			;
+ 1717  737   000293 A640        	LDAA	0,Y			;
+ 1718  738   000295 84C3        	ANDA	#11000011b		;CANx-Status lesen
+ 1719  739                      					;
+ 1720  740   000297 1808 4000   	MOVB	#00000000b,0,Y		;CANx-Status rücksetzen
+ 1721  741   00029B 1806        	ABA				;MSCANx Statusbits und CANx-Statusbits überlagern
+ 1722  742                      					;
+ 1723  743                      CAN_STATUS9:
+ 1724  744   00029D 3D          	RTS				;
+ 1725  745                      					;
+ 1726  746                      ;------------------------------------------------------------------------------
+ 1727  747                      ;Public: CAN_READ liest ein Kommunikationsobjekt und legt es im
+ 1728  748                      ;Variablenspeicher ab.
+ 1729  749                      ;
+ 1730  750                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1731  751                      ;			R1		Message-Nummer
+ 1732  752                      ;			R4/R5		Zeiger auf Variablenspeicher
+ 1733  753                      ;Ausgangsparameter:	R3		Länge des empfangenen Kommunikationsobjektes
+ 1734  754                      ;			A		0 	= ok
+ 1735  755                      ;					<> 0	= Fehler
+ 1736  756                      ;veränderte Register:   CCR, B, X, Y
+ 1737  757                      ;------------------------------------------------------------------------------
+ 1738  758                      					;
+ 1739  759                      CAN_READ:
+ 1740  760                      ;
+ 1741  761                      ;begin 08.11.2006
+ 1742  762   00029E 180B 0010   	MOVB	#0,R0			;Index stets = 0
+             0002A2 00         
+ 1743  763                      					;
+ 1744  764                      ;end
+ 1745  765                      ;
+ 1746  766   0002A3 B610 00     	LDAA	R0			;
+ 1747  767   0002A6 8101        	CMPA	#LOW(CANx_BASE_TBL_CNT)	;wenn Index nicht im zulässigen Bereich,
+ 1748  768   0002A8 2505        	BLO	CAN_READ1		;dann
+ 1749  769   0002AA 86FE        	LDAA	#E_CAN_INDEX		;  Fehler: ungültiger Index
+ 1750  770   0002AC 06xx xx     	JMP	CAN_READ9		;
+ 1751  771                      					;
+ 1752  772                      CAN_READ1:
+ 1753  773   0002AF B610 01     	LDAA	R1			;
+ 1754  774   0002B2 8108        	CMPA	#8			;wenn Message-Nummer > 7,
+ 1755  775   0002B4 2505        	BLO	CAN_READ2		;dann
+ 1756  776   0002B6 86FD        	LDAA	#E_CAN_MESSAGE		;  Fehler: ungültige Message-Nummer
+ 1757  777   0002B8 06xx xx     	JMP	CAN_READ9		;
+ 1758  778                      					;
+ 1759  779                      CAN_READ2:
+ 1760  780   0002BB B610 00     	LDAA	R0			;
+ 1761  781   0002BE 48          	LSLA				;MSCAN-Modul Index * 2
+ 1762  782   0002BF 7A10 00     	STAA	R0			;
+ 1763  783   0002C2 B610 01     	LDAA	R1			;
+ 1764  784   0002C5 48          	LSLA				;Message-Nummer * 2
+ 1765  785   0002C6 7A10 01     	STAA	R1			;
+ 1766  786                      					;
+ 1767  787                      CAN_READ3:
+ 1768  788   0002C9 CExx xx     	LDX	#CANx_RRR_TBL		;Zeiger auf Adressentabelle der
+ 1769  789   0002CC F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Receive Ready Reset Flags
+ 1770  790   0002CF EEE5        	LDX	B,X			;
+ 1771  791   0002D1 F610 01     	LDAB	R1			;
+ 1772  792   0002D4 58          	LSLB				;
+ 1773  793   0002D5 EDE5        	LDY	B,X			;Adresse
+ 1774  794   0002D7 52          	INCB				;
+ 1775  795   0002D8 52          	INCB				;
+ 1776  796   0002D9 A6E5        	LDAA	B,X			;Maske
+ 1777  797   0002DB E640        	LDAB	0,Y			;
+ 1778  798   0002DD A440        	ANDA	0,Y			;
+ 1779  799   0002DF 6A40        	STAA	0,Y			; > RESET RECEIVE READY BIT
+ 1780  800                      					;
+ 1781  801   0002E1 7A10 03     	STAA	R3			;
+ 1782  802   0002E4 7110 03     	COM	R3			;
+ 1783  803   0002E7 F410 03     	ANDB	R3			; > RECEIVE READY BIT SET ?
+ 1784  804   0002EA 2605        	BNE	CAN_READ4		;
+ 1785  805   0002EC 86FB        	LDAA	#E_CAN_NO_DATA		;
+ 1786  806   0002EE 06xx xx     	JMP	CAN_READ9		;
+ 1787  807                      					;
+ 1788  808                      CAN_READ4:
+ 1789  809   0002F1 CDxx xx     	LDY	#CANx_DESCR_ADR_TBL	;Zeiger auf Adressentabelle der
+ 1790  810   0002F4 F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Descriptoren
+ 1791  811   0002F7 EDED        	LDY	B,Y			;
+ 1792  812   0002F9 F610 01     	LDAB	R1			;
+ 1793  813   0002FC EDED        	LDY	B,Y			;Zeiger auf Descriptor
+ 1794  814   0002FE A641        	LDAA	1,Y			;Descriptor Low Byte lesen
+ 1795  815   000300 840F        	ANDA	#00001111b		;
+ 1796  816   000302 2742        	BEQ	CAN_READ8		;
+ 1797  817   000304 8109        	CMPA	#9			;wenn Message-Länge > 8,
+ 1798  818   000306 2505        	BLO	CAN_READ5		;dann
+ 1799  819   000308 86FC        	LDAA	#E_CAN_LENGTH		;  Fehler: ungültige Message-Länge
+ 1800  820   00030A 06xx xx     	JMP	CAN_READ9		;
+ 1801  821                      					;
+ 1802  822                      CAN_READ5:
+ 1803  823   00030D 7A10 03     	STAA	R3			;
+ 1804  824   000310 CExx xx     	LDX	#CANx_CAN_ADR_TBL	;Zeiger auf Adressentabelle der
+ 1805  825   000313 F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Messagebuffer
+ 1806  826   000316 EEE5        	LDX	B,X			;
+ 1807  827   000318 F610 01     	LDAB	R1			;
+ 1808  828   00031B EEE5        	LDX	B,X			;Zeiger auf Messagebuffer
+ 1809  829   00031D FD10 04     	LDY	R4			;Zeiger auf Datenziel
+ 1810  830                      CAN_READ6:
+ 1811  831   000320 180A 3070   	MOVB	1,X+,1,Y+		; > READ DATA SEGMENT
+ 1812  832   000324 0430 F9     	DBNE	A,CAN_READ6		;
+ 1813  833                      					;
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1814  834   000327 CExx xx     	LDX	#CANx_RRR_TBL		;Zeiger auf Adressentabelle der
+ 1815  835   00032A F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Receive Ready Reset Flags
+ 1816  836   00032D EEE5        	LDX	B,X			;
+ 1817  837   00032F F610 01     	LDAB	R1			;
+ 1818  838   000332 58          	LSLB				;
+ 1819  839   000333 EDE5        	LDY	B,X			;Adresse
+ 1820  840   000335 52          	INCB				;
+ 1821  841   000336 52          	INCB				;
+ 1822  842   000337 A6E5        	LDAA	B,X			;Maske
+ 1823  843   000339 E640        	LDAB	0,Y			;
+ 1824  844   00033B 7A10 03     	STAA	R3			;
+ 1825  845   00033E 7110 03     	COM	R3			;
+ 1826  846   000341 F410 03     	ANDB	R3			; > RECEIVE READY BIT SET ?
+ 1827  847   000344 2683        	BNE	CAN_READ3		;
+ 1828  848                      					;
+ 1829  849                      CAN_READ8:
+ 1830  850   000346 87          	CLRA				;ok, mit A = 0 zurück
+ 1831  851                      					;
+ 1832  852                      CAN_READ9:
+ 1833  853   000347 3D          	RTS				;
+ 1834  854                      					;
+ 1835  855                      ;------------------------------------------------------------------------------
+ 1836  856                      ;Public: CAN_WRITE lädt ein Kommunikationsobjekt mit Daten aus dem
+ 1837  857                      ;Variablenspeicher.
+ 1838  858                      ;
+ 1839  859                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1840  860                      ;			R1		Message-Nummer
+ 1841  861                      ;			R2		 = 0	Message aktualisieren und senden
+ 1842  862                      ;					<> 0	Message nur aktualisieren
+ 1843  863                      ;			R4/R5		Zeiger auf Variablenspeicher
+ 1844  864                      ;Ausgangsparameter:	A		0 	= ok
+ 1845  865                      ;					<> 0	= Fehler
+ 1846  866                      ;veränderte Register:   CCR, B, X, Y
+ 1847  867                      ;------------------------------------------------------------------------------
+ 1848  868                      					;
+ 1849  869                      CAN_WRITE:
+ 1850  870                      ;
+ 1851  871                      ;begin 08.11.2006
+ 1852  872   000348 180B 0010   	MOVB	#0,R0			;Index stets = 0
+             00034C 00         
+ 1853  873                      					;
+ 1854  874                      ;end
+ 1855  875                      ;
+ 1856  876   00034D B610 00     	LDAA	R0			;
+ 1857  877   000350 8101        	CMPA	#LOW(CANx_BASE_TBL_CNT)	;wenn Index nicht im zulässigen Bereich,
+ 1858  878   000352 2505        	BLO	CAN_WRITE1		;dann
+ 1859  879   000354 86FE        	LDAA	#E_CAN_INDEX		;  Fehler: ungültiger Index
+ 1860  880   000356 06xx xx     	JMP	CAN_WRITE9		;
+ 1861  881                      					;
+ 1862  882                      CAN_WRITE1:
+ 1863  883   000359 B610 01     	LDAA	R1			;
+ 1864  884   00035C 8108        	CMPA	#8			;wenn Message-Nummer > 7,
+ 1865  885   00035E 2505        	BLO	CAN_WRITE2		;dann
+ 1866  886   000360 86FD        	LDAA	#E_CAN_MESSAGE		;  Fehler: ungültige Message-Nummer
+ 1867  887   000362 06xx xx     	JMP	CAN_WRITE9		;
+ 1868  888                      					;
+ 1869  889                      CAN_WRITE2:
+ 1870  890   000365 B610 00     	LDAA	R0			;
+ 1871  891   000368 48          	LSLA				;MSCAN-Modul Index * 2
+ 1872  892   000369 7A10 00     	STAA	R0			;
+ 1873  893   00036C B610 01     	LDAA	R1			;
+ 1874  894   00036F 48          	LSLA				;Message-Nummer * 2
+ 1875  895   000370 7A10 01     	STAA	R1			;
+ 1876  896                      					;
+ 1877  897   000373 CDxx xx     	LDY	#CANx_DESCR_ADR_TBL	;Zeiger auf Adressentabelle der
+ 1878  898   000376 F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Descriptoren
+ 1879  899   000379 EDED        	LDY	B,Y			;
+ 1880  900   00037B F610 01     	LDAB	R1			;
+ 1881  901   00037E EDED        	LDY	B,Y			;Zeiger auf Descriptor
+ 1882  902   000380 A641        	LDAA	1,Y			;Descriptor Low Byte lesen
+ 1883  903   000382 840F        	ANDA	#00001111b		;
+ 1884  904   000384 2720        	BEQ	CAN_WRITE5		;
+ 1885  905   000386 8109        	CMPA	#9			;wenn Message-Länge > 8,
+ 1886  906   000388 2505        	BLO	CAN_WRITE3		;dann
+ 1887  907   00038A 86FC        	LDAA	#E_CAN_LENGTH		;  Fehler: ungültige Message-Länge
+ 1888  908   00038C 06xx xx     	JMP	CAN_WRITE9		;
+ 1889  909                      					;
+ 1890  910                      CAN_WRITE3:
+ 1891  911   00038F FE10 04     	LDX	R4			;Zeiger auf Datenquelle
+ 1892  912   000392 CDxx xx     	LDY	#CANx_CAN_ADR_TBL	;Zeiger auf Adressentabelle der
+ 1893  913   000395 F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Messagebuffer
+ 1894  914   000398 EDED        	LDY	B,Y			;
+ 1895  915   00039A F610 01     	LDAB	R1			;
+ 1896  916   00039D EDED        	LDY	B,Y			;Zeiger auf Messagebuffer
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1897  917                      CAN_WRITE4:
+ 1898  918   00039F 180A 3070   	MOVB	1,X+,1,Y+		; > WRITE DATA TO DATA SEGMENT
+ 1899  919   0003A3 0430 F9     	DBNE	A,CAN_WRITE4		;
+ 1900  920                      					;
+ 1901  921                      CAN_WRITE5:
+ 1902  922   0003A6 B610 02     	LDAA	R2			;
+ 1903  923   0003A9 2703        	BEQ	CAN_WRITE6		;
+ 1904  924   0003AB 06xx xx     	JMP	CAN_WRITE8		;
+ 1905  925                      					;
+ 1906  926                      CAN_WRITE6:
+ 1907  927   0003AE CExx xx     	LDX	#CANx_TRSR_TBL		;Zeiger auf Adressentabelle der
+ 1908  928   0003B1 F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Transmit Request Set Flags
+ 1909  929   0003B4 EEE5        	LDX	B,X			;
+ 1910  930   0003B6 F610 01     	LDAB	R1			;
+ 1911  931   0003B9 58          	LSLB				;
+ 1912  932   0003BA EDE5        	LDY	B,X			;Adresse
+ 1913  933   0003BC 52          	INCB				;
+ 1914  934   0003BD 52          	INCB				;
+ 1915  935   0003BE A6E5        	LDAA	B,X			;Maske
+ 1916  936   0003C0 AA40        	ORAA	0,Y			;
+ 1917  937   0003C2 6A40        	STAA	0,Y			; > SET TRANSMIT REQUEST
+ 1918  938                      					;
+ 1919  939                      CAN_WRITE8:
+ 1920  940   0003C4 B610 00     	LDAA	R0			;
+ 1921  941   0003C7 CDxx xx     	LDY	#CANx_BASE_TBL		;
+ 1922  942   0003CA EDEC        	LDY	A,Y			;MSCANx Register-Basisadresse
+ 1923  943   0003CC 0C47 07     	BSET	TIER,Y,_TXEIE2 | _TXEIE1 | _TXEIE0 ;Transmit Interrupts enable
+ 1924  944   0003CF 87          	CLRA				;ok, mit A = 0 zurück
+ 1925  945                      					;
+ 1926  946                      CAN_WRITE9:
+ 1927  947   0003D0 3D          	RTS				;
+ 1928  948                      					;
+ 1929  949                      ;------------------------------------------------------------------------------
+ 1930  950                      ;Public: CAN_REQUEST fordert Daten für ein Kommunikationsobjekt an.
+ 1931  951                      ;
+ 1932  952                      ;Eingangsparameter:	R0		MSCAN-Modul Index (0..1)
+ 1933  953                      ;			R1		Message-Nummer
+ 1934  954                      ;Ausgangsparameter:	A		0 	= ok
+ 1935  955                      ;					<> 0	= Fehler
+ 1936  956                      ;veränderte Register:   CCR, B, X, Y
+ 1937  957                      ;------------------------------------------------------------------------------
+ 1938  958                      					;
+ 1939  959                      CAN_REQUEST:
+ 1940  960                      ;
+ 1941  961                      ;begin 08.11.2006
+ 1942  962   0003D1 180B 0010   	MOVB	#0,R0			;Index stets = 0
+             0003D5 00         
+ 1943  963                      					;
+ 1944  964                      ;end
+ 1945  965                      ;
+ 1946  966   0003D6 B610 00     	LDAA	R0			;
+ 1947  967   0003D9 8101        	CMPA	#LOW(CANx_BASE_TBL_CNT)	;wenn Index nicht im zulässigen Bereich,
+ 1948  968   0003DB 2505        	BLO	CAN_REQUEST1		;dann
+ 1949  969   0003DD 86FE        	LDAA	#E_CAN_INDEX		;  Fehler: ungültiger Index
+ 1950  970   0003DF 06xx xx     	JMP	CAN_REQUEST9		;
+ 1951  971                      					;
+ 1952  972                      CAN_REQUEST1:
+ 1953  973   0003E2 B610 01     	LDAA	R1			;
+ 1954  974   0003E5 8108        	CMPA	#8			;wenn Message-Nummer > 7,
+ 1955  975   0003E7 2505        	BLO	CAN_REQUEST2		;dann
+ 1956  976   0003E9 86FD        	LDAA	#E_CAN_MESSAGE		;  Fehler: ungültige Message-Nummer
+ 1957  977   0003EB 06xx xx     	JMP	CAN_REQUEST9		;
+ 1958  978                      					;
+ 1959  979                      CAN_REQUEST2:
+ 1960  980   0003EE B610 00     	LDAA	R0			;
+ 1961  981   0003F1 48          	LSLA				;MSCAN-Modul Index * 2
+ 1962  982   0003F2 7A10 00     	STAA	R0			;
+ 1963  983   0003F5 B610 01     	LDAA	R1			;
+ 1964  984   0003F8 48          	LSLA				;Message-Nummer * 2
+ 1965  985   0003F9 7A10 01     	STAA	R1			;
+ 1966  986                      					;
+ 1967  987   0003FC CDxx xx     	LDY	#CANx_DESCR_ADR_TBL	;Zeiger auf Adressentabelle der
+ 1968  988   0003FF F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Descriptoren
+ 1969  989   000402 EDED        	LDY	B,Y			;
+ 1970  990   000404 F610 01     	LDAB	R1			;
+ 1971  991   000407 EDED        	LDY	B,Y			;Zeiger auf Descriptor
+ 1972  992   000409 A641        	LDAA	1,Y			;Descriptor Low Byte lesen
+ 1973  993   00040B 841F        	ANDA	#00011111b		;
+ 1974  994   00040D 8110        	CMPA	#00010000b		;wenn RTR <> 1 und Message-Länge <> 0,
+ 1975  995                      ;
+ 1976  996                      ;begin 08.11.2006
+ 1977  997   00040F 2705        	BEQ	CAN_REQUEST3		;dann
+ 1978  998                      ;end
+ 1979  999                      ;
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1980 1000   000411 86FC        	LDAA	#E_CAN_LENGTH		;  Fehler: ungültige Message-Länge
+ 1981 1001   000413 06xx xx     	JMP	CAN_WRITE9		;
+ 1982 1002                      					;
+ 1983 1003                      CAN_REQUEST3:
+ 1984 1004   000416 CExx xx     	LDX	#CANx_TRSR_TBL		;Zeiger auf Adressentabelle der
+ 1985 1005   000419 F610 00     	LDAB	R0			;MSCAN-Modul bezogenen Transmit Request Set Flags
+ 1986 1006   00041C EEE5        	LDX	B,X			;
+ 1987 1007   00041E F610 01     	LDAB	R1			;
+ 1988 1008   000421 58          	LSLB				;
+ 1989 1009   000422 EDE5        	LDY	B,X			;Adresse
+ 1990 1010   000424 52          	INCB				;
+ 1991 1011   000425 52          	INCB				;
+ 1992 1012   000426 A6E5        	LDAA	B,X			;Maske
+ 1993 1013   000428 AA40        	ORAA	0,Y			;
+ 1994 1014   00042A 6A40        	STAA	0,Y			; > SET TRANSMIT REQUEST
+ 1995 1015                      					;
+ 1996 1016                      CAN_REQUEST8:
+ 1997 1017   00042C B610 00     	LDAA	R0			;
+ 1998 1018   00042F CDxx xx     	LDY	#CANx_BASE_TBL		;
+ 1999 1019   000432 EDEC        	LDY	A,Y			;MSCANx Register-Basisadresse
+ 2000 1020   000434 0C47 07     	BSET	TIER,Y,_TXEIE2 | _TXEIE1 | _TXEIE0 ;Transmit Interrupts enable
+ 2001 1021   000437 87          	CLRA				;ok, mit A = 0 zurück
+ 2002 1022                      					;
+ 2003 1023                      CAN_REQUEST9:
+ 2004 1024   000438 3D          	RTS				;
+ 2005 1025                      					;
+ 2006 1026   000439 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00043D FFFF       
+ 2007 1027   00043F 3F          	SWI				;
+ 2008 1028                      					;
+ 2009 1029                      ;------------------------------------------------------------------------------
+ 2010 1030                      ;Tabellen für CAN_INIT
+ 2011 1031                      ;
+ 2012 1032                      	even
+ 2013 1033                      CANx_BASE_TBL:
+ 2014 1034   000440 0140        	dc.w	CAN0_BASE		;
+ 2015 1035          0000 0001   CANx_BASE_TBL_CNT:	equ	(* - CANx_BASE_TBL) / 2
+ 2016 1036                      					;
+ 2017 1037                      	even
+ 2018 1038                      CANx_VAR_TBL:
+ 2019 1039   000442 xxxx        	dc.w	CAN0_VAR		;
+ 2020 1040          0000 0001   CANx_VAR_TBL_CNT:	equ	(* - CANx_VAR_TBL) / 2
+ 2021 1041                      					;
+ 2022 1042                      ;------------------------------------------------------------------------------
+ 2023 1043                      ;Tabellen für CAN_INIT und CAN_STATUS
+ 2024 1044                      ;
+ 2025 1045                      	even
+ 2026 1046                      CANx_STATUS_TBL:
+ 2027 1047   000444 xxxx        	dc.w	CAN0_STATUS		;
+ 2028 1048          0000 0001   CANx_STATUS_TBL_CNT:	equ	(* - CANx_STATUS_TBL) / 2
+ 2029 1049                      					;
+ 2030 1050                      ;------------------------------------------------------------------------------
+ 2031 1051                      ;Tabellen für CAN_READ, CAN_WRITE und CAN_REQUEST
+ 2032 1052                      ;
+ 2033 1053                      	even
+ 2034 1054                      CANx_RRR_TBL:
+ 2035 1055   000446 xxxx        	dc.w	CAN0_RRR_TBL		;
+ 2036 1056          0000 0001   CANx_RRR_TBL_CNT:	equ	(* - CANx_RRR_TBL) / 2
+ 2037 1057                      					;
+ 2038 1058                      	even
+ 2039 1059                      CANx_TRSR_TBL:
+ 2040 1060   000448 xxxx        	dc.w	CAN0_TRSR_TBL		;
+ 2041 1061          0000 0001   CANx_TRSR_TBL_CNT:	equ	(* - CANx_TRSR_TBL) / 2
+ 2042 1062                      					;
+ 2043 1063                      	even
+ 2044 1064                      CANx_DESCR_ADR_TBL:
+ 2045 1065   00044A xxxx        	dc.w	CAN0_DESCR_ADR_TBL	;
+ 2046 1066          0000 0001   CANx_DESCR_ADR_TBL_CNT:	equ	(* - CANx_DESCR_ADR_TBL) / 2
+ 2047 1067                      					;
+ 2048 1068                      	even
+ 2049 1069                      CANx_CAN_ADR_TBL:
+ 2050 1070   00044C xxxx        	dc.w	CAN0_CAN_ADR_TBL	;
+ 2051 1071          0000 0001   CANx_CAN_ADR_TBL_CNT:	equ	(* - CANx_CAN_ADR_TBL) / 2
+ 2052 1072                      					;
+ 2053 1073                      ;------------------------------------------------------------------------------
+ 2054 1074                      ;Adressen und Masken für MSCAN-Modul 0
+ 2055 1075                      ;
+ 2056 1076                      	even
+ 2057 1077                      CAN0_RRR_TBL:
+ 2058 1078   00044E xxxx        	dc.w	CAN0_RRR		;
+ 2059 1079   000450 FE          	dc.b	11111110b		;
+ 2060 1080   000451 00          	even
+ 2061 1081   000452 xxxx        	dc.w	CAN0_RRR		;
+ 2062 1082   000454 FD          	dc.b	11111101b		;
+s12c_MSCAN  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 2063 1083   000455 00          	even
+ 2064 1084   000456 xxxx        	dc.w	CAN0_RRR		;
+ 2065 1085   000458 FB          	dc.b	11111011b		;
+ 2066 1086   000459 00          	even
+ 2067 1087   00045A xxxx        	dc.w	CAN0_RRR		;
+ 2068 1088   00045C F7          	dc.b	11110111b		;
+ 2069 1089   00045D 00          	even
+ 2070 1090   00045E xxxx        	dc.w	CAN0_RRR		;
+ 2071 1091   000460 EF          	dc.b	11101111b		;
+ 2072 1092   000461 00          	even
+ 2073 1093   000462 xxxx        	dc.w	CAN0_RRR		;
+ 2074 1094   000464 DF          	dc.b	11011111b		;
+ 2075 1095   000465 00          	even
+ 2076 1096   000466 xxxx        	dc.w	CAN0_RRR		;
+ 2077 1097   000468 BF          	dc.b	10111111b		;
+ 2078 1098   000469 00          	even
+ 2079 1099   00046A xxxx        	dc.w	CAN0_RRR		;
+ 2080 1100   00046C 7F          	dc.b	01111111b		;
+ 2081 1101                      					;
+ 2082 1102   00046D 00          	even
+ 2083 1103                      CAN0_TRSR_TBL:
+ 2084 1104   00046E xxxx        	dc.w	CAN0_TRSR		;
+ 2085 1105   000470 01          	dc.b	00000001b		;
+ 2086 1106   000471 00          	even
+ 2087 1107   000472 xxxx        	dc.w	CAN0_TRSR		;
+ 2088 1108   000474 02          	dc.b	00000010b		;
+ 2089 1109   000475 00          	even
+ 2090 1110   000476 xxxx        	dc.w	CAN0_TRSR		;
+ 2091 1111   000478 04          	dc.b	00000100b		;
+ 2092 1112   000479 00          	even
+ 2093 1113   00047A xxxx        	dc.w	CAN0_TRSR		;
+ 2094 1114   00047C 08          	dc.b	00001000b		;
+ 2095 1115   00047D 00          	even
+ 2096 1116   00047E xxxx        	dc.w	CAN0_TRSR		;
+ 2097 1117   000480 10          	dc.b	00010000b		;
+ 2098 1118   000481 00          	even
+ 2099 1119   000482 xxxx        	dc.w	CAN0_TRSR		;
+ 2100 1120   000484 20          	dc.b	00100000b		;
+ 2101 1121   000485 00          	even
+ 2102 1122   000486 xxxx        	dc.w	CAN0_TRSR		;
+ 2103 1123   000488 40          	dc.b	01000000b		;
+ 2104 1124   000489 00          	even
+ 2105 1125   00048A xxxx        	dc.w	CAN0_TRSR		;
+ 2106 1126   00048C 80          	dc.b	10000000b		;
+ 2107 1127                      					;
+ 2108 1128   00048D 00          	even
+ 2109 1129                      CAN0_DESCR_ADR_TBL:
+ 2110 1130   00048E xxxx        	dc.w	CAN0_DESCR0		;
+ 2111 1131   000490 xxxx        	dc.w	CAN0_DESCR1		;
+ 2112 1132   000492 xxxx        	dc.w	CAN0_DESCR2		;
+ 2113 1133   000494 xxxx        	dc.w	CAN0_DESCR3		;
+ 2114 1134   000496 xxxx        	dc.w	CAN0_DESCR4		;
+ 2115 1135   000498 xxxx        	dc.w	CAN0_DESCR5		;
+ 2116 1136   00049A xxxx        	dc.w	CAN0_DESCR6		;
+ 2117 1137   00049C xxxx        	dc.w	CAN0_DESCR7		;
+ 2118 1138                      					;
+ 2119 1139                      	even
+ 2120 1140                      CAN0_CAN_ADR_TBL:
+ 2121 1141   00049E xxxx        	dc.w	CAN0_MSG0		;
+ 2122 1142   0004A0 xxxx        	dc.w	CAN0_MSG1		;
+ 2123 1143   0004A2 xxxx        	dc.w	CAN0_MSG2		;
+ 2124 1144   0004A4 xxxx        	dc.w	CAN0_MSG3		;
+ 2125 1145   0004A6 xxxx        	dc.w	CAN0_MSG4		;
+ 2126 1146   0004A8 xxxx        	dc.w	CAN0_MSG5		;
+ 2127 1147   0004AA xxxx        	dc.w	CAN0_MSG6		;
+ 2128 1148   0004AC xxxx        	dc.w	CAN0_MSG7		;
+ 2129 1149                      					;
+ 2130 1150                      ;------------------------------------------------------------------------------

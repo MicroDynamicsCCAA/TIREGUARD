@@ -1,0 +1,29 @@
+	nolist
+	title	"s12ga_MAX6957X4.sfr  Copyright (C) 2016, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_MAX6957X4.sfr
+;
+;Copyright: 	(C) 2016, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	03.10.2016
+;
+;Description:	Hardwarespezifische Definitionen für das Modul s12ga_MAX6957X4.asm
+;
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  02.13
+;
+;Definitionen für BARGRAPH
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Definition der Chipadressen
+;/////////////////////////////////////////////////////////////////////////////
+					;
+CS_LEDS0:	equ	bit0		;Port P.0
+CS_LEDS1:	equ	bit1		;Port P.1
+CS_LEDS2:	equ	bit2		;Port P.2
+CS_LEDS3:	equ	bit3		;Port P.3
+					;
+;------------------------------------------------------------------------------
+	list
+	end

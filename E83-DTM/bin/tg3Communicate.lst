@@ -1,0 +1,1118 @@
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title	"tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;TireGuard 3a	Betriebsprogramm
+ 1018    6                      ;------------------------------------------------------------------------------
+ 1019    7                      ;Module:	tg3Communicate.asm
+ 1020    8                      ;
+ 1021    9                      ;Copyright:	(C) 2005-2013, micro dynamics GmbH
+ 1022   10                      ;Author(s):	Michael Frank
+ 1023   11                      ;Update:	02.07.2013
+ 1024   12                      ;
+ 1025   13                      ;Description:	CAN-Kommunikation, RS232-Kommunikation und Ende des Programmzyklusses
+ 1026   14                      ;------------------------------------------------------------------------------
+ 1027   15                      ;Revision History:	Original Version  11.05
+ 1028   16                      ;
+ 1029   17                      ;02.07.2013	Version 2.60
+ 1030   18                      ;02.07.2013	aktuell zugeordnete Identifier im Sekundentakt an CAN ausgeben
+ 1031   19                      ;20.01.2011	Version 2.50
+ 1032   20                      ;20.01.2011	RS232-Timeout-Funktion aufrufen
+ 1033   21                      ;05.07.2008	Version 2.10
+ 1034   22                      ;27.11.2007	Version 2.00
+ 1035   23                      ;27.11.2007	in CHK_IDENTIFIER wird Fixieren desselben Identifiers für mehrere
+ 1036   24                      ;		Räder nun unterbunden
+ 1037   25                      ;		in CHK_IDENTIFIER den Identifiervergleich in neue Funktion
+ 1038   26                      ;		COMPARE_IDENTIFIER ausgelagert
+ 1039   27                      ;		in PUT_DATA Rohdatenwerte nach Abzug des Offsets nach unten begrenzt
+ 1040   28                      ;		Ergänzungen für LIN-Empfangsmultiplexer
+ 1041   29                      ;
+ 1042   30                      ;24.11.2006	Version 1.00
+ 1043   31                      ;08.11.2006	Anpassung an MC9S12C128
+ 1044   32                      ;
+ 1045   33                      ;29.03.2006	Erweiterung in CHK_IDENTIFIER
+ 1046   34                      ;21.02.2006	Korrektur in CHECK_SPEED
+ 1047   35                      ;08.02.2006
+ 1048   36                      ;11.12.2005
+ 1049   37                      ;------------------------------------------------------------------------------
+ 1050   38                      					;
+ 1051   39                      ;------------------------------------------------------------------------------
+ 1052   40                      ;Externals
+ 1053   41                      ;------------------------------------------------------------------------------
+ 1054   42                      					;
+ 1055   43          0000 0000    ifne fDebug
+ 1061   49                       endif
+ 1062   50                      					;
+ 1063   51                      	xref	CLEAR_BUFFER		;Code
+ 1064   52                      
+ 1065   53                      	xref	CAN_READ		;Code
+ 1066   54                      	xref	CAN_WRITE		;Code
+ 1067   55                      	xref	COMLINE_INPUT		;Code
+ 1068   56                      	xref	COMLINE_REACTION	;Code
+ 1069   57                      ;
+ 1070   58                      ;begin 20.01.2011
+ 1071   59                      	xref	COMLINE_TIMEOUTS	;Code
+ 1072   60                      ;end
+ 1073   61                      ;
+ 1074   62                      					;
+ 1075   63                      	xref	LIN_IDENTIFIER_TBL	;roData
+ 1076   64                      	xref	MSG_IDENTIFIER_TBL	;roData
+ 1077   65                      	xref	MSG_CTR_TBL		;roData
+ 1078   66                      	xref	MSG_RX_TBL		;roData
+ 1079   67                      					;
+ 1080   68                      	xref	E_BARO_PRESSURE		;bssData
+ 1081   69                      	xref	E_DROP_PRESSURE		;bssData
+ 1082   70                      	xref	E_DROP_REF		;bssData
+ 1083   71                      ;
+ 1084   72                      ;begin 02.07.2013
+ 1085   73                      	xref	E_FUN_MODE		;bssData
+ 1086   74                      ;end
+ 1087   75                      ;
+ 1088   76                      	xref	E_PRESSURE		;bssData
+ 1089   77                      	xref	E_TEMPERATURE		;bssData
+ 1090   78                      	xref	E_XP_REF		;bssData
+ 1091   79                      					;
+ 1092   80                      	xref	ALARM			;Data
+ 1093   81                      	xref	BATTERY_VOLTAGE		;Data
+ 1094   82                      	xref	CAN0_MSG0_BUF		;Data
+ 1095   83                      	xref	CAN0_MSG1_BUF		;Data
+ 1096   84                      	xref	CAN0_MSG2_BUF		;Data
+ 1097   85                      	xref	CAN0_RX_CTR		;Data
+ 1098   86                      	xref	CHECK_WAIT_CTR		;Data
+ 1099   87                      	xref	COMMUNICATE_FLAGS	;Data
+ 1100   88                      	xref.b	_LOW_XP_TRIG		;bitMask
+ 1101   89                      	xref.b	_LOW_XP_FLAG		;bitMask
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1102   90                      	xref.b	_CAN_RFSH_TRIG		;bitMask
+ 1103   91                      					;
+ 1104   92                      	xref	DROP_ALARM		;Data
+ 1105   93                      	xref	LAST_RX_POS		;Data
+ 1106   94                      	xref	LIN_ANT_ADC		;Data
+ 1107   95                      	xref	LIN_ANT_FLAGS		;Data
+ 1108   96                      	xref	LIN_ADC_BUF		;Data
+ 1109   97                      	xref	LIN_RX_BUF		;Data
+ 1110   98                      	xref	LIN_RX_POS		;Data
+ 1111   99                      	xref	LIN_RX_CTR		;Data
+ 1112  100                      	xref	LIN_TIME_CTR		;Data
+ 1113  101                      	xref	LOOP_FLAGS		;Data
+ 1114  102                      	xref.b	_LOOP_TIMEOUT		;bitMask
+ 1115  103                      					;
+ 1116  104                      	xref	MSG_RX_REC		;Data
+ 1117  105                      	xref	MSG_S1_REC		;Data
+ 1118  106                      	xref	SENSOR_CTR_REC		;Data
+ 1119  107                      ;
+ 1120  108                      ;begin 02.07.2013
+ 1121  109                      	xref	TIRE_RFSH_CTR		;Data
+ 1122  110                      ;end
+ 1123  111                      ;
+ 1124  112                      	xref	UNIT_TEMPERATURE	;Data
+ 1125  113                      	xref	XP			;Data
+ 1126  114                      					;
+ 1127  115                      	xref	CAN0_RX_CT		;Number
+ 1128  116                      	xref	CHECK_WAIT_CT		;Number
+ 1129  117                      ;
+ 1130  118                      ;begin 02.07.2013
+ 1131  119                      	xref.b	TIRE_RFSH_CT		;Number
+ 1132  120                      ;end
+ 1133  121                      ;
+ 1134  122                      	xref	LIN_RX_CT		;Number
+ 1135  123                      					;
+ 1136  124                      	xref.b	oIDENTIFIER		;Number
+ 1137  125                      	xref.b	oTEMPERATURE		;Number
+ 1138  126                      	xref.b	oPRESSURE		;Number
+ 1139  127                      					;
+ 1140  128                      	xref	SENSOR_CT		;Number
+ 1141  129                      					;
+ 1142  130                      ;------------------------------------------------------------------------------
+ 1143  131                      ;Publics
+ 1144  132                      ;------------------------------------------------------------------------------
+ 1145  133                      					;
+ 1146  134                      	xdef	COMMUNICATE		;Code
+ 1147  135                      					;
+ 1148  136                      .text:		section
+ 1149  137                      					;
+ 1150  138                      ;==============================================================================
+ 1151  139                      ;COMMUNICATE Modul-Einsprung
+ 1152  140                      ;==============================================================================
+ 1153  141                      					;
+ 1154  142                      COMMUNICATE:
+ 1155  143   000000 16xx xx     	JSR	CAN_IO			;
+ 1156  144                      ;
+ 1157  145                      ;begin 20.01.2011
+ 1158  146   000003 16xx xx     	JSR	COMLINE_TIMEOUTS	;
+ 1159  147                      ;end
+ 1160  148                      ;
+ 1161  149                      					;
+ 1162  150   000006 1C02 4080   	BSET	PTT,bit7		;Ende der aktiven Zyklusphase
+ 1163  151                      					;
+ 1164  152                      COMMUNICATE1:
+ 1165  153   00000A 16xx xx     	JSR	COMLINE_INPUT		;ankommende Zeichen lesen
+ 1166  154   00000D 16xx xx     	JSR	COMLINE_REACTION	;Kommandos auswerten und ausführen
+ 1167  155   000010 1Fxx xxxx    	BRCLR	LOOP_FLAGS,_LOOP_TIMEOUT,COMMUNICATE1
+             000014 F5         
+ 1168  156   000015 3D          	RTS				;bis zum Ende der Zykluszeit
+ 1169  157                      					;
+ 1170  158   000016 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00001A FFFF       
+ 1171  159   00001C 3F          	SWI				;
+ 1172  160                      					;
+ 1173  161                      ;------------------------------------------------------------------------------
+ 1174  162                      ;GET_1753_DATA empfängt die Fahrgeschwindigkeit und Analogwerte vom Messsystem.
+ 1175  163                      ;
+ 1176  164                      ;Eingangsparameter:	CAN0_RX_CTR
+ 1177  165                      ;Ausgangsparameter:	CAN0_RX_CTR
+ 1178  166                      ;			XP
+ 1179  167                      ;veränderte Register:	CCR, A, B, X, Y, R[0..5]
+ 1180  168                      ;------------------------------------------------------------------------------
+ 1181  169                      					;
+ 1182  170                      GET_1753_DATA:
+ 1183  171   00001D 180B 0010   	MOVB	#0,R0			;
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             000021 00         
+ 1184  172   000022 180B 0210   	MOVB	#2,R1			;Message 2
+             000026 01         
+ 1185  173   000027 1803 xxxx   	MOVW	#CAN0_MSG2_BUF,R4	;
+             00002B 1004       
+ 1186  174   00002D 16xx xx     	JSR	CAN_READ		;von CAN0 lesen
+ 1187  175   000030 2717        	BEQ	GET_1753_DATA2		;wenn keine neuen Daten da,
+ 1188  176                      					;
+ 1189  177   000032 FExx xx     	LDX	CAN0_RX_CTR		;dann
+ 1190  178   000035 2706        	BEQ	GET_1753_DATA1		;  wenn CAN0_RX_CTR <> 0,
+ 1191  179   000037 09          	DEX				;  dann
+ 1192  180   000038 7Exx xx     	STX	CAN0_RX_CTR		;    CAN0_RX_CTR decrementieren
+ 1193  181   00003B 261B        	BNE	GET_1753_DATA9		;
+ 1194  182                      					;
+ 1195  183                      GET_1753_DATA1:
+ 1196  184   00003D CDxx xx     	LDY	#CAN0_MSG2_BUF		;  wenn CAN0_RX_CTR = 0,
+ 1197  185   000040 87          	CLRA				;  dann
+ 1198  186   000041 180B 0810   	MOVB	#8,R3			;
+             000045 03         
+ 1199  187   000046 16xx xx     	JSR	CLEAR_BUFFER		;    Empfangsbuffer fegen
+ 1200  188                      					;
+ 1201  189                      GET_1753_DATA2:
+ 1202  190                      					;Byte 1:  Blockzähler
+ 1203  191   000049 F6xx xx     	LDAB	CAN0_MSG2_BUF+1		;Byte 2:  XP Low Byte
+ 1204  192   00004C B6xx xx     	LDAA	CAN0_MSG2_BUF+2		;Byte 3:  XP High Byte
+ 1205  193   00004F 7Cxx xx     	STD	XP			;Byte 4:  stets = 0
+ 1206  194                      					;Byte 5:  stets = 0
+ 1207  195                      					;Byte 6:  Blockdatenbyte 1 Low Byte
+ 1208  196                      					;Byte 7:  Blockdatenbyte 2 High Byte
+ 1209  197                      					;Byte 8:  - nicht vorhanden -
+ 1210  198                      					;
+ 1211  199   000052 1803 xxxx   	MOVW	#CAN0_RX_CT,CAN0_RX_CTR	;Empfangszeitgrenze auf Startwert
+             000056 xxxx       
+ 1212  200                      					;
+ 1213  201                      GET_1753_DATA9:
+ 1214  202   000058 3D          	RTS				;
+ 1215  203                      					;
+ 1216  204                      ;------------------------------------------------------------------------------
+ 1217  205                      ;CHK_SPEED prüft, ob die Fahrgeschwindigkeit kleiner als die Ausblend-
+ 1218  206                      ;geschwindigkeit ist. Abhängig davon wird das LOW_XP_FLAG gesetzt oder
+ 1219  207                      ;rückgesetzt.
+ 1220  208                      ;
+ 1221  209                      ;Eingangsparameter:	XP
+ 1222  210                      ;			COMMUNICATE_FLAGS._LOW_XP_FLAG
+ 1223  211                      ;			E_XP_REF
+ 1224  212                      ;Ausgangsparameter:	COMMUNICATE_FLAGS._LOW_XP_TRIG
+ 1225  213                      ;			COMMUNICATE_FLAGS._LOW_XP_FLAG
+ 1226  214                      ;veränderte Register:	CCR, A, B
+ 1227  215                      ;------------------------------------------------------------------------------
+ 1228  216                      					;
+ 1229  217                      CHK_SPEED:
+ 1230  218   000059 1Dxx xxxx   	BCLR	COMMUNICATE_FLAGS,_LOW_XP_TRIG
+ 1231  219   00005D FCxx xx     	LDD	E_XP_REF		;wenn Geschwindigkeitsgrenze <> 0
+ 1232  220   000060 2714        	BEQ	CHK_SPEED2		;und Geschwindigkeit < Grenzgeschwindigkeit,
+ 1233  221   000062 BCxx xx     	CPD	XP			;dann
+ 1234  222   000065 230F        	BLS	CHK_SPEED2		;  wenn _LOW_XP_FLAG rückgesetzt,
+ 1235  223   000067 1Exx xxxx   	BRSET	COMMUNICATE_FLAGS,_LOW_XP_FLAG,CHK_SPEED1
+             00006B 04         
+ 1236  224                      					;  dann
+ 1237  225   00006C 1Cxx xxxx   	BSET	COMMUNICATE_FLAGS,_LOW_XP_TRIG
+ 1238  226                      					;    _LOW_XP_TRIG setzen
+ 1239  227                      CHK_SPEED1:
+ 1240  228   000070 1Cxx xxxx   	BSET	COMMUNICATE_FLAGS,_LOW_XP_FLAG
+ 1241  229   000074 2004        	BRA	CHK_SPEED3		;  _LOW_XP_FLAG setzen
+ 1242  230                      					;sonst
+ 1243  231                      CHK_SPEED2:
+ 1244  232   000076 1Dxx xxxx   	BCLR	COMMUNICATE_FLAGS,_LOW_XP_FLAG
+ 1245  233                      					;  _LOW_XP_FLAG rücksetzen
+ 1246  234                      CHK_SPEED3:
+ 1247  235   00007A 3D          	RTS				;
+ 1248  236                      					;
+ 1249  237                      ;------------------------------------------------------------------------------
+ 1250  238                      ;CHK_SENSORS setzt nach Ablauf der durch SENSOR_CT festgelegten Zeit die
+ 1251  239                      ;jeweiligen Temperatur- und Druckwerte auf Null.
+ 1252  240                      ;
+ 1253  241                      ;Eingangsparameter:	SENSOR_CTR_REC
+ 1254  242                      ;Ausgangsparameter:
+ 1255  243                      ;			COMMUNICATE_FLAGS._CAN_RFSH_TRIG
+ 1256  244                      ;			SENSOR_CTR_REC
+ 1257  245                      ;			MSG_RX_REC
+ 1258  246                      ;veränderte Register:	CCR, A, B, X, Y
+ 1259  247                      ;------------------------------------------------------------------------------
+ 1260  248                      					;
+ 1261  249                      CHK_SENSORS:
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1262  250   00007B 1Dxx xxxx   	BCLR	COMMUNICATE_FLAGS,_CAN_RFSH_TRIG
+ 1263  251   00007F CDxx xx     	LDY	#MSG_RX_REC		;
+ 1264  252   000082 CExx xx     	LDX	#SENSOR_CTR_REC		;
+ 1265  253   000085 180B 0410   	MOVB	#4,R3			;vier Radsender
+             000089 03         
+ 1266  254                      CHK_SENSORS1:
+ 1267  255   00008A EC00        	LDD	0,X			;wenn Zähler <> 0,
+ 1268  256   00008C 270B        	BEQ	CHK_SENSORS2		;dann
+ 1269  257   00008E C3FF FF     	ADDD	#-1			;  Zähler decrementieren
+ 1270  258   000091 6C00        	STD	0,X			;  wenn Zähler danach = 0,
+ 1271  259   000093 260C        	BNE	CHK_SENSORS3		;  dann
+ 1272  260   000095 1Cxx xxxx   	BSET	COMMUNICATE_FLAGS,_CAN_RFSH_TRIG
+ 1273  261                      					;    _CAN_RFSH_TRIG setzen
+ 1274  262                      CHK_SENSORS2:
+ 1275  263   000099 1808 xx00   	MOVB	#0,oPRESSURE,Y		;sonst
+ 1276  264   00009D 1808 xx00   	MOVB	#0,oTEMPERATURE,Y	;  Druck- und Temperaturwert auf Null setzen
+ 1277  265                      					;
+ 1278  266                      CHK_SENSORS3:
+ 1279  267   0000A1 19E8 18     	LEAY	24,Y			;nächsten Radsender prüfen
+ 1280  268   0000A4 1A02        	LEAX	2,X			;
+ 1281  269   0000A6 7310 03     	DEC	R3			;
+ 1282  270   0000A9 26DF        	BNE	CHK_SENSORS1		;
+ 1283  271   0000AB 3D          	RTS				;
+ 1284  272                      					;
+ 1285  273                      ;------------------------------------------------------------------------------
+ 1286  274                      ;COMPARE_MESSAGE
+ 1287  275                      ;
+ 1288  276                      ;Eingangsparameter:	B
+ 1289  277                      ;Ausgangsparameter:	B		bleibt unverändert !
+ 1290  278                      ;veränderte Register:	CCR, A, X, Y, R3
+ 1291  279                      ;------------------------------------------------------------------------------
+ 1292  280                      					;
+ 1293  281                      COMPARE_MESSAGE:
+ 1294  282   0000AC CDxx xx     	LDY	#MSG_RX_TBL		;Tabelle mit den MSG_RX_BUF-Basisadressen
+ 1295  283   0000AF 19ED        	LEAY	B,Y			;
+ 1296  284   0000B1 ED40        	LDY	0,Y			;MSG_RX_BUF-Basisadresse aus Tabelle lesen
+ 1297  285   0000B3 CExx xx     	LDX	#LIN_RX_BUF		;
+ 1298  286                      					;
+ 1299  287   0000B6 A600        	LDAA	0,X			;Telegramme, die von mehreren Empfängern
+ 1300  288   0000B8 B1xx xx     	CMPA	LAST_RX_POS		;parallel empfangen wurden, ignorieren
+ 1301  289   0000BB 2716        	BEQ	COMPARE_MESSAGE7	;
+ 1302  290                      					;
+ 1303  291   0000BD A632        	LDAA	3,X+			;Triggerantennen-Position vergleichen
+ 1304  292   0000BF A172        	CMPA	3,Y+			;Zeitoffsets überspringen
+ 1305  293   0000C1 2614        	BNE	COMPARE_MESSAGE8	;
+ 1306  294   0000C3 180B 0D10   	MOVB	#13,R3			;  13 Bytes
+             0000C7 03         
+ 1307  295                      COMPARE_MESSAGE1:
+ 1308  296   0000C8 A630        	LDAA	1,X+			;
+ 1309  297   0000CA A170        	CMPA	1,Y+			;
+ 1310  298   0000CC 2609        	BNE	COMPARE_MESSAGE8	;wenn relevanter Dateninhalt des neuen Telegrammes
+ 1311  299   0000CE 7310 03     	DEC	R3			;identisch mit den bereits vorliegenden Daten ist,
+ 1312  300   0000D1 26F5        	BNE	COMPARE_MESSAGE1	;dann
+ 1313  301                      					;
+ 1314  302                      COMPARE_MESSAGE7:
+ 1315  303   0000D3 86FF        	LDAA	#0FFh			;neues Telegramm ignorieren
+ 1316  304   0000D5 2001        	BRA	COMPARE_MESSAGE9	;
+ 1317  305                      					;
+ 1318  306                      COMPARE_MESSAGE8:
+ 1319  307   0000D7 87          	CLRA				;
+ 1320  308                      					;
+ 1321  309                      COMPARE_MESSAGE9:
+ 1322  310   0000D8 3D          	RTS				;
+ 1323  311                      					;
+ 1324  312                      ;------------------------------------------------------------------------------
+ 1325  313                      ;COMPARE_IDENTIFIER vergleicht zwei Identifier.
+ 1326  314                      ;
+ 1327  315                      ;Eingangsparameter:	Y		Zeiger auf gespeicherten Identifier
+ 1328  316                      ;			R[4..7]		neuer Identifier
+ 1329  317                      ;Ausgangsparameter:	Y		bleibt unverändert!
+ 1330  318                      ;			R[4..7]		bleibt unverändert!
+ 1331  319                      ;			A		0	= Identifier sind gleich
+ 1332  320                      ;					0FFh	= Identifier sind verschieden
+ 1333  321                      ;veränderte Register:	CCR
+ 1334  322                      ;------------------------------------------------------------------------------
+ 1335  323                      					;
+ 1336  324                      COMPARE_IDENTIFIER:
+ 1337  325   0000D9 A640        	LDAA	0,Y			;
+ 1338  326   0000DB B110 04     	CMPA	R4			;
+ 1339  327   0000DE 2618        	BNE	COMPARE_IDENTIFIER8	;gespeicherten mit neuem Identifier
+ 1340  328   0000E0 A641        	LDAA	1,Y			;
+ 1341  329   0000E2 B110 05     	CMPA	R5			;vergleichen
+ 1342  330   0000E5 2611        	BNE	COMPARE_IDENTIFIER8	;
+ 1343  331   0000E7 A642        	LDAA	2,Y			;
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1344  332   0000E9 B110 06     	CMPA	R6			;
+ 1345  333   0000EC 260A        	BNE	COMPARE_IDENTIFIER8	;
+ 1346  334   0000EE A643        	LDAA	3,Y			;
+ 1347  335   0000F0 B110 07     	CMPA	R7			;
+ 1348  336   0000F3 2603        	BNE	COMPARE_IDENTIFIER8	;wenn beide Identifier gleich,
+ 1349  337   0000F5 87          	CLRA				;dann mit A = 0 zurück
+ 1350  338   0000F6 2002        	BRA	COMPARE_IDENTIFIER9	;
+ 1351  339                      					;
+ 1352  340                      COMPARE_IDENTIFIER8:
+ 1353  341   0000F8 86FF        	LDAA	#0FFh			;sonst mit A = 0FFh zurück
+ 1354  342                      					;
+ 1355  343                      COMPARE_IDENTIFIER9:
+ 1356  344   0000FA 3D          	RTS				;
+ 1357  345                      					;
+ 1358  346                      ;------------------------------------------------------------------------------
+ 1359  347                      ;ANALYSE_IDENTIFIER untersucht den gespeicherten Identifier einer Radposition
+ 1360  348                      ;
+ 1361  349                      ;Eingangsparameter:	B
+ 1362  350                      ;			R[4..7]		neuer Identifier
+ 1363  351                      ;Ausgangsparameter:	B		bleibt unverändert!
+ 1364  352                      ;			R[4..7]		bleibt unverändert!
+ 1365  353                      ;			A		0	= ok
+ 1366  354                      ;					0FFh	= Identifier darf nicht übernommen werden
+ 1367  355                      ;veränderte Register:	CCR, X, Y
+ 1368  356                      ;------------------------------------------------------------------------------
+ 1369  357                      					;
+ 1370  358                      ANALYSE_IDENTIFIER:
+ 1371  359   0000FB CDxx xx     	LDY	#LIN_IDENTIFIER_TBL	;Zeiger auf gespeicherte Identifier
+ 1372  360   0000FE 19ED        	LEAY	B,Y			;
+ 1373  361   000100 ED40        	LDY	0,Y			;
+ 1374  362   000102 16xx xx     	JSR	COMPARE_IDENTIFIER	;wenn neuer = gespeichertem Identifier
+ 1375  363   000105 2611        	BNE	ANALYSE_IDENTIFIER8	;
+ 1376  364   000107 CExx xx     	LDX	#MSG_CTR_TBL		;
+ 1377  365   00010A 1AE5        	LEAX	B,X			;
+ 1378  366   00010C EE00        	LDX	0,X			;
+ 1379  367   00010E A600        	LDAA	0,X			;und Telegramm-Zählerstand
+ 1380  368   000110 8103        	CMPA	#03h			;des gespeicherten Identifiers >= 3,
+ 1381  369   000112 2504        	BLO	ANALYSE_IDENTIFIER8	;dann
+ 1382  370   000114 86FF        	LDAA	#0FFh			;  darf neuer Identifier nicht übernommen werden
+ 1383  371   000116 2001        	BRA	ANALYSE_IDENTIFIER9	;
+ 1384  372                      					;
+ 1385  373                      ANALYSE_IDENTIFIER8:
+ 1386  374   000118 87          	CLRA				;sonst ok, mit A = 0 zurück
+ 1387  375                      					;
+ 1388  376                      ANALYSE_IDENTIFIER9:
+ 1389  377   000119 3D          	RTS				;
+ 1390  378                      					;
+ 1391  379                      ;------------------------------------------------------------------------------
+ 1392  380                      ;VALIDATE_IDENTIFIER prüft, ob der neue Identifier als aktueller Identifier
+ 1393  381                      ;übernommen werden darf.
+ 1394  382                      ;
+ 1395  383                      ;Eingangsparameter:	R[4..7]		neuer Identifier
+ 1396  384                      ;Ausgangsparameter:	R[4..7]		bleibt unverändert!
+ 1397  385                      ;			A		0	= ok
+ 1398  386                      ;					0FFh	= Identifier darf nicht übernommen werden
+ 1399  387                      ;veränderte Register:	CCR, R3
+ 1400  388                      ;------------------------------------------------------------------------------
+ 1401  389                      					;
+ 1402  390                      VALIDATE_IDENTIFIER:
+ 1403  391   00011A 37          	PSHB				;Register retten
+ 1404  392   00011B 34          	PSHX				;
+ 1405  393   00011C 35          	PSHY				;
+ 1406  394                      					;
+ 1407  395   00011D C600        	LDAB	#0			;
+ 1408  396   00011F 180B 0410   	MOVB	#4,R3			;vier Radpositionen untersuchen
+             000123 03         
+ 1409  397                      VALIDATE_IDENTIFIER1:
+ 1410  398   000124 16xx xx     	JSR	ANALYSE_IDENTIFIER	;
+ 1411  399   000127 2608        	BNE	VALIDATE_IDENTIFIER9	;
+ 1412  400   000129 52          	INCB				;
+ 1413  401   00012A 52          	INCB				;
+ 1414  402   00012B 7310 03     	DEC	R3			;
+ 1415  403   00012E 26F4        	BNE	VALIDATE_IDENTIFIER1	;
+ 1416  404   000130 87          	CLRA				;
+ 1417  405                      					;
+ 1418  406                      VALIDATE_IDENTIFIER9:
+ 1419  407   000131 31          	PULY				;Register restaurieren
+ 1420  408   000132 30          	PULX				;
+ 1421  409   000133 33          	PULB				;
+ 1422  410   000134 3D          	RTS				;
+ 1423  411                      					;
+ 1424  412                      ;------------------------------------------------------------------------------
+ 1425  413                      ;CHK_IDENTIFIER
+ 1426  414                      ;
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1427  415                      ;Eingangsparameter:	B		Positionszeiger
+ 1428  416                      ;Ausgangsparameter:	B		bleibt unverändert !
+ 1429  417                      ;			A		0	= Telegramm auswerten
+ 1430  418                      ;					<> 0	= Telegramm ignorieren
+ 1431  419                      ;veränderte Register:	CCR, X, Y, R[3..7]
+ 1432  420                      ;------------------------------------------------------------------------------
+ 1433  421                      					;
+ 1434  422                      CHK_IDENTIFIER:
+ 1435  423   000135 CDxx xx     	LDY	#LIN_IDENTIFIER_TBL	;
+ 1436  424   000138 19ED        	LEAY	B,Y			;
+ 1437  425   00013A ED40        	LDY	0,Y			;Zeiger auf gespeicherten Identifier
+ 1438  426                      					;
+ 1439  427   00013C CExx xx     	LDX	#LIN_RX_BUF		;
+ 1440  428   00013F 1AEx xx     	LEAX	oIDENTIFIER,X		;
+ 1441  429   000142 1805 0010   	MOVW	0,X,R4			;neuen Identifier nach R[4..7] laden
+             000146 04         
+ 1442  430   000147 1805 0210   	MOVW	2,X,R6			;
+             00014B 06         
+ 1443  431                      					;
+ 1444  432   00014C CExx xx     	LDX	#MSG_CTR_TBL		;
+ 1445  433   00014F 1AE5        	LEAX	B,X			;
+ 1446  434   000151 EE00        	LDX	0,X			;Zeiger auf Telegrammzähler
+ 1447  435                      					;
+ 1448  436   000153 A600        	LDAA	0,X			;wenn Zähler = 0
+ 1449  437   000155 2611        	BNE	CHK_IDENTIFIER1		;
+ 1450  438   000157 16xx xx     	JSR	VALIDATE_IDENTIFIER	;und nichts gegen den neuen Identifier spricht,
+ 1451  439   00015A 260C        	BNE	CHK_IDENTIFIER1		;dann
+ 1452  440   00015C 1801 4010   	MOVW	R4,0,Y			;  neuen Identifier übernehmen
+             000160 04         
+ 1453  441   000161 1801 4210   	MOVW	R6,2,Y			;
+             000165 06         
+ 1454  442   000166 2005        	BRA	CHK_IDENTIFIER2		;
+ 1455  443                      					;
+ 1456  444                      CHK_IDENTIFIER1:
+ 1457  445   000168 16xx xx     	JSR	COMPARE_IDENTIFIER	;gespeicherten mit neuem Identifier vergleichen
+ 1458  446   00016B 2622        	BNE	CHK_IDENTIFIER3		;wenn beide Identifier gleich,
+ 1459  447                      					;
+ 1460  448                      CHK_IDENTIFIER2:
+ 1461  449   00016D A600        	LDAA	0,X			;dann
+ 1462  450   00016F 8120        	CMPA	#20h			;  wenn Zähler < Maximalwert,
+ 1463  451   000171 1824 0021   	LBHS	CHK_IDENTIFIER4		;  dann
+ 1464  452   000175 42          	INCA				;    Zähler incrementieren
+ 1465  453   000176 6A00        	STAA	0,X			;
+ 1466  454   000178 8108        	CMPA	#08h			;    wenn Zähler = Minimalwert,
+ 1467  455   00017A 261A        	BNE	CHK_IDENTIFIER4		;    dann
+ 1468  456   00017C CDxx xx     	LDY	#MSG_IDENTIFIER_TBL	;
+ 1469  457   00017F 19ED        	LEAY	B,Y			;
+ 1470  458   000181 ED40        	LDY	0,Y			;      Zeiger auf fixierten Identifier
+ 1471  459   000183 1801 4010   	MOVW	R4,0,Y			;      neuen Identifier fixieren
+             000187 04         
+ 1472  460   000188 1801 4210   	MOVW	R6,2,Y			;
+             00018C 06         
+ 1473  461   00018D 2007        	BRA	CHK_IDENTIFIER4		;
+ 1474  462                      					;
+ 1475  463                      CHK_IDENTIFIER3:
+ 1476  464   00018F A600        	LDAA	0,X			;sonst
+ 1477  465   000191 2703        	BEQ	CHK_IDENTIFIER4		;  wenn Zähler > 0,
+ 1478  466   000193 43          	DECA				;  dann
+ 1479  467   000194 6A00        	STAA	0,X			;    Zähler decrementieren
+ 1480  468                      					;
+ 1481  469                      CHK_IDENTIFIER4:
+ 1482  470   000196 CDxx xx     	LDY	#MSG_IDENTIFIER_TBL	;
+ 1483  471   000199 19ED        	LEAY	B,Y			;
+ 1484  472   00019B ED40        	LDY	0,Y			;Zeiger auf fixierten Identifier
+ 1485  473                      					;
+ 1486  474   00019D 16xx xx     	JSR	COMPARE_IDENTIFIER	;fixierten mit neuem Identifier vergleichen
+ 1487  475   0001A0 2603        	BNE	CHK_IDENTIFIER8		;
+ 1488  476   0001A2 87          	CLRA				;wenn fixierter <> neuem Identifier,
+ 1489  477   0001A3 2002        	BRA	CHK_IDENTIFIER9		;dann
+ 1490  478                      					;
+ 1491  479                      CHK_IDENTIFIER8:
+ 1492  480   0001A5 86FF        	LDAA	#0FFh			;  neues Telegramm ignorieren
+ 1493  481                      					;
+ 1494  482                      CHK_IDENTIFIER9:
+ 1495  483   0001A7 3D          	RTS				;
+ 1496  484                      					;
+ 1497  485                      ;------------------------------------------------------------------------------
+ 1498  486                      ;GET_DATA legt empfangene Reifensensor-Telegramme im MSG_RX_REC ab.
+ 1499  487                      ;
+ 1500  488                      ;Eingangsparameter:     LIN_RX_BUF
+ 1501  489                      ;Ausgangsparameter:	MSG_RX_REC
+ 1502  490                      ;			SENSOR_CTR_REC
+ 1503  491                      ;veränderte Register:	CCR, A, B, X, Y, R3
+ 1504  492                      ;------------------------------------------------------------------------------
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1505  493                      					;
+ 1506  494                      GET_DATA:
+ 1507  495   0001A8 F6xx xx     	LDAB	LIN_RX_POS		;
+ 1508  496   0001AB 1827 0044   	LBEQ	GET_DATA9		;
+ 1509  497   0001AF C104        	CMPB	#4			;wenn Position im Bereich [1..4] liegt,
+ 1510  498   0001B1 1822 003E   	LBHI	GET_DATA9		;dann
+ 1511  499   0001B5 53          	DECB				;  Position decrementieren und mal 2
+ 1512  500   0001B6 58          	LSLB				;  liefert in B Zeiger in
+ 1513  501                      					;
+ 1514  502   0001B7 16xx xx     	JSR	COMPARE_MESSAGE		;
+ 1515  503   0001BA 2708        	BEQ	GET_DATA1		;
+ 1516  504   0001BC 180B 00xx   	MOVB	#0,LIN_RX_POS		;
+             0001C0 xx         
+ 1517  505   0001C1 06xx xx     	JMP	GET_DATA9		;
+ 1518  506                      					;
+ 1519  507                      GET_DATA1:
+ 1520  508   0001C4 16xx xx     	JSR	CHK_IDENTIFIER		;
+ 1521  509   0001C7 2708        	BEQ	GET_DATA2		;
+ 1522  510   0001C9 180B 00xx   	MOVB	#0,LIN_RX_POS		;
+             0001CD xx         
+ 1523  511   0001CE 06xx xx     	JMP	GET_DATA9		;
+ 1524  512                      					;
+ 1525  513                      GET_DATA2:
+ 1526  514   0001D1 CDxx xx     	LDY	#MSG_RX_TBL		;  Tabelle mit den MSG_RX_BUF-Basisadressen
+ 1527  515   0001D4 19ED        	LEAY	B,Y			;
+ 1528  516   0001D6 ED40        	LDY	0,Y			;  MSG_RX_BUF-Basisadresse aus Tabelle lesen
+ 1529  517   0001D8 CExx xx     	LDX	#LIN_RX_BUF		;
+ 1530  518                      
+ 1531  519   0001DB 180B 1810   	MOVB	#24,R3			;  24 Bytes
+             0001DF 03         
+ 1532  520                      GET_DATA3:
+ 1533  521   0001E0 180A 3070   	MOVB	1,X+,1,Y+		;  Daten ablegen
+ 1534  522   0001E4 7310 03     	DEC	R3			;
+ 1535  523   0001E7 26F7        	BNE	GET_DATA3		;
+ 1536  524                      					;
+ 1537  525   0001E9 CDxx xx     	LDY	#SENSOR_CTR_REC		;
+ 1538  526   0001EC 19ED        	LEAY	B,Y			;
+ 1539  527   0001EE 1800 40xx   	MOVW	#SENSOR_CT,0,Y		;  Timeout-Zähler auf Startwert
+             0001F2 xx         
+ 1540  528                      					;
+ 1541  529                      GET_DATA9:
+ 1542  530   0001F3 3D          	RTS				;
+ 1543  531                      					;
+ 1544  532                      ;------------------------------------------------------------------------------
+ 1545  533                      ;PUT_DATA bereitet den Ausgabebuffer mit den Temperatur- und Druckwerten vor.
+ 1546  534                      ;
+ 1547  535                      ;Eingangsparameter:	MSG_RX_REC
+ 1548  536                      ;Ausgangsparameter:	CAN0_MSG0_BUF
+ 1549  537                      ;veränderte Register:	CCR, A, B, X, Y, R3
+ 1550  538                      ;------------------------------------------------------------------------------
+ 1551  539                      					;
+ 1552  540                      PUT_DATA:
+ 1553  541   0001F4 CExx xx     	LDX	#MSG_RX_REC		;
+ 1554  542   0001F7 1AEx xx     	LEAX	oTEMPERATURE,X		;
+ 1555  543   0001FA CDxx xx     	LDY	#CAN0_MSG0_BUF		;
+ 1556  544   0001FD 180B 0410   	MOVB	#4,R3			;
+             000201 03         
+ 1557  545                      PUT_DATA1:
+ 1558  546   000202 A600        	LDAA	0,X			;
+ 1559  547   000204 270A        	BEQ	PUT_DATA2		;wenn Temperatur-Rohdatenwert <> 0 und <> 0xFF,
+ 1560  548   000206 81FF        	CMPA	#0FFh			;
+ 1561  549   000208 2706        	BEQ	PUT_DATA2		;dann
+ 1562  550   00020A 8028        	SUBA	#40			;  den Temperaturoffset von 40°C subtrahieren
+ 1563  551   00020C 2202        	BHI	PUT_DATA2		;  ggf. Ergebnis nach unten begrenzen
+ 1564  552   00020E 8601        	LDAA	#1			;
+ 1565  553                      PUT_DATA2:
+ 1566  554   000210 6A70        	STAA	1,Y+			;
+ 1567  555   000212 1AE0 18     	LEAX	24,X			;
+ 1568  556   000215 7310 03     	DEC	R3			;
+ 1569  557   000218 26E8        	BNE	PUT_DATA1		;
+ 1570  558                      					;
+ 1571  559   00021A CExx xx     	LDX	#MSG_RX_REC		;
+ 1572  560   00021D 1AEx xx     	LEAX	oPRESSURE,X		;
+ 1573  561   000220 180B 0410   	MOVB	#4,R3			;
+             000224 03         
+ 1574  562                      PUT_DATA3:
+ 1575  563   000225 A600        	LDAA	0,X			;
+ 1576  564   000227 270B        	BEQ	PUT_DATA4		;wenn Druck-Rohdatenwert <> 0 und <> 0xFF,
+ 1577  565   000229 81FF        	CMPA	#0FFh			;
+ 1578  566   00022B 2707        	BEQ	PUT_DATA4		;dann
+ 1579  567   00022D B0xx xx     	SUBA	E_BARO_PRESSURE		;  Umgebungsdruck subtrahieren
+ 1580  568   000230 2202        	BHI	PUT_DATA4		;  ggf. Ergebnis nach unten begrenzen
+ 1581  569   000232 8601        	LDAA	#1			;
+ 1582  570                      PUT_DATA4:
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1583  571   000234 6A70        	STAA	1,Y+			;
+ 1584  572   000236 1AE0 18     	LEAX	24,X			;
+ 1585  573   000239 7310 03     	DEC	R3			;
+ 1586  574   00023C 26E7        	BNE	PUT_DATA3		;
+ 1587  575   00023E 3D          	RTS				;
+ 1588  576                      					;
+ 1589  577                      ;-----------------------------------------------------------------------------
+ 1590  578                      ;CKH_ALARM untersucht die Temperatur- und Druckwerte im Ausgabebuffer auf
+ 1591  579                      ;Verletzung der absoluten Grenzwerte.
+ 1592  580                      ;
+ 1593  581                      ;Eingangsparameter:	CAN0_MSG0_BUF
+ 1594  582                      ;Ausgangsparameter:	ALARM
+ 1595  583                      ;veränderte Register:	CCR, A, B, X, R[2..3]
+ 1596  584                      ;-----------------------------------------------------------------------------
+ 1597  585                      					;
+ 1598  586                      CHK_ALARM:
+ 1599  587   00023F C7          	CLRB				;
+ 1600  588                      					;
+ 1601  589   000240 CExx xx     	LDX	#CAN0_MSG0_BUF		;
+ 1602  590                      
+ 1603  591          0000 0000    ifne fDebug
+ 1605  593                       else
+ 1606  594   000243 180B 0410   	MOVB	#4,R3			;
+             000247 03         
+ 1607  595                       endif
+ 1608  596                      
+ 1609  597                      CHK_ALARM1:
+ 1610  598   000248 A630        	LDAA	1,X+			;
+ 1611  599   00024A 270B        	BEQ	CHK_ALARM11		;
+ 1612  600   00024C 81FF        	CMPA	#0FFh			;
+ 1613  601   00024E 2707        	BEQ	CHK_ALARM11		;
+ 1614  602   000250 B1xx xx     	CMPA	E_TEMPERATURE		;
+ 1615  603   000253 2302        	BLS	CHK_ALARM11		;Temperaturwerte untersuchen
+ 1616  604                      					;
+ 1617  605   000255 C6FF        	LDAB	#0FFh			;
+ 1618  606                      					;
+ 1619  607                      CHK_ALARM11:
+ 1620  608   000257 7310 03     	DEC	R3			;
+ 1621  609   00025A 26EC        	BNE	CHK_ALARM1		;
+ 1622  610                      
+ 1623  611          0000 0000    ifne fDebug
+ 1625  613                       endif
+ 1626  614                      					;
+ 1627  615   00025C B6xx xx     	LDAA	E_PRESSURE		;
+ 1628  616   00025F B0xx xx     	SUBA	E_BARO_PRESSURE		;
+ 1629  617   000262 7A10 02     	STAA	R2			;
+ 1630  618                      
+ 1631  619          0000 0000    ifne fDebug
+ 1633  621                       else
+ 1634  622   000265 180B 0410   	MOVB	#4,R3			;
+             000269 03         
+ 1635  623                       endif
+ 1636  624                      
+ 1637  625                      CHK_ALARM2:
+ 1638  626   00026A A630        	LDAA	1,X+			;
+ 1639  627   00026C 270B        	BEQ	CHK_ALARM21		;
+ 1640  628   00026E 81FF        	CMPA	#0FFh			;
+ 1641  629   000270 2707        	BEQ	CHK_ALARM21		;
+ 1642  630   000272 B110 02     	CMPA	R2			;Druckwerte untersuchen
+ 1643  631   000275 2402        	BHS	CHK_ALARM21		;
+ 1644  632                      					;
+ 1645  633   000277 C6FF        	LDAB	#0FFh			;
+ 1646  634                      					;
+ 1647  635                      CHK_ALARM21:
+ 1648  636   000279 7310 03     	DEC	R3			;
+ 1649  637   00027C 26EC        	BNE	CHK_ALARM2		;
+ 1650  638                      					;
+ 1651  639   00027E 7Bxx xx     	STAB	ALARM			;
+ 1652  640   000281 3D          	RTS				;
+ 1653  641                      					;
+ 1654  642                      ;-----------------------------------------------------------------------------
+ 1655  643                      ;PUT_LOW_XP_DATA setzt die Temperatur- und Druckwerte im Ausgabepuffer auf
+ 1656  644                      ;deren Überwachungsgrenzen und nimmt einen evtl. Alarm zurück.
+ 1657  645                      ;
+ 1658  646                      ;Eingangsparameter:	keine
+ 1659  647                      ;Ausgangsparameter:	CAN0_MSG0_BUF
+ 1660  648                      ;			ALARM
+ 1661  649                      ;veränderte Register:	CCR, A, Y, R3
+ 1662  650                      ;-----------------------------------------------------------------------------
+ 1663  651                      					;
+ 1664  652                      PUT_LOW_XP_DATA:
+ 1665  653   000282 CDxx xx     	LDY	#CAN0_MSG0_BUF		;
+ 1666  654   000285 B6xx xx     	LDAA	E_TEMPERATURE		;
+ 1667  655   000288 180B 0410   	MOVB	#4,R3			;
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             00028C 03         
+ 1668  656                      PUT_LOW_XP_DATA1:
+ 1669  657   00028D 6A70        	STAA	1,Y+			;Temperaturwerte auf Grenzwert
+ 1670  658   00028F 7310 03     	DEC	R3			;
+ 1671  659   000292 26F9        	BNE	PUT_LOW_XP_DATA1	;
+ 1672  660                      					;
+ 1673  661   000294 B6xx xx     	LDAA	E_PRESSURE		;
+ 1674  662   000297 B0xx xx     	SUBA	E_BARO_PRESSURE		;
+ 1675  663   00029A 180B 0410   	MOVB	#4,R3			;
+             00029E 03         
+ 1676  664                      PUT_LOW_XP_DATA2:
+ 1677  665   00029F 6A70        	STAA	1,Y+			;Druckwerte auf Grenzwert
+ 1678  666   0002A1 7310 03     	DEC	R3			;
+ 1679  667   0002A4 26F9        	BNE	PUT_LOW_XP_DATA2	;
+ 1680  668                      					;
+ 1681  669   0002A6 180B 00xx   	MOVB	#0,ALARM		;Alarm rücksetzen
+             0002AA xx         
+ 1682  670   0002AB 3D          	RTS				;
+ 1683  671                      					;
+ 1684  672                      ;------------------------------------------------------------------------------
+ 1685  673                      ;CHK_PRESSURE_DROP prüft die vier Raddruckwerte auf einen unzulässigen
+ 1686  674                      ;Druckabfall.
+ 1687  675                      ;
+ 1688  676                      ;Eingangsparameter:	CHECK_WAIT_CTR
+ 1689  677                      ;			MSG_RX_REC
+ 1690  678                      ;			MSG_S1_REC
+ 1691  679                      ;			E_DROP_PRESSURE
+ 1692  680                      ;			E_DROP_REF
+ 1693  681                      ;Ausgangsparameter:	CHECK_WAIT_CTR
+ 1694  682                      ;			MSG_S1_REC
+ 1695  683                      ;			DROP_ALARM
+ 1696  684                      ;veraenderte Register:	CCR, A, B, X, Y, R[3..4]
+ 1697  685                      ;------------------------------------------------------------------------------
+ 1698  686                      					;
+ 1699  687                      CHK_PRESSURE_DROP:
+ 1700  688   0002AC FCxx xx     	LDD	CHECK_WAIT_CTR		;wenn CHECK_WAIT_CTR <> 0,
+ 1701  689   0002AF 2708        	BEQ	CHK_PRESSURE_DROP1	;dann
+ 1702  690   0002B1 C3FF FF     	ADDD	#-1			;  CHECK_WAIT_CTR decrementieren
+ 1703  691   0002B4 7Cxx xx     	STD	CHECK_WAIT_CTR		;wenn CHECK_WAIT_CTR = 0,
+ 1704  692   0002B7 266D        	BNE	CHK_PRESSURE_DROP9	;dann
+ 1705  693                      					;
+ 1706  694                      CHK_PRESSURE_DROP1:
+ 1707  695   0002B9 180B 00xx   	MOVB	#0,DROP_ALARM		;  DROP_ALARM rücksetzen
+             0002BD xx         
+ 1708  696                      					;
+ 1709  697                      ;-----------------------------------------------------------------------------
+ 1710  698                      ;Druckwerte auf unzulässigen Abfall prüfen
+ 1711  699                      ;
+ 1712  700   0002BE CExx xx     	LDX	#MSG_RX_REC		;
+ 1713  701   0002C1 180B 0410   	MOVB	#4,R4			;vier Radsender
+             0002C5 04         
+ 1714  702                      					;
+ 1715  703                      CHK_PRESSURE_DROP2:
+ 1716  704   0002C6 CDxx xx     	LDY	#MSG_S1_REC		;
+ 1717  705   0002C9 180B 0410   	MOVB	#4,R3			;vier Einträge zur Auswahl
+             0002CD 03         
+ 1718  706                      					;
+ 1719  707                      CHK_PRESSURE_DROP3:
+ 1720  708   0002CE C6xx        	LDAB	#oIDENTIFIER		;Zeiger auf Identifier
+ 1721  709   0002D0 180B 0410   	MOVB	#4,R2			;32 bit Identifier
+             0002D4 02         
+ 1722  710                      CHK_PRESSURE_DROP4:
+ 1723  711   0002D5 A6E5        	LDAA	B,X			;
+ 1724  712   0002D7 A1ED        	CMPA	B,Y			;Identifier vergleichen
+ 1725  713   0002D9 2621        	BNE	CHK_PRESSURE_DROP6	;
+ 1726  714   0002DB 52          	INCB				;
+ 1727  715   0002DC 7310 02     	DEC	R2			;
+ 1728  716   0002DF 26F4        	BNE	CHK_PRESSURE_DROP4	;
+ 1729  717                      					;
+ 1730  718   0002E1 C6xx        	LDAB	#oPRESSURE		;wenn Identifier gefunden,
+ 1731  719   0002E3 A6E5        	LDAA	B,X			;dann
+ 1732  720   0002E5 271D        	BEQ	CHK_PRESSURE_DROP7	;  wenn aktueller Druckwert <> 0,
+ 1733  721                      					;
+ 1734  722   0002E7 BBxx xx     	ADDA	E_DROP_REF		;  und aktueller Druckwert
+ 1735  723   0002EA A1ED        	CMPA	B,Y			;  + zulässiger Druckabfall
+ 1736  724   0002EC 2416        	BHS	CHK_PRESSURE_DROP7	;  < alter Druckwert
+ 1737  725                      					;
+ 1738  726   0002EE A6E5        	LDAA	B,X			;
+ 1739  727   0002F0 B1xx xx     	CMPA	E_DROP_PRESSURE		;  und aktueller Druckwert
+ 1740  728   0002F3 240F        	BHS	CHK_PRESSURE_DROP7	;  < Abfall-Druckgrenzwert,
+ 1741  729                      					;
+ 1742  730   0002F5 180B FFxx   	MOVB	#0FFh,DROP_ALARM	;  dann
+             0002F9 xx         
+ 1743  731   0002FA 2008        	BRA	CHK_PRESSURE_DROP7	;    Druckabfall-Alarm auslösen
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1744  732                      					;    weiter mit nächstem Radsender
+ 1745  733                      CHK_PRESSURE_DROP6:
+ 1746  734   0002FC 19E8 18     	LEAY	24,Y			;
+ 1747  735   0002FF 7310 03     	DEC	R3			;sonst
+ 1748  736   000302 26CA        	BNE	CHK_PRESSURE_DROP3	;  weitersuchen
+ 1749  737                      					;
+ 1750  738                      CHK_PRESSURE_DROP7:
+ 1751  739   000304 1AE0 18     	LEAX	24,X			;
+ 1752  740   000307 7310 04     	DEC	R4			;
+ 1753  741   00030A 26BA        	BNE	CHK_PRESSURE_DROP2	;nächster Radsender
+ 1754  742                      					;
+ 1755  743                      ;-----------------------------------------------------------------------------
+ 1756  744                      ;Datenfeld umspeichern
+ 1757  745                      ;
+ 1758  746   00030C CExx xx     	LDX	#MSG_RX_REC		;Zeiger auf Quelle
+ 1759  747   00030F CDxx xx     	LDY	#MSG_S1_REC		;Zeiger auf Ziel
+ 1760  748   000312 180B 6010   	MOVB	#4*24,R3		;Anzahl Bytes
+             000316 03         
+ 1761  749                      CHK_PRESSURE_DROP8:
+ 1762  750   000317 180A 3070   	MOVB	1,X+,1,Y+		;Datenfeld für nächste Prüfung
+ 1763  751   00031B 7310 03     	DEC	R3			;umspeichern
+ 1764  752   00031E 26F7        	BNE	CHK_PRESSURE_DROP8	;
+ 1765  753                      					;
+ 1766  754   000320 1803 xxxx   	MOVW	#CHECK_WAIT_CT,CHECK_WAIT_CTR
+             000324 xxxx       
+ 1767  755                      					;Zeitzähler auf Startwert
+ 1768  756                      CHK_PRESSURE_DROP9:
+ 1769  757   000326 3D          	RTS				;
+ 1770  758                      					;
+ 1771  759                      ;------------------------------------------------------------------------------
+ 1772  760                      ;CHK_TIRES empfängt Botschaften von den Radsendern, prüft die Reifendruck- und
+ 1773  761                      ;Temperaturwerte und bereitet den Datenausgabebuffer vor.
+ 1774  762                      ;
+ 1775  763                      ;Eingangsparameter:	LIN_RX_POS
+ 1776  764                      ;			LIN_RX_BUF
+ 1777  765                      ;Ausgangsparameter:     ALARM
+ 1778  766                      ;			CAN0_MSG0_BUF
+ 1779  767                      ;			LIN_RX_POS
+ 1780  768                      ;			A		0	= keine CAN-Datenausgabe nötig
+ 1781  769                      ;					<> 0	= neue CAN-Datenausgabe gewünscht
+ 1782  770                      ;veränderte Register:	CCR, A, B, X, Y, R[0..5]
+ 1783  771                      ;------------------------------------------------------------------------------
+ 1784  772                      					;
+ 1785  773                      CHK_TIRES:
+ 1786  774   000327 16xx xx     	JSR	CHK_SPEED		;Geschwindigkeit prüfen
+ 1787  775   00032A 16xx xx     	JSR	CHK_SENSORS		;Radsender Zeitgrenzen prüfen
+ 1788  776   00032D 1Fxx xxxx   	BRCLR	COMMUNICATE_FLAGS,_CAN_RFSH_TRIG,CHK_TIRES1
+             000331 0A         
+ 1789  777                      					;wenn Empfangsunterbrechung erkannt
+ 1790  778                      					;und Datenauswertung aktiv
+ 1791  779   000332 1Cxx xxxx   	BSET	COMMUNICATE_FLAGS,_LOW_XP_FLAG
+ 1792  780   000336 16xx xx     	JSR	PUT_DATA		;dann
+ 1793  781   000339 06xx xx     	JMP	CHK_TIRES8		;  sofortige Datenausgabe
+ 1794  782                      
+ 1795  783                      CHK_TIRES1:
+ 1796  784   00033C B6xx xx     	LDAA	LIN_RX_POS		;
+ 1797  785   00033F 2632        	BNE	CHK_TIRES3		;wenn keine neuen Daten da,
+ 1798  786                      					;dann
+ 1799  787   000341 FCxx xx     	LDD	LIN_RX_CTR		;  wenn LIN_RX_CTR <> 0,
+ 1800  788   000344 2711        	BEQ	CHK_TIRES2		;  dann
+ 1801  789   000346 C3FF FF     	ADDD	#-1			;    LIN_RX_CTR decrementieren
+ 1802  790   000349 7Cxx xx     	STD	LIN_RX_CTR		;
+ 1803  791   00034C 2709        	BEQ	CHK_TIRES2		;
+ 1804  792   00034E 1Exx xxxx   	BRSET	COMMUNICATE_FLAGS,_LOW_XP_TRIG,CHK_TIRES4
+             000352 25         
+ 1805  793   000353 87          	CLRA				;
+ 1806  794   000354 06xx xx     	JMP	CHK_TIRES9		;    A = 0, keine CAN-Datenausgabe
+ 1807  795                      					;
+ 1808  796                      CHK_TIRES2:
+ 1809  797   000357 CDxx xx     	LDY	#CAN0_MSG0_BUF		;    wenn LIN_RX_CTR = 0,
+ 1810  798   00035A 86FF        	LDAA	#0FFh			;    dann
+ 1811  799   00035C 180B 0810   	MOVB	#8,R3			;
+             000360 03         
+ 1812  800   000361 16xx xx     	JSR	CLEAR_BUFFER		;      Ausgabebuffer fegen
+ 1813  801   000364 CDxx xx     	LDY	#SENSOR_CTR_REC		;
+ 1814  802   000367 87          	CLRA				;
+ 1815  803   000368 180B 0810   	MOVB	#4*2,R3			;
+             00036C 03         
+ 1816  804   00036D 16xx xx     	JSR	CLEAR_BUFFER		;      Radsender-Timeoutzähler auf Null
+ 1817  805   000370 06xx xx     	JMP	CHK_TIRES7		;      und ausgeben
+ 1818  806                      					;
+ 1819  807                      CHK_TIRES3:
+ 1820  808                      					;sonst
+ 1821  809   000373 1Fxx xxxx   	BRCLR	COMMUNICATE_FLAGS,_LOW_XP_FLAG,CHK_TIRES5
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             000377 06         
+ 1822  810                      					;  wenn _LOW_XP_FLAG gesetzt,
+ 1823  811                      CHK_TIRES4:
+ 1824  812   000378 16xx xx     	JSR	PUT_LOW_XP_DATA		;  dann
+ 1825  813   00037B 06xx xx     	JMP	CHK_TIRES7		;    kein Alarm und keine Datenauswertung
+ 1826  814                      					;
+ 1827  815                      ;------------------------------------------------------------------------------
+ 1828  816                      ;Auswertung der Botschaft
+ 1829  817                      					;
+ 1830  818                      CHK_TIRES5:
+ 1831  819   00037E 16xx xx     	JSR	GET_DATA		;  sonst
+ 1832  820   000381 B6xx xx     	LDAA	LIN_RX_POS		;    Datentelegramm auswerten
+ 1833  821   000384 2603        	BNE	CHK_TIRES6		;
+ 1834  822   000386 87          	CLRA				;    ggf. LIN-Daten ignorieren
+ 1835  823   000387 200E        	BRA	CHK_TIRES9		;
+ 1836  824                      					;
+ 1837  825                      CHK_TIRES6:
+ 1838  826   000389 16xx xx     	JSR	PUT_DATA		;    neue Daten abholen und
+ 1839  827   00038C 16xx xx     	JSR	CHK_ALARM		;    auf absolute Grenzwerte prüfen
+ 1840  828                      					;
+ 1841  829                      CHK_TIRES7:
+ 1842  830   00038F 1803 xxxx   	MOVW	#LIN_RX_CT,LIN_RX_CTR	;LIN_RX_CTR auf Startwert
+             000393 xxxx       
+ 1843  831                      					;
+ 1844  832                      CHK_TIRES8:
+ 1845  833   000395 86FF        	LDAA	#0FFh			;
+ 1846  834                      					;
+ 1847  835                      CHK_TIRES9:
+ 1848  836   000397 180C xxxx   	MOVB	LIN_RX_POS,LAST_RX_POS	;
+             00039B xxxx       
+ 1849  837   00039D 180B 00xx   	MOVB	#0,LIN_RX_POS		;LIN-Daten quittieren
+             0003A1 xx         
+ 1850  838   0003A2 3D          	RTS				;
+ 1851  839                      					;
+ 1852  840                      ;------------------------------------------------------------------------------
+ 1853  841                      ;PUT_1781_DATA gibt zu Testzwecken neue Messdaten aus.
+ 1854  842                      ;
+ 1855  843                      ;Eingangsparameter:	Variablenwerte
+ 1856  844                      ;Ausgangsparameter:	keine
+ 1857  845                      ;veränderte Register:	CCR, A, B, X, Y, R[0..2,4..5]
+ 1858  846                      ;------------------------------------------------------------------------------
+ 1859  847                      					;
+ 1860  848                      PUT_1781_DATA:
+ 1861  849                      					;
+ 1862  850          0000 0000    ifne fDebug
+ 1872  860                       else
+ 1873  861   0003A3 FCxx xx     	LDD	BATTERY_VOLTAGE		;DATA16: Batteriespannung
+ 1874  862   0003A6 7Cxx xx     	STD	CAN0_MSG1_BUF+0		;
+ 1875  863   0003A9 FCxx xx     	LDD	UNIT_TEMPERATURE	;DATA16: Geräteinnentemperatur
+ 1876  864   0003AC 7Cxx xx     	STD	CAN0_MSG1_BUF+2		;
+ 1877  865                       endif
+ 1878  866                      					;
+ 1879  867   0003AF FCxx xx     	LDD	LIN_TIME_CTR		;DATA16: benötigte Zeit für kompletten Abfragezyklus
+ 1880  868   0003B2 7Cxx xx     	STD	CAN0_MSG1_BUF+4		;
+ 1881  869   0003B5 B6xx xx     	LDAA	ALARM			;
+ 1882  870   0003B8 BAxx xx     	ORAA	DROP_ALARM		;DATA8: Warnlampenstatus
+ 1883  871   0003BB 7Axx xx     	STAA	CAN0_MSG1_BUF+6		;
+ 1884  872   0003BE B6xx xx     	LDAA	LIN_ANT_FLAGS		;DATA8: Antennenstatus
+ 1885  873   0003C1 7Axx xx     	STAA	CAN0_MSG1_BUF+7		;
+ 1886  874                      					;
+ 1887  875   0003C4 180B 0010   	MOVB	#0,R0			;
+             0003C8 00         
+ 1888  876   0003C9 180B 0110   	MOVB	#1,R1			;Message 1
+             0003CD 01         
+ 1889  877   0003CE 180B 0010   	MOVB	#0,R2			;
+             0003D2 02         
+ 1890  878   0003D3 1803 xxxx   	MOVW	#CAN0_MSG1_BUF,R4	;an CAN0 ausgeben
+             0003D7 1004       
+ 1891  879   0003D9 16xx xx     	JSR	CAN_WRITE		;
+ 1892  880   0003DC 3D          	RTS				;
+ 1893  881                      					;
+ 1894  882                      ;
+ 1895  883                      ;begin 02.07.2013
+ 1896  884                      ;------------------------------------------------------------------------------
+ 1897  885                      ;PUT_IDENTIFIER_DATA gibt aktuell erkannte Identifier an CAN aus.
+ 1898  886                      ;
+ 1899  887                      ;Eingangsparameter:	Identifierwerte
+ 1900  888                      ;Ausgangsparameter:	keine
+ 1901  889                      ;veränderte Register:	CCR, A, B, X, Y, R[0..2,4..5]
+ 1902  890                      ;------------------------------------------------------------------------------
+ 1903  891                      					;
+ 1904  892                      PUT_IDENTIFIER_DATA:
+ 1905  893   0003DD FExx xx     	LDX	MSG_IDENTIFIER_TBL+0	;Zeiger auf Identifier vorne links
+ 1906  894   0003E0 CDxx xx     	LDY	#CAN0_MSG1_BUF+3	;DATA32:
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1907  895   0003E3 A630        	LDAA	1,X+
+ 1908  896   0003E5 6A7F        	STAA	1,Y-
+ 1909  897   0003E7 A630        	LDAA	1,X+
+ 1910  898   0003E9 6A7F        	STAA	1,Y-
+ 1911  899   0003EB A630        	LDAA	1,X+
+ 1912  900   0003ED 6A7F        	STAA	1,Y-
+ 1913  901   0003EF A600        	LDAA	0,X
+ 1914  902   0003F1 6A40        	STAA	0,Y
+ 1915  903   0003F3 FExx xx     	LDX	MSG_IDENTIFIER_TBL+2	;Zeiger auf Identifier vorne rechts
+ 1916  904   0003F6 CDxx xx     	LDY	#CAN0_MSG1_BUF+7	;DATA32:
+ 1917  905   0003F9 A630        	LDAA	1,X+
+ 1918  906   0003FB 6A7F        	STAA	1,Y-
+ 1919  907   0003FD A630        	LDAA	1,X+
+ 1920  908   0003FF 6A7F        	STAA	1,Y-
+ 1921  909   000401 A630        	LDAA	1,X+
+ 1922  910   000403 6A7F        	STAA	1,Y-
+ 1923  911   000405 A600        	LDAA	0,X
+ 1924  912   000407 6A40        	STAA	0,Y
+ 1925  913   000409 180B 0010   	MOVB	#0,R0			;
+             00040D 00         
+ 1926  914   00040E 180B 0310   	MOVB	#3,R1			;Message 3
+             000412 01         
+ 1927  915   000413 180B 0010   	MOVB	#0,R2			;
+             000417 02         
+ 1928  916   000418 1803 xxxx   	MOVW	#CAN0_MSG1_BUF,R4	;an CAN0 ausgeben
+             00041C 1004       
+ 1929  917   00041E 16xx xx     	JSR	CAN_WRITE		;
+ 1930  918                      					;
+ 1931  919   000421 FExx xx     	LDX	MSG_IDENTIFIER_TBL+4	;Zeiger auf Identifier hinten links
+ 1932  920   000424 CDxx xx     	LDY	#CAN0_MSG1_BUF+3	;DATA32:
+ 1933  921   000427 A630        	LDAA	1,X+
+ 1934  922   000429 6A7F        	STAA	1,Y-
+ 1935  923   00042B A630        	LDAA	1,X+
+ 1936  924   00042D 6A7F        	STAA	1,Y-
+ 1937  925   00042F A630        	LDAA	1,X+
+ 1938  926   000431 6A7F        	STAA	1,Y-
+ 1939  927   000433 A600        	LDAA	0,X
+ 1940  928   000435 6A40        	STAA	0,Y
+ 1941  929   000437 FExx xx     	LDX	MSG_IDENTIFIER_TBL+6	;Zeiger auf Identifier hinten rechts
+ 1942  930   00043A CDxx xx     	LDY	#CAN0_MSG1_BUF+7	;DATA32:
+ 1943  931   00043D A630        	LDAA	1,X+
+ 1944  932   00043F 6A7F        	STAA	1,Y-
+ 1945  933   000441 A630        	LDAA	1,X+
+ 1946  934   000443 6A7F        	STAA	1,Y-
+ 1947  935   000445 A630        	LDAA	1,X+
+ 1948  936   000447 6A7F        	STAA	1,Y-
+ 1949  937   000449 A600        	LDAA	0,X
+ 1950  938   00044B 6A40        	STAA	0,Y
+ 1951  939   00044D 180B 0010   	MOVB	#0,R0			;
+             000451 00         
+ 1952  940   000452 180B 0410   	MOVB	#4,R1			;Message 4
+             000456 01         
+ 1953  941   000457 180B 0010   	MOVB	#0,R2			;
+             00045B 02         
+ 1954  942   00045C 1803 xxxx   	MOVW	#CAN0_MSG1_BUF,R4	;an CAN0 ausgeben
+             000460 1004       
+ 1955  943   000462 16xx xx     	JSR	CAN_WRITE		;
+ 1956  944   000465 3D          	RTS				;
+ 1957  945                      ;end
+ 1958  946                      ;
+ 1959  947                      					;
+ 1960  948                      ;------------------------------------------------------------------------------
+ 1961  949                      ;CAN_IO empfängt Botschaften von anderen Netzkoten und sendet Messdaten.
+ 1962  950                      ;
+ 1963  951                      ;Eingangsparameter:	.
+ 1964  952                      ;Ausgangsparameter:	.
+ 1965  953                      ;veränderte Register:	CCR, A, B, X, Y, R[0..5]
+ 1966  954                      ;------------------------------------------------------------------------------
+ 1967  955                      					;
+ 1968  956                      CAN_IO:
+ 1969  957   000466 16xx xx     	JSR	GET_1753_DATA		;Message 2 abfragen
+ 1970  958   000469 16xx xx     	JSR	CHK_TIRES		;
+ 1971  959                      ;
+ 1972  960                      ;begin 02.07.2013
+ 1973  961                      					;
+ 1974  962   00046C 8100        	CMPA	#0			;wenn neue Reifendaten vorhanden
+ 1975  963   00046E 2718        	BEQ	CAN_IO1			;dann
+ 1976  964                      					;
+ 1977  965   000470 180B 0010   	MOVB	#0,R0			;
+             000474 00         
+ 1978  966   000475 180B 0010   	MOVB	#0,R1			;
+             000479 01         
+ 1979  967   00047A 180B 0010   	MOVB	#0,R2			;
+             00047E 02         
+tg3Communicate  Copyright (C) 2005-2013, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1980  968   00047F 1803 xxxx   	MOVW	#CAN0_MSG0_BUF,R4	;  Message 0 ausgeben
+             000483 1004       
+ 1981  969   000485 16xx xx     	JSR	CAN_WRITE		;
+ 1982  970                      					;
+ 1983  971                      CAN_IO1:
+ 1984  972   000488 B6xx xx     	LDAA	E_FUN_MODE		;
+ 1985  973   00048B 8410        	ANDA	#00010000b		;wenn E_FUN_MODE.4 = 0
+ 1986  974   00048D 260E        	BNE	CAN_IO9			;dann
+ 1987  975                      					;
+ 1988  976   00048F B6xx xx     	LDAA	TIRE_RFSH_CTR		;  wenn 1 s Telegrammzykluszeit abgelaufen
+ 1989  977   000492 43          	DECA				;
+ 1990  978   000493 2605        	BNE	CAN_IO2			;  dann
+ 1991  979   000495 16xx xx     	JSR	PUT_IDENTIFIER_DATA	;    Identifier an CAN ausgeben
+ 1992  980   000498 86xx        	LDAA	#TIRE_RFSH_CT		;    Telegrammzykluszeit auf Startwert
+ 1993  981                      CAN_IO2:
+ 1994  982   00049A 7Axx xx     	STAA	TIRE_RFSH_CTR		;
+ 1995  983                      					;
+ 1996  984                      CAN_IO9:
+ 1997  985   00049D 16xx xx     	JSR	CHK_PRESSURE_DROP	;auf Reifendruckabfall prüfen
+ 1998  986   0004A0 16xx xx     	JSR	PUT_1781_DATA		;Diagnosedaten ausgeben
+ 1999  987                      ;end
+ 2000  988                      ;
+ 2001  989   0004A3 3D          	RTS				;
+ 2002  990                      					;
+ 2003  991                      ;
+ 2004  992                      ;begin 20.01.2011
+ 2005  993                      ;end
+ 2006  994                      ;
+ 2007  995   0004A4 FFFF FFFF   	dcb.b	6, 0FFh			;
+             0004A8 FFFF       
+ 2008  996   0004AA 3F          	SWI				;
+ 2009  997                      					;

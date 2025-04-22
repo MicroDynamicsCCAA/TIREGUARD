@@ -1,0 +1,980 @@
+	plen 90	;passend für Schrifthöhe 8-Punkt im Listing
+	nolist
+	title	"s12c_128.sfr  Copyright (C) 2004-2006, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12c_128.sfr
+;
+;Copyright: 	(C) 2004-2006, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	24.11.2006
+;
+;Description:	Assembly Language Peripheral File for FreeScale	MC9S12C128
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  12.04
+;
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;
+;MC9S12C128 USER CONFIGURABLE MEMORY MAP
+;
+;0000h - 03FFh 	Registers, mappable to any 2K boundary within the first 32K Bytes.
+;0400h - 0FFFh	3K Bytes flash EEPROM
+;1000h - 1FFFh	4K Bytes of RAM (mappable to any 4K boundary and alignable to top or bottom)
+;4000h - 7FFFh	16K Bytes fixed flash EEPROM page 3Eh = 62 (depends on the state of the ROMHM bit)
+;8000h - BFFFh	16K Bytes page window 8*16K flash EEPROM pages
+;C000h - FFFFh	16K Bytes fixed flash EEPROM page 3Fh = 63
+;FF00h - FFFFh	BDM (if active) for Special Single Chip.
+;
+;------------------------------------------------------------------------------
+;Base address of register blocks. Change these if you relocate register blocks.
+;------------------------------------------------------------------------------
+						;
+SFR_BASE:	equ	0000h			;MCU Special Function Registers
+GPR_BASE:	equ	1000h			;32 General Purpose Registers
+						;
+;------------------------------------------------------------------------------
+;
+;MC9S12C128 DEVICE REGISTER MAP OVERVIEW
+;
+;Addresses	Module						    Size/Bytes
+;
+;0000h - 0017h	CORE (Ports A, B, E, Modes, Inits, Test)		    24
+;    0018h	Reserved						     1
+;    0019h	Voltage Regulator					     1
+;001Ah - 001Bh	Device ID register (PARTID)				     2
+;001Ch - 001Fh	CORE (MEMSIZ, IRQ, HPRIO)				     4
+;0020h - 002Fh	CORE (DBG)						     8
+;0030h - 0033h	CORE (PPAGE)						     4
+;0034h - 003Fh	Clock and Reset Generator (CRG)				    12
+;0040h - 006Fh	Standard Timer Module (TIM)				    48
+;0070h - 007Fh	Reserverd						    16
+;0080h - 009Fh	Analog to Digital Converter (ATD)			    32
+;00A0h - 00C7h	Reserved						    40
+;00C8h - 00CFh	Serial Communications Interface (SCI)			     8
+;00D0h - 00D7h	Reserved						     8
+;00D8h - 00DFh	Serial Peripheral Interface (SPI)			     8
+;00E0h - 00FFh	Pulse Width Modulator (PWM)				    32
+;0100h - 010Fh	Flash Control Register					    16
+;0110h - 013Fh	Reserved						    48
+;0140h - 017Fh	Scalable Controller Area Network (CAN)			    64
+;0180h - 023Fh	Reserved						   192
+;0240h - 027Fh	Port Integration Module (PIM)				    64
+;0280h - 03FFh	Reserved						   384
+;
+;1000h - 1FFFh	RAM array						  4096
+;4000h - 7FFFh	Fixed Flash EEPROM array
+;	 	incl. 0.5K, 1K, 2K or 4K Protected Sector at start	 16384
+;8000h - BFFFh	Flash EEPROM Page Window				 16384
+;C000h - FFFFh	Fixed Flash EEPROM array
+;		incl. 0.5K, 1K, 2K or 4K Protected Sector at end
+;		and 256 bytes of Vector Space at FF80h - FFFFh		 16384
+;
+;------------------------------------------------------------------------------
+						;
+;==============================================================================
+; 1. MCU Special Function Register addresses locations
+;==============================================================================
+						;
+;------------------------------------------------------------------------------
+; 0000h	- 000Fh	    MEBI Map 1 of 3 (HCS12 Multiplexed External Bus Interface)
+;------------------------------------------------------------------------------
+						;
+PORTA:		equ	SFR_BASE + 0000h	;Port A	Data Register
+PORTB:		equ	SFR_BASE + 0001h	;Port B	Data Register
+;Non Standard 16-bit Register
+PORTAB:		equ	SFR_BASE + 0000h	;Port AB Data Register
+
+DDRA:		equ	SFR_BASE + 0002h	;Port A	Data Direction Register
+DDRB:		equ	SFR_BASE + 0003h	;Port B	Data Direction Register
+;Non Standard 16-bit Register
+DDRAB:		equ	SFR_BASE + 0002h	;Port AB Data Direction	Register
+;
+;#define Reserved	_P(0x0004 - 0x0007)
+;
+PORTE:		equ	SFR_BASE + 0008h	;Port E	Data Register
+DDRE:		equ	SFR_BASE + 0009h	;Port E	Data Direction Register
+PEAR:		equ	SFR_BASE + 000Ah	;Port E	Assignment Register
+MODE:		equ	SFR_BASE + 000Bh	;Mode Register
+PUCR:		equ	SFR_BASE + 000Ch	;Pull Up Control Register
+RDRIV:		equ	SFR_BASE + 000Dh	;Reduced Drive Register
+EBICTL:		equ	SFR_BASE + 000Eh	;External Bus Interface	Control	Register
+;
+;#define Reserved	_P(0x000F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0010h - 0014h	    MMC Map 1 of 4 (HCS12 Module Mapping Control)
+;------------------------------------------------------------------------------
+						;
+INITRM:		equ	SFR_BASE + 0010h	;Initialization	of Internal RAM	Position Register
+INITRG:		equ	SFR_BASE + 0011h	;Initialization	of Internal Registers Position Register
+INITEE:		equ	SFR_BASE + 0012h	;Initialization	of Internal EEPROM Position Register
+MISC:		equ	SFR_BASE + 0013h	;Miscellaneous System Control Register
+;
+;#define Reserved	_P(0x0014)
+;
+						;
+;------------------------------------------------------------------------------
+; 0015h - 0016h	    INT	Map 1 of 2 (HCS12 Interrupt)
+;------------------------------------------------------------------------------
+						;
+ITCR:		equ	SFR_BASE + 0015h	;Interrupt Test	Control	Register
+ITEST:		equ	SFR_BASE + 0016h	;Interrupt Test	Registers
+						;
+;------------------------------------------------------------------------------
+; 0017h - 0017h	    MMC Map 2 of 4 (HCS12 Module Mapping Control)
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0017)
+;
+						;
+;------------------------------------------------------------------------------
+; 0018h - 0018h	    Miscellaneous Peripherals (Device User Guide)
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0018)
+;
+						;
+;------------------------------------------------------------------------------
+; 0019h - 0019h	    VREG3V3 (Voltage Regulator)
+;------------------------------------------------------------------------------
+						;
+VREGCTRL:	equ	SFR_BASE + 0019h	;VREG3V3V2 Control Register
+						;
+;------------------------------------------------------------------------------
+; 001Ah - 001Bh	    Miscellaneous Peripherals (Device User Guide)
+;------------------------------------------------------------------------------
+						;
+PARTIDH:	equ	SFR_BASE + 001Ah	;Part ID High Byte
+PARTIDL:	equ	SFR_BASE + 001Bh	;Part ID Low Byte
+;Non Standard 16-bit Register
+PARTID:		equ	SFR_BASE + 001Ah	;Part ID
+						;
+;------------------------------------------------------------------------------
+; 001Ch - 001Dh	    MMC Map 3 of 4 (HCS12 Module Mapping Control, Device User Guide)
+;------------------------------------------------------------------------------
+						;
+MEMSIZ0:	equ	SFR_BASE + 001Ch	;Memory	Size Register Zero
+MEMSIZ1:	equ	SFR_BASE + 001Dh	;Memory	Size Register One
+						;
+;------------------------------------------------------------------------------
+; 001Eh - 001Eh	    MEBI Map 2 of 3 (HCS12 Multiplexed Externel Bus Interface)
+;------------------------------------------------------------------------------
+						;
+IRQCR:		equ	SFR_BASE + 001Eh	;IRQ Control Register
+						;
+;------------------------------------------------------------------------------
+; 001Fh - 001Fh	    INT Map 2 of 2 (HCS12 Interrupt)
+;------------------------------------------------------------------------------
+						;
+HPRIO:		equ	SFR_BASE + 001Fh	;Highest Priority I Interrupt Register
+						;
+;------------------------------------------------------------------------------
+; 0020h - 002Fh     DBG (Including BKP) Map 1 of 1 (HCS12 Debug)
+;------------------------------------------------------------------------------
+						;
+DBGC1:		equ	SFR_BASE + 0020h	;Debug Control Register
+DBGSC:		equ	SFR_BASE + 0021h	;Debug Status and Control Register
+DBGTBH:		equ	SFR_BASE + 0022h	;Debug Trace Buffer Register High Byte
+DBGTBL:		equ	SFR_BASE + 0023h	;Debug Trace Buffer Register Low Byte
+DBGCNT:		equ	SFR_BASE + 0024h	;Debug Count Register
+DBGCCX:		equ	SFR_BASE + 0025h	;Debug Comparator C Extended Register
+DBGCCH:		equ	SFR_BASE + 0026h	;Debug Comparator C Register High Byte
+DBGCCL:		equ	SFR_BASE + 0027h	;Debug Comparator C Register Low Byte
+						;
+BKPCT0:		equ	SFR_BASE + 0028h	;Breakpoint Control Register 0
+BKPCT1:		equ	SFR_BASE + 0029h	;Breakpoint Control Register 1
+BKP0X:		equ	SFR_BASE + 002Ah	;Breakpoint First Address Expansion Register
+BKP0H:		equ	SFR_BASE + 002Bh	;Breakpoint First Address High Byte Register
+BKP0L:		equ	SFR_BASE + 002Ch	;Breakpoint First Address Low Byte Register
+;Non Standard 16-bit Register
+BKP0:		equ	SFR_BASE + 002Bh	;Breakpoint First Address Register
+
+BKP1X:		equ	SFR_BASE + 002Dh	;Breakpoint Second Address Expansion Register
+BKP1H:		equ	SFR_BASE + 002Eh	;Breakpoint Second Address Register High Byte
+BKP1L:		equ	SFR_BASE + 002Fh	;Breakpoint Second Address Register Low	Byte
+;Non Standard 16-bit Register
+BKP1:		equ	SFR_BASE + 002Eh	;Breakpoint Second Address Register
+						;
+;------------------------------------------------------------------------------
+; 0030h - 0031h	    MMC Map 4 of 4 (HCS12 Module Mapping Control)
+;------------------------------------------------------------------------------
+						;
+PPAGE:		equ	SFR_BASE + 0030h	;Program Page Index Register
+;
+;#define Reserved	_P(0x0031)
+;
+						;
+;------------------------------------------------------------------------------
+; 0032h - 0033h	    MEBI Map 3 of 3 (HCS12 Multiplexed External Bus Interface)
+;------------------------------------------------------------------------------
+						;
+PORTK:		equ	SFR_BASE + 0032h	;Port K	Data Register
+DDRK:		equ	SFR_BASE + 0033h	;Port K	Data Direction Register
+						;
+;------------------------------------------------------------------------------
+; 0034h - 003Fh	    CRG (Clock and Reset Generator)
+;------------------------------------------------------------------------------
+						;
+SYNR:		equ	SFR_BASE + 0034h	;CRG Systhesizer Register
+REFDV:		equ	SFR_BASE + 0035h	;CRG Reference Divider Register
+CTFLG:		equ	SFR_BASE + 0036h	;Reserved
+CRGFLG:		equ	SFR_BASE + 0037h	;CRG Flags Register
+CRGINT:		equ	SFR_BASE + 0038h	;CRG Interrupt Enable Register
+CLKSEL:		equ	SFR_BASE + 0039h	;CRG Clock Select Register
+PLLCTL:		equ	SFR_BASE + 003Ah	;CRG PLL Control Register
+RTICTL:		equ	SFR_BASE + 003Bh	;CRG RTI Control Register
+COPCTL:		equ	SFR_BASE + 003Ch	;CRG COP Control Register
+FORBYP:		equ	SFR_BASE + 003Dh	;Reserved Register
+CTCTL:		equ	SFR_BASE + 003Eh	;Reserved Register
+ARMCOP:		equ	SFR_BASE + 003Fh	;CRG COP Timer Arm/Reset Register
+						;
+;------------------------------------------------------------------------------
+; 0040h - 004Fh	    TIM (HCS12 Timer Module)
+;------------------------------------------------------------------------------
+						;
+TIOS:		equ	SFR_BASE + 0040h	;Timer Input Capture/Output Compare Select
+TCFORC:		equ	SFR_BASE + 0041h	;Timer Compare Force Register
+TOC7M:		equ	SFR_BASE + 0042h	;Output	Compare	7 Mask Register
+TOC7D:		equ	SFR_BASE + 0043h	;Output	Compare	7 Data Register
+
+TCNT:		equ	SFR_BASE + 0044h	;Timer Count Register
+
+TSCR1:		equ	SFR_BASE + 0046h	;Timer System Control Register 1
+TTOV:		equ	SFR_BASE + 0047h	;Timer Toggle Overflow Register
+TCTL1:		equ	SFR_BASE + 0048h	;Timer Control Register	1
+TCTL2:		equ	SFR_BASE + 0049h	;Timer Control Register	2
+TCTL3:		equ	SFR_BASE + 004Ah	;Timer Control Register	3
+TCTL4:		equ	SFR_BASE + 004Bh	;Timer Control Register	4
+TIE:		equ	SFR_BASE + 004Ch	;Timer Interrupt Enable	Register
+TSCR2:		equ	SFR_BASE + 004Dh	;Timer System Control Register 2
+TFLG1:		equ	SFR_BASE + 004Eh	;Main Timer Interrupt Flag 1
+TFLG2:		equ	SFR_BASE + 004Fh	;Main Timer Interrupt Flag 2
+
+TC0:		equ	SFR_BASE + 0050h	;Timer Input Capture/Output Compare Register 0
+TC1:		equ	SFR_BASE + 0052h	;Timer Input Capture/Output Compare Register 1
+TC2:		equ	SFR_BASE + 0054h	;Timer Input Capture/Output Compare Register 2
+TC3:		equ	SFR_BASE + 0056h	;Timer Input Capture/Output Compare Register 3
+TC4:		equ	SFR_BASE + 0058h	;Timer Input Capture/Output Compare Register 4
+TC5:		equ	SFR_BASE + 005Ah	;Timer Input Capture/Output Compare Register 5
+TC6:		equ	SFR_BASE + 005Ch	;Timer Input Capture/Output Compare Register 6
+TC7:		equ	SFR_BASE + 005Eh	;Timer Input Capture/Output Compare Register 7
+
+PACTL:		equ	SFR_BASE + 0060h	;16-bit	Pulse Accumulator A Control Register
+PAFLG:		equ	SFR_BASE + 0061h	;Pulse Accumulator A Flag Register
+
+PACNT:		equ	SFR_BASE + 0062h	;Pulse Accumulator Count Register
+;
+;#define Reserved	_P(0x0064 - 0x006F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0070h - 007Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0070 - 0x007F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0080h - 009Fh	    ATD0 (Analog to Digital Converter 10 Bit 8 Channel)
+;------------------------------------------------------------------------------
+						;
+ATD0CTL0:	equ	SFR_BASE + 0080h	;Reserved Register
+ATD0CTL1:	equ	SFR_BASE + 0081h	;Reserved Register
+ATD0CTL2:	equ	SFR_BASE + 0082h	;ATD0 Control Register 2
+ATD0CTL3:	equ	SFR_BASE + 0083h	;ATD0 Control Register 3
+ATD0CTL4:	equ	SFR_BASE + 0084h	;ATD0 Control Register 4
+ATD0CTL5:	equ	SFR_BASE + 0085h	;ATD0 Control Register 5
+ATD0STAT0:	equ	SFR_BASE + 0086h	;ATD0 Status Register 0
+;
+;#define Reserved	_P(0x0087)
+;
+ATD0TEST0:	equ	SFR_BASE + 0088h	;ATD0 Test Register 0
+ATD0TEST1:	equ	SFR_BASE + 0089h	;ATD0 Test Register 1
+;
+;#define Reserved	_P(0x008A)
+;
+ATD0STAT1:	equ	SFR_BASE + 008Bh	;ATD0 Status Register 1
+;
+;#define Reserved	_P(0x008C)
+;
+ATD0DIEN:	equ	SFR_BASE + 008Dh	;ATD0 Input Enable Register
+;
+;#define Reserved	_P(0x008E)
+;
+PORTAD0:	equ	SFR_BASE + 008Fh	;ATD0 Port Data	Register
+						;
+ATD0DR0H:	equ	SFR_BASE + 0090h	;ATD0.0	Conversion Result Register High	Byte
+ATD0DR0L:	equ	SFR_BASE + 0091h	;ATD0.0	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR0:	equ	SFR_BASE + 0090h	;ATD0.0	Conversion Result Register
+						;
+ATD0DR1H:	equ	SFR_BASE + 0092h	;ATD0.1	Conversion Result Register High	Byte
+ATD0DR1L:	equ	SFR_BASE + 0093h	;ATD0.1	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR1:	equ	SFR_BASE + 0092h	;ATD0.1	Conversion Result Register
+						;
+ATD0DR2H:	equ	SFR_BASE + 0094h	;ATD0.2	Conversion Result Register High	Byte
+ATD0DR2L:	equ	SFR_BASE + 0095h	;ATD0.2	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR2:	equ	SFR_BASE + 0094h	;ATD0.2	Conversion Result Register
+						;
+ATD0DR3H:	equ	SFR_BASE + 0096h	;ATD0.3	Conversion Result Register High	Byte
+ATD0DR3L:	equ	SFR_BASE + 0097h	;ATD0.3	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR3:	equ	SFR_BASE + 0096h	;ATD0.3	Conversion Result Register
+						;
+ATD0DR4H:	equ	SFR_BASE + 0098h	;ATD0.4	Conversion Result Register High	Byte
+ATD0DR4L:	equ	SFR_BASE + 0099h	;ATD0.4	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR4:	equ	SFR_BASE + 0098h	;ATD0.4	Conversion Result Register
+						;
+ATD0DR5H:	equ	SFR_BASE + 009Ah	;ATD0.5	Conversion Result Register High	Byte
+ATD0DR5L:	equ	SFR_BASE + 009Bh	;ATD0.5	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR5:	equ	SFR_BASE + 009Ah	;ATD0.5	Conversion Result Register
+						;
+ATD0DR6H:	equ	SFR_BASE + 009Ch	;ATD0.6	Conversion Result Register High	Byte
+ATD0DR6L:	equ	SFR_BASE + 009Dh	;ATD0.6	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR6:	equ	SFR_BASE + 009Ch	;ATD0.6	Conversion Result Register
+						;
+ATD0DR7H:	equ	SFR_BASE + 009Eh	;ATD0.7	Conversion Result Register High	Byte
+ATD0DR7L:	equ	SFR_BASE + 009Fh	;ATD0.7	Conversion Result Register Low Byte
+;Non Standard 16-bit Register
+ATD0DR7:	equ	SFR_BASE + 009Eh	;ATD0.7	Conversion Result Register
+						;
+;------------------------------------------------------------------------------
+; 00A0h - 00C7h	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x00A0 - 0x00C7)
+;
+						;
+;------------------------------------------------------------------------------
+; 00C8h - 00CFh	    SCI0 (Asynchronous Serial Interface)
+;------------------------------------------------------------------------------
+						;
+SCI0_BASE:	equ	SFR_BASE + 00C8h	;Basisadresse von SCI0
+						;
+SCI0BDH:	equ	SFR_BASE + 00C8h	;SCI0 Baudrate Register	High Byte
+SCI0BDL:	equ	SFR_BASE + 00C9h	;SCI0 Baudrate Register	Low Byte
+;Non Standard 16-bit Register
+SCI0BD:		equ	SFR_BASE + 00C8h	;SCI0 Baudrate Registers
+
+SCI0CR1:	equ	SFR_BASE + 00CAh	;SCI0 Control Register 1
+SCI0CR2:	equ	SFR_BASE + 00CBh	;SCI0 Control Register 2
+SCI0SR1:	equ	SFR_BASE + 00CCh	;SCI0 Status Register 1
+SCI0SR2:	equ	SFR_BASE + 00CDh	;SCI0 Status Register 2
+
+SCI0DRH:	equ	SFR_BASE + 00CEh	;SCI0 Data Register High Byte
+SCI0DRL:	equ	SFR_BASE + 00CFh	;SCI0 Data Register Low	Byte
+;Non Standard 16-bit Register
+SCI0DR:		equ	SFR_BASE + 00CEh	;SCI0 Data Registers
+						;
+;------------------------------------------------------------------------------
+; 00D0h - 00D7h	    SCI1 (Asynchronous Serial Interface)
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x00D0 - 0x00D7)
+;
+						;
+;------------------------------------------------------------------------------
+; 00D8h - 00DFh	    SPI0 (Serial Peripheral Interface)
+;------------------------------------------------------------------------------
+						;
+SPI0CR1:	equ	SFR_BASE + 00D8h	;SPI0 Control Register 1
+SPI0CR2:	equ	SFR_BASE + 00D9h	;SPI0 Control Register 2
+SPI0BR:		equ	SFR_BASE + 00DAh	;SPI0 Baudrate Register
+SPI0SR:		equ	SFR_BASE + 00DBh	;SPI0 Status Register
+;
+;#define Reserved	_P(0x00DC)
+;
+SPI0DR:		equ	SFR_BASE + 00DDh	;SPI0 Data Register
+;
+;#define Reserved	_P(0x00DE - 0x00DF)
+;
+						;
+;------------------------------------------------------------------------------
+; 00E0h - 00FFh	    PWM (Pulse Width Modulator 8 Bit 8 Channel)
+;------------------------------------------------------------------------------
+						;
+PWME:		equ	SFR_BASE + 00E0h	;PWM Enable Register
+PWMPOL:		equ	SFR_BASE + 00E1h	;PWM Polarity Register
+PWMCLK:		equ	SFR_BASE + 00E2h	;PWM Clock Select Register
+PWMPRCLK:	equ	SFR_BASE + 00E3h	;PWM Prescale Clock Select Register
+PWMCAE:		equ	SFR_BASE + 00E4h	;PWM Center Align Enable Register
+PWMCTL:		equ	SFR_BASE + 00E5h	;PWM Control Register
+PWMTST:		equ	SFR_BASE + 00E6h	;PWM Test Register (for	factory	testing)
+PWMPRSC:	equ	SFR_BASE + 00E7h	;PWM Prescale Counter Register (for factory testing)
+PWMSCLA:	equ	SFR_BASE + 00E8h	;PWM Scale A Register
+PWMSCLB:	equ	SFR_BASE + 00E9h	;PWM Scale B Register
+PWMSCNTA:	equ	SFR_BASE + 00EAh	;PWM Scale A Counter Register (for factory testing)
+PWMSCNTB:	equ	SFR_BASE + 00EBh	;PWM Scale B Counter Register (for factory testing)
+
+PWMCNT0:	equ	SFR_BASE + 00ECh	;PWM Channel 0 Counter Register
+PWMCNT1:	equ	SFR_BASE + 00EDh	;PWM Channel 1 Counter Register
+PWMCNT2:	equ	SFR_BASE + 00EEh	;PWM Channel 2 Counter Register
+PWMCNT3:	equ	SFR_BASE + 00EFh	;PWM Channel 3 Counter Register
+PWMCNT4:	equ	SFR_BASE + 00F0h	;PWM Channel 4 Counter Register
+PWMCNT5:	equ	SFR_BASE + 00F1h	;PWM Channel 5 Counter Register
+
+PWMPER0:	equ	SFR_BASE + 00F2h	;PWM Channel 0 Period Register
+PWMPER1:	equ	SFR_BASE + 00F3h	;PWM Channel 1 Period Register
+PWMPER2:	equ	SFR_BASE + 00F4h	;PWM Channel 2 Period Register
+PWMPER3:	equ	SFR_BASE + 00F5h	;PWM Channel 3 Period Register
+PWMPER4:	equ	SFR_BASE + 00F6h	;PWM Channel 4 Period Register
+PWMPER5:	equ	SFR_BASE + 00F7h	;PWM Channel 5 Period Register
+
+
+PWMDTY0:	equ	SFR_BASE + 00F8h	;PWM Channel 0 Duty Register
+PWMDTY1:	equ	SFR_BASE + 00F9h	;PWM Channel 1 Duty Register
+PWMDTY2:	equ	SFR_BASE + 00FAh	;PWM Channel 2 Duty Register
+PWMDTY3:	equ	SFR_BASE + 00FBh	;PWM Channel 3 Duty Register
+PWMDTY4:	equ	SFR_BASE + 00FCh	;PWM Channel 4 Duty Register
+PWMDTY5:	equ	SFR_BASE + 00FDh	;PWM Channel 5 Duty Register
+;
+;#define Reserved	_P(0x00FE - 0x00FF)
+;
+						;
+;------------------------------------------------------------------------------
+; 0100h - 010Fh	    Flash Control Register
+;------------------------------------------------------------------------------
+						;
+FCLKDIV:	equ	SFR_BASE + 0100h	;Flash Clock Devider Register
+FSEC:		equ	SFR_BASE + 0101h	;Flash Security	Register
+FTSTMOD:	equ	SFR_BASE + 0102h	;Flash Test Mode Register (for factory testing)
+FCNFG:		equ	SFR_BASE + 0103h	;Flash Configuration Register
+FPROT:		equ	SFR_BASE + 0104h	;Flash Protection Register
+FSTAT:		equ	SFR_BASE + 0105h	;Flash Status Register
+FCMD:		equ	SFR_BASE + 0106h	;Flash Command Register
+;
+;#define Reserved	_P(0x0107) (for factory test)
+;
+FADDRHI:	equ	SFR_BASE + 0108h	;16-bit	Address	Register High Byte (for	factory	testing)
+FADDRLO:	equ	SFR_BASE + 0109h	;16-bit	Address	Register Low Byte  (for	factory	testing)
+FDATAHI:	equ	SFR_BASE + 010Ah	;16-bit	Data Register High Byte	(for factory testing)
+FDATALO:	equ	SFR_BASE + 010Bh	;16-bit	Data Register Low Byte (for factory testing)
+;
+;#define Reserved	_P(0x010C - 0x010F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0110h - 013Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0110 - 0x013F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0140h - 017Fh	    CAN (Scalable Controller Area Network - MSCAN)
+;------------------------------------------------------------------------------
+						;
+CAN0_BASE:	equ	SFR_BASE + 0140h	;Basisadresse von MSCAN0
+						;
+CAN0CTL0:	equ	SFR_BASE + 0140h	;MSCAN0	Control	Register 0
+CAN0CTL1:	equ	SFR_BASE + 0141h	;MSCAN0	Control	Register 1
+CAN0BTR0:	equ	SFR_BASE + 0142h	;MSCAN0	Bus Timing Register 0
+CAN0BTR1:	equ	SFR_BASE + 0143h	;MSCAN0	Bus Timing Register 1
+CAN0RFLG:	equ	SFR_BASE + 0144h	;MSCAN0	Receiver Flag Register
+CAN0RIER:	equ	SFR_BASE + 0145h	;MSCAN0	Receiver Interrupt Enable Register
+CAN0TFLG:	equ	SFR_BASE + 0146h	;MSCAN0	Transmitter Flag Register
+CAN0TIER:	equ	SFR_BASE + 0147h	;MSCAN0	Transmitter Interrupt Enable Register
+CAN0TARQ:	equ	SFR_BASE + 0148h	;MSCAN0	Transmitter Message Abort Request
+CAN0TAAK:	equ	SFR_BASE + 0149h	;MSCAN0	Transmitter Message Abort Acknowledge
+CAN0TBSEL:	equ	SFR_BASE + 014Ah	;MSCAN0	Transmit Buffer	Selection
+CAN0IDAC:	equ	SFR_BASE + 014Bh	;MSCAN0	Identifier Acceptance Control Register
+;
+;#define Reserved	_P(0x014C - 0x014D)
+;
+CAN0RXERR:	equ	SFR_BASE + 014Eh	;MSCAN0	Receive	Error Counter Register
+CAN0TXERR:	equ	SFR_BASE + 014Fh	;MSCAN0	Transmit Error Counter Register
+						;
+CAN0IDAR0:	equ	SFR_BASE + 0150h	;MSCAN0	Identifier Acceptance Register 0
+CAN0IDAR1:	equ	SFR_BASE + 0151h	;MSCAN0	Identifier Acceptance Register 1
+CAN0IDAR2:	equ	SFR_BASE + 0152h	;MSCAN0	Identifier Acceptance Register 2
+CAN0IDAR3:	equ	SFR_BASE + 0153h	;MSCAN0	Identifier Acceptance Register 3
+						;
+CAN0IDMR0:	equ	SFR_BASE + 0154h	;MSCAN0	Identifier Mask	Register 0
+CAN0IDMR1:	equ	SFR_BASE + 0155h	;MSCAN0	Identifier Mask	Register 1
+CAN0IDMR2:	equ	SFR_BASE + 0156h	;MSCAN0	Identifier Mask	Register 2
+CAN0IDMR3:	equ	SFR_BASE + 0157h	;MSCAN0	Identifier Mask	Register 3
+						;
+CAN0IDAR4:	equ	SFR_BASE + 0158h	;MSCAN0	Identifier Acceptance Register 4
+CAN0IDAR5:	equ	SFR_BASE + 0159h	;MSCAN0	Identifier Acceptance Register 5
+CAN0IDAR6:	equ	SFR_BASE + 015Ah	;MSCAN0	Identifier Acceptance Register 6
+CAN0IDAR7:	equ	SFR_BASE + 015Bh	;MSCAN0	Identifier Acceptance Register 7
+						;
+CAN0IDMR4:	equ	SFR_BASE + 015Ch	;MSCAN0	Identifier Mask	Register 4
+CAN0IDMR5:	equ	SFR_BASE + 015Dh	;MSCAN0	Identifier Mask	Register 5
+CAN0IDMR6:	equ	SFR_BASE + 015Eh	;MSCAN0	Identifier Mask	Register 6
+CAN0IDMR7:	equ	SFR_BASE + 015Fh	;MSCAN0	Identifier Mask	Register 7
+						;
+CAN0RXFG:	equ	SFR_BASE + 0160h	;MSCAN0	Receive	Buffer
+CAN0RXIDR0:	equ	SFR_BASE + 0160h	;MSCAN0	Receive	Identifier Register 0
+CAN0RXIDR1:	equ	SFR_BASE + 0161h	;MSCAN0	Receive	Identifier Register 1
+CAN0RXIDR2:	equ	SFR_BASE + 0162h	;MSCAN0	Receive	Identifier Register 2
+CAN0RXIDR3:	equ	SFR_BASE + 0163h	;MSCAN0	Receive	Identifier Register 3
+CAN0RXDSR0:	equ	SFR_BASE + 0164h	;MSCAN0	Receive	Data Segment Register 0
+CAN0RXDSR1:	equ	SFR_BASE + 0165h	;MSCAN0	Receive	Data Segment Register 1
+CAN0RXDSR2:	equ	SFR_BASE + 0166h	;MSCAN0	Receive	Data Segment Register 2
+CAN0RXDSR3:	equ	SFR_BASE + 0167h	;MSCAN0	Receive	Data Segment Register 3
+CAN0RXDSR4:	equ	SFR_BASE + 0168h	;MSCAN0	Receive	Data Segment Register 4
+CAN0RXDSR5:	equ	SFR_BASE + 0169h	;MSCAN0	Receive	Data Segment Register 5
+CAN0RXDSR6:	equ	SFR_BASE + 016Ah	;MSCAN0	Receive	Data Segment Register 6
+CAN0RXDSR7:	equ	SFR_BASE + 016Bh	;MSCAN0	Receive	Data Segment Register 7
+CAN0RXDLR:	equ	SFR_BASE + 016Ch	;MSCAN0	Receive	Data Length Register
+;
+;#define Reserved	_P(0x016D)
+;
+CAN0RTSRH:	equ	SFR_BASE + 016Eh	;MSCAN0	Receive	Time Stamp Register High Byte
+CAN0RTSRL:	equ	SFR_BASE + 016Fh	;MSCAN0	Receive	Time Stamp Register Low	Byte
+						;
+CAN0TXFG:	equ	SFR_BASE + 0170h	;MSCAN0	Transmit Buffer
+CAN0TXIDR0:	equ	SFR_BASE + 0170h	;MSCAN0	Transmit Identifier Register 0
+CAN0TXIDR1:	equ	SFR_BASE + 0171h	;MSCAN0	Transmit Identifier Register 1
+CAN0TXIDR2:	equ	SFR_BASE + 0172h	;MSCAN0	Transmit Identifier Register 2
+CAN0TXIDR3:	equ	SFR_BASE + 0173h	;MSCAN0	Transmit Identifier Register 3
+CAN0TXDSR0:	equ	SFR_BASE + 0174h	;MSCAN0	Transmit Data Segment Register 0
+CAN0TXDSR1:	equ	SFR_BASE + 0175h	;MSCAN0	Transmit Data Segment Register 1
+CAN0TXDSR2:	equ	SFR_BASE + 0176h	;MSCAN0	Transmit Data Segment Register 2
+CAN0TXDSR3:	equ	SFR_BASE + 0177h	;MSCAN0	Transmit Data Segment Register 3
+CAN0TXDSR4:	equ	SFR_BASE + 0178h	;MSCAN0	Transmit Data Segment Register 4
+CAN0TXDSR5:	equ	SFR_BASE + 0179h	;MSCAN0	Transmit Data Segment Register 5
+CAN0TXDSR6:	equ	SFR_BASE + 017Ah	;MSCAN0	Transmit Data Segment Register 6
+CAN0TXDSR7:	equ	SFR_BASE + 017Bh	;MSCAN0	Transmit Data Segment Register 7
+CAN0TXDLR:	equ	SFR_BASE + 017Ch	;MSCAN0	Transmit Data Length Register
+CAN0TXBPR:	equ	SFR_BASE + 017Dh	;MSCAN0	Transmit Buffer	Priority Register
+;
+;#define Reserved	 _P(0x017E - 0x017F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0180h - 023Fh	    Reserved
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0180 - 0x023F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0240h - 027Fh	    PIM (Port Integration Module)
+;------------------------------------------------------------------------------
+						;
+; Port T
+PTT:		equ	SFR_BASE + 0240h	;Port T	I/O Register
+PTIT:		equ	SFR_BASE + 0241h	;Port T	Input Register
+DDRT:		equ	SFR_BASE + 0242h	;Port T	Data Direction Register
+RDRT:		equ	SFR_BASE + 0243h	;Port T	Reduce Drive Register
+PERT:		equ	SFR_BASE + 0244h	;Port T	Pull Device Enable Register
+PPST:		equ	SFR_BASE + 0245h	;Port T	Polarity Select	Register
+;
+;#define Reserved	_P(0x0246)
+;
+MODRR:		equ	SFR_BASE + 0247h	;Port M Module Routing Register
+						;
+; Port S
+PTS:		equ	SFR_BASE + 0248h	;Port S	I/O Register
+PTIS:		equ	SFR_BASE + 0249h	;Port S	Input Register
+DDRS:		equ	SFR_BASE + 024Ah	;Port S	Data Direction Register
+RDRS:		equ	SFR_BASE + 024Bh	;Port S	Reduce Drive Register
+PERS:		equ	SFR_BASE + 024Ch	;Port S	Pull Device Enable Register
+PPSS:		equ	SFR_BASE + 024Dh	;Port S	Polarity Select	Register
+WOMS:		equ	SFR_BASE + 024Eh	;Port S	Wired-Or Mode Register
+;
+;#define Reserved	_P(0x024F)
+;
+						;
+; Port M
+PTM:		equ	SFR_BASE + 0250h	;Port M	I/O Register
+PTIM:		equ	SFR_BASE + 0251h	;Port M	Input Register
+DDRM:		equ	SFR_BASE + 0252h	;Port M	Data Direction Register
+RDRM:		equ	SFR_BASE + 0253h	;Port M	Reduce Drive Register
+PERM:		equ	SFR_BASE + 0254h	;Port M	Pull Device Enable Register
+PPSM:		equ	SFR_BASE + 0255h	;Port M	Polarity Select	Register
+WOMM:		equ	SFR_BASE + 0256h	;Port M	Wired-Or Mode Register
+;
+;#define Reserved	_P(0x0257)
+;
+						;
+; Port P
+PTP:		equ	SFR_BASE + 0258h	;Port P	I/O Register
+PTIP:		equ	SFR_BASE + 0259h	;Port P	Input Register
+DDRP:		equ	SFR_BASE + 025Ah	;Port P	Data Direction Register
+RDRP:		equ	SFR_BASE + 025Bh	;Port P	Reduce Drive Register
+PERP:		equ	SFR_BASE + 025Ch	;Port P	Pull Device Enable Register
+PPSP:		equ	SFR_BASE + 025Dh	;Port P	Polarity Select	Register
+PIEP:		equ	SFR_BASE + 025Eh	;Port P	Interrupt Enable Register
+PIFP:		equ	SFR_BASE + 025Fh	;Port P	Interrupt Flag Register
+						;
+;
+;#define Reserved	_P(0x0260 - 0x0267)
+;
+						;
+; Port J
+PTJ:		equ	SFR_BASE + 0268h	;Port J	I/O Register
+PTIJ:		equ	SFR_BASE + 0269h	;Port J	Input Register
+DDRJ:		equ	SFR_BASE + 026Ah	;Port J	Data Direction Register
+RDRJ:		equ	SFR_BASE + 026Bh	;Port J	Reduce Drive Register
+PERJ:		equ	SFR_BASE + 026Ch	;Port J	Pull Device Enable Register
+PPSJ:		equ	SFR_BASE + 026Dh	;Port J	Polarity Select	Register
+PIEJ:		equ	SFR_BASE + 026Eh	;Port J	Interrupt Enable Register
+PIFJ:		equ	SFR_BASE + 026Fh	;Port J	Interrupt Flag Register
+						;
+;Port AD
+PTAD:		equ	SFR_BASE + 0270h	;Port AD I/O Register
+PTIAD:		equ	SFR_BASE + 0271h	;Port AD Input Register
+DDRAD:		equ	SFR_BASE + 0272h	;Port AD Data Direction Register
+RDRAD:		equ	SFR_BASE + 0273h	;Port AD Reduce Drive Register
+PERAD:		equ	SFR_BASE + 0274h	;Port AD Pull Device Enable Register
+PPSAD:		equ	SFR_BASE + 0275h	;Port AD Polarity Select Register
+;
+;#define Reserved	_P(0x0276 - 0x027F)
+;
+						;
+;------------------------------------------------------------------------------
+; 0280h - 03FFh	    Reserved Space
+;------------------------------------------------------------------------------
+						;
+;
+;#define Reserved	_P(0x0280 - 0x02FF)
+;#define Unimplemented	_P(0x0300 - 0x03FF)
+;
+						;
+;==============================================================================
+; 2. MCU Special Function Register bit locations
+;==============================================================================
+						;
+bit0:		equ	01h
+bit1:		equ	02h
+bit2:		equ	04h
+bit3:		equ	08h
+bit4:		equ	10h
+bit5:		equ	20h
+bit6:		equ	40h
+bit7:		equ	80h
+						;
+;------------------------------------------------------------------------------
+; MEBI bit declarations
+;
+; -MODE-
+_EME:		equ	bit0
+_EMK:		equ	bit1
+_IVIS:		equ	bit3
+_MODA:		equ	bit5
+_MODB:		equ	bit6
+_MODC:		equ	bit7
+						;
+;------------------------------------------------------------------------------
+; CRG bit declarations
+;
+; -CRGFLG-
+_SCM:		equ	bit0
+_SCMIF:		equ	bit1
+_TRACK:		equ	bit2
+_LOCK:		equ	bit3
+_LOCKIF:	equ	bit4
+_PORF:		equ	bit6
+_RTIF:		equ	bit7
+
+; -CRGINT-
+_SCMIE:		equ	bit1
+_LOCKIE:	equ	bit4
+_RTIE:		equ	bit7
+
+; -CLKSEL-
+_COPWAI:	equ	bit0
+_RTIWAI:	equ	bit1
+_CWAI:		equ	bit2
+_PLLWAI:	equ	bit3
+_ROAWAI:	equ	bit4
+_SYSWAI:	equ	bit5
+_PSTP:		equ	bit6
+_PLLSEL:	equ	bit7
+
+; -PLLCTL-
+_SMCE:		equ	bit0
+_PCE:		equ	bit1
+_PRE:		equ	bit2
+_ACQ:		equ	bit4
+_AUTO:		equ	bit5
+_PLLON:		equ	bit6
+_CME:		equ	bit7
+
+; -COPCTL-
+_RSBCK:		equ	bit6
+_WCOP:		equ	bit7
+						;
+;------------------------------------------------------------------------------
+; TIM bit declarations
+;
+; -TIOS-
+_IOS0:		equ	bit0
+_IOS1:		equ	bit1
+_IOS2:		equ	bit2
+_IOS3:		equ	bit3
+_IOS4:		equ	bit4
+_IOS5:		equ	bit5
+_IOS6:		equ	bit6
+_IOS7:		equ	bit7
+
+; -TCFORC-
+_FOC0:		equ	bit0
+_FOC1:		equ	bit1
+_FOC2:		equ	bit2
+_FOC3:		equ	bit3
+_FOC4:		equ	bit4
+_FOC5:		equ	bit5
+_FOC6:		equ	bit6
+_FOC7:		equ	bit7
+
+; -TSCR1-
+_TFFCA:		equ	bit4
+_TSFRZ:		equ	bit5
+_TSWAI:		equ	bit6
+_TEN:		equ	bit7
+
+; -TSCR2-
+_TCRE:		equ	bit3
+_TOI:		equ	bit7
+
+; -TIE-
+_C0I:		equ	bit0
+_C1I:		equ	bit1
+_C2I:		equ	bit2
+_C3I:		equ	bit3
+_C4I:		equ	bit4
+_C5I:		equ	bit5
+_C6I:		equ	bit6
+_C7I:		equ	bit7
+
+; -TFLG1-
+_C0F:		equ	bit0
+_C1F:		equ	bit1
+_C2F:		equ	bit2
+_C3F:		equ	bit3
+_C4F:		equ	bit4
+_C5F:		equ	bit5
+_C6F:		equ	bit6
+_C7F:		equ	bit7
+
+; -TFLG2-
+_TOF:		equ	bit7
+
+; -PACTL-
+_PAI:		equ	bit0
+_PAOVI:		equ	bit1
+_PEDGE:		equ	bit4
+_PAMOD:		equ	bit5
+_PAEN:		equ	bit6
+
+; -PAFLG-
+_PAIF:		equ	bit0
+_PAOVF:		equ	bit1
+						;
+;------------------------------------------------------------------------------
+; ATDx bit declarations
+;
+; -ATDxCTL2-
+_ASCIF:		equ	bit0
+_ASCIE:		equ	bit1
+_ETRIGE:	equ	bit2
+_ETRIGP:	equ	bit3
+_ETRIGLE:	equ	bit4
+_AWAI:		equ	bit5
+_AFFC:		equ	bit6
+_ADPU:		equ	bit7
+
+; -ATDxCTL3-
+_FIFO:		equ	bit2
+
+; -ATDxCTL5-
+_MULT:		equ	bit4
+_SCAN:		equ	bit5
+_DSGN:		equ	bit6
+_DJM:		equ	bit7
+
+; -ATDxSTAT0-
+_FIFOR:		equ	bit4
+_ETORF:		equ	bit5
+_SCF:		equ	bit7
+
+;------------------------------------------------------------------------------
+; SCIx bit declarations
+;
+; -SCIxCR1-
+_PT:		equ	bit0
+_PE:		equ	bit1
+_ILT:		equ	bit2
+_WAKE:		equ	bit3
+_M:		equ	bit4
+_RSRC:		equ	bit5
+_SCISWAI:	equ	bit6
+_LOOPS:		equ	bit7
+
+; -SCIxCR2-
+_SBK:		equ	bit0
+_RWU:		equ	bit1
+_RE:		equ	bit2
+_TE:		equ	bit3
+_ILIE:		equ	bit4
+_RIE:		equ	bit5
+_TCIE:		equ	bit6
+_TIE:		equ	bit7
+
+; -SCIxSR1-
+_PF:		equ	bit0
+_FE:		equ	bit1
+_NF:		equ	bit2
+_OR:		equ	bit3
+_IDLE:		equ	bit4
+_RDRF:		equ	bit5
+_TC:		equ	bit6
+_TDRE:		equ	bit7
+
+; -SCIxSR2-
+_RAF:		equ	bit0
+_TXDIR:		equ	bit1
+_BK13:		equ	bit2
+
+; -SCIDRH-
+_T8:		equ	bit6
+_R8:		equ	bit7
+						;
+;------------------------------------------------------------------------------
+; FTS128K bit declarations
+;
+; -FCLKDIV-
+_FDIVLD:	equ	bit7
+
+; -FCNFG-
+_CCIE:		equ	bit6
+_CBEIE:		equ	bit7
+
+; -FPROT-
+_FPLDIS:	equ	bit3
+_FPOPEN:	equ	bit7
+
+; -FSTAT-
+_DONE:		equ	bit0
+_FAIL:		equ	bit1
+_BLANK:		equ	bit2
+_ACCERR:	equ	bit4
+_PVIOL:		equ	bit5
+_CCIF:		equ	bit6
+_CBEIF:		equ	bit7
+						;
+;------------------------------------------------------------------------------
+; MSCANx bit declarations
+;
+; -CANxCTL0-
+_INITRQ:	equ	bit0
+_SLPRQ:		equ	bit1
+_WUPE:		equ	bit2
+_TIME:		equ	bit3
+_SYNCH:		equ	bit4
+_CSWAI:		equ	bit5
+_RXACT:		equ	bit6
+_RXFRM:		equ	bit7
+
+; -CANxCTL1-
+_INITAK:	equ	bit0
+_SLPAK:		equ	bit1
+_WUPM:		equ	bit2
+_LISTEN:	equ	bit4
+_LOOPB:		equ	bit5
+_CLKSRC:	equ	bit6
+_CANE:		equ	bit7
+
+; -CANxRFLG-
+_RXF:		equ	bit0
+_OVRIF:		equ	bit1
+_TSTAT0:	equ	bit2
+_TSTAT1:	equ	bit3
+_RSTAT0:	equ	bit4
+_RSTAT1:	equ	bit5
+_CSCIF:		equ	bit6
+_WUPIF:		equ	bit7
+
+; -CANxRIER-
+_RXFIE:		equ	bit0
+_OVRIE:		equ	bit1
+_TSTATE0:	equ	bit2
+_TSTATE1:	equ	bit3
+_RSTATE0:	equ	bit4
+_RSTATE1:	equ	bit5
+_CSCIE:		equ	bit6
+_WUPIE:		equ	bit7
+
+; -CANxTFLG-
+_TXE0:		equ	bit0
+_TXE1:		equ	bit1
+_TXE2:		equ	bit2
+
+; -CANxTIER-
+_TXEIE0:	equ	bit0
+_TXEIE1:	equ	bit1
+_TXEIE2:	equ	bit2
+
+; -CANxTARQ-
+_ABTRQ0:	equ	bit0
+_ABTRQ1:	equ	bit1
+_ABTRQ2:	equ	bit2
+
+; -CANxTAAK-
+_ABTAK0:	equ	bit0
+_ABTAK1:	equ	bit1
+_ABTAK2:	equ	bit2
+
+; -CANxTBSEL-
+_TX0:		equ	bit0
+_TX1:		equ	bit1
+_TX2:		equ	bit2
+						;
+;==============================================================================
+; 3. 32 General Purpose Registers
+;==============================================================================
+						;
+R0:		equ	GPR_BASE + 0000h	;
+R1:		equ	GPR_BASE + 0001h	;
+R2:		equ	GPR_BASE + 0002h	;
+R3:		equ	GPR_BASE + 0003h	;
+R4:		equ	GPR_BASE + 0004h	;
+R5:		equ	GPR_BASE + 0005h	;
+R6:		equ	GPR_BASE + 0006h	;
+R7:		equ	GPR_BASE + 0007h	;
+R8:		equ	GPR_BASE + 0008h	;
+R9:		equ	GPR_BASE + 0009h	;
+R10:		equ	GPR_BASE + 000Ah	;
+R11:		equ	GPR_BASE + 000Bh	;
+R12:		equ	GPR_BASE + 000Ch	;
+R13:		equ	GPR_BASE + 000Dh	;
+R14:		equ	GPR_BASE + 000Eh	;
+R15:		equ	GPR_BASE + 000Fh	;
+R16:		equ	GPR_BASE + 0010h	;
+R17:		equ	GPR_BASE + 0011h	;
+R18:		equ	GPR_BASE + 0012h	;
+R19:		equ	GPR_BASE + 0013h	;
+R20:		equ	GPR_BASE + 0014h	;
+R21:		equ	GPR_BASE + 0015h	;
+R22:		equ	GPR_BASE + 0016h	;
+R23:		equ	GPR_BASE + 0017h	;
+R24:		equ	GPR_BASE + 0018h	;
+R25:		equ	GPR_BASE + 0019h	;
+R26:		equ	GPR_BASE + 001Ah	;
+R27:		equ	GPR_BASE + 001Bh	;
+R28:		equ	GPR_BASE + 001Ch	;
+R29:		equ	GPR_BASE + 001Dh	;
+R30:		equ	GPR_BASE + 001Eh	;
+R31:		equ	GPR_BASE + 001Fh	;
+						;
+;------------------------------------------------------------------------------
+	list
+	end

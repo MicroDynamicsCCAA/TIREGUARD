@@ -1,0 +1,194 @@
+	include "s12ga_240.sfr"
+	title	"tg4Scale  Copyright (C) 2005-2015, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;TIREGUARD 4	Betriebsprogramm
+;------------------------------------------------------------------------------
+;Module:	tg4Scale.asm
+;
+;Copyright: 	(C) 2005-2015, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	07.01.2015
+;
+;Description:	Bearbeitung der Rohdaten in Form von digitaler Filterung
+;		analoger Signale.
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.05
+;
+;07.01.2015	Version 4.00
+;27.11.2014	Anpassung an MC9S12GA240
+;		Herkunft: tg3Scale.asm
+;
+;18.09.2013	Version 4.0 Beta 0
+;
+;24.11.2006	Version 1.00
+;08.11.2006	Anpassung an MC9S12C128
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;Externals
+;------------------------------------------------------------------------------
+					;
+	xref	MEAN16			;Code
+					;
+	xref	E_ANALOG_COEFF_TBL	;bssData
+	xref	E_SENSORS_COEFF_TBL	;bssData
+					;
+	xref	ANALOG_BUF		;Data
+	xref	ANALOG_RESULT_BUF	;Data
+	xref	ANALOG_S1_BUF		;Data
+	xref	P_AMBIENT		;Data
+	xref	P_TPMS			;Data
+	xref	SENSORS_BUF		;Data
+	xref	SENSORS_RESULT_BUF	;Data
+	xref	SENSORS_S1_BUF		;Data
+					;
+	xref.b	ANALOG_CT		;Number
+	xref	DEF_NOVALUE		;Number
+	xref.b	SENSORS_CT		;Number
+					;
+;------------------------------------------------------------------------------
+;Publics
+;------------------------------------------------------------------------------
+					;
+	xdef	SCALE			;Code
+					;
+.text:		section
+					;
+;==============================================================================
+;SCALE Modul-Einsprung
+;==============================================================================
+					;
+SCALE:
+	JSR	SCALE_ANALOG		;
+	JSR	SCALE_SENSORS		;
+	JSR	SCALE_P_TPMS		;
+	RTS				;
+					;
+	dcb.b	6, 0FFh			;
+	SWI				;
+					;
+;------------------------------------------------------------------------------
+;SCALE_ANALOG filtert ggf. die analogen Messwerte.
+;
+;Eingangsparameter:	ANALOG_BUF
+;			ANALOG_S1_BUF
+;			E_ANALOG_COEFF_TBL
+;Ausgangsparameter:	ANALOG_RESULT_BUF
+;			ANALOG_S1_BUF
+;veränderte Register:	CCR, A, B, X, Y, R[0..1,3..7,10..27]
+;------------------------------------------------------------------------------
+					;
+SCALE_ANALOG:
+	MOVW	#ANALOG_BUF,R10		;Zeiger auf analoge Rohdaten
+	MOVW	#ANALOG_RESULT_BUF,R12	;Zeiger auf Ergebnisbuffer
+
+	MOVW	#E_ANALOG_COEFF_TBL,R16	;Zeiger auf Mittelungskonstanten
+	MOVW	#ANALOG_S1_BUF,R6	;Zeiger auf Vorgeschichtswerte
+	MOVB	#ANALOG_CT,R3		;maximal 7 Analogeingänge
+					;
+SCALE_ANALOG1:
+	LDX	R10			;
+	MOVW	2,X+,R18		;Rohdatenwert nach R[18..19]
+	STX	R10			;
+					;
+	LDX	R16			;
+	LDAA	1,X+			;
+	STX	R16			;
+	CMPA	#0			;wenn Mittelungskonstante > 0,
+	BEQ	SCALE_ANALOG2		;dann
+	STAA	R0			;  Mittelungskonstante
+	MOVW	#R18,R4			;  Zeiger auf Eingangswert
+					;  R[6..7] zeigt auf Vorgeschichtswert
+	JSR	MEAN16			;  Aufruf der Mittelungsfunktion
+SCALE_ANALOG2:
+	LDX	R6			;Zeiger auf Vorgeschichtswerte
+	LEAX	3,X			;zum nächsten 24-bit Wert verschieben
+	STX	R6			;
+					;
+	LDY	R12			;
+	LDD	R18			;
+	STD	2,Y+			;16-bit Ergebnis im Ergebnisbuffer ablegen
+	STY	R12			;
+	DEC	R3			;
+	BNE	SCALE_ANALOG1		;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;SCALE_SENSORS filtert ggf. die analogen Sensor-Messwerte.
+;
+;Eingangsparameter:	SENSORS_BUF
+;			SENSORS_S1_BUF
+;			E_SENSORS_COEFF_TBL
+;Ausgangsparameter:	SENSORS_RESULT_BUF
+;			SENSORS_S1_BUF
+;veränderte Register:	CCR, A, B, X, Y, R[0..1,3..7,10..27]
+;------------------------------------------------------------------------------
+					;
+SCALE_SENSORS:
+	MOVW	#SENSORS_BUF,R10	;Zeiger auf analoge Rohdaten
+	MOVW	#SENSORS_RESULT_BUF,R12	;Zeiger auf Ergebnisbuffer
+	MOVW	#E_SENSORS_COEFF_TBL,R16;Zeiger auf Mittelungskonstanten
+	MOVW	#SENSORS_S1_BUF,R6	;Zeiger auf Vorgeschichtswerte
+	MOVB	#SENSORS_CT,R3		;maximal 7 Sensoreingänge
+					;
+SCALE_SENSORS1:
+	LDX	R10			;
+	MOVW	2,X+,R18		;Rohdatenwert nach R[18..19]
+	STX	R10			;
+					;
+	LDX	R16			;
+	LDAA	1,X+			;
+	STX	R16			;
+	CMPA	#0			;wenn Mittelungskonstante > 0,
+	BEQ	SCALE_SENSORS2		;dann
+	STAA	R0			;  Mittelungskonstante
+	LDD	R18			;
+	CPD	#DEF_NOVALUE		;
+	BEQ	SCALE_SENSORS2		;
+	MOVW	#R18,R4			;  Zeiger auf Eingangswert
+					;  R[6..7] zeigt auf Vorgeschichtswert
+	JSR	MEAN16			;  Aufruf der Mittelungsfunktion
+SCALE_SENSORS2:
+	LDX	R6			;Zeiger auf Vorgeschichtswerte
+	LEAX	3,X			;zum nächsten 24-bit Wert verschieben
+	STX	R6			;
+					;
+	LDY	R12			;
+	LDD	R18			;
+	STD	2,Y+			;16-bit Ergebnis im Ergebnisbuffer ablegen
+	STY	R12			;
+	DEC	R3			;
+	BNE	SCALE_SENSORS1		;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;SCALE_P_TPMS skaliert den Umgebungsdruckwert auf 25 mbar pro Increment um.
+;
+;Eingangsparameter:	P_AMBIENT
+;Ausgangsparameter:	P_TPMS
+;veränderte Register:	CCR, A, B, X
+;------------------------------------------------------------------------------
+					;
+SCALE_P_TPMS:
+	LDD	P_AMBIENT		;
+	LDX	#25			;
+	IDIV				;
+	LSLD				;
+	SUBD	#25			;
+	BLO	SCALE_P_TPMS1		;
+	INX				;
+					;
+SCALE_P_TPMS1:
+	EXG	D,X			;
+	CMPA	#0			;
+	BEQ	SCALE_P_TPMS2		;
+	LDAB	#0FFh			;
+SCALE_P_TPMS2:
+	STAB	P_TPMS			;
+	RTS				;
+					;
+	dcb.b	6, 0FFh			;
+	SWI				;
+					;
+;------------------------------------------------------------------------------
+	end

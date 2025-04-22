@@ -1,0 +1,45 @@
+	nolist
+	title	"s12ga_MC33879.sfr  Copyright (C) 2006-2014, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_MC33879.sfr
+;
+;Copyright: 	(C) 2006-2014, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	30.11.2014
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12ga_MC33879.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.06
+;
+;27.11.2014	Angepasst für TIREGUARD 4
+;
+;24.11.2006	Ursprungsversion
+;------------------------------------------------------------------------------
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Definition der Bits
+;//////////////////////////////////////////////////////////////////////////////
+					;
+_MISO:		equ	bit4		;
+_MOSI:		equ	bit6		;
+_SCLK:		equ	bit7		;
+					;
+_CS:		equ	bit2		;
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;//////////////////////////////////////////////////////////////////////////////
+					;
+MISO_PORT:	equ	PTS		;
+MISO_DIR:	equ	DDRS		;
+MOSI_PORT:	equ	PTS		;
+MOSI_DIR:	equ	DDRS		;
+SCLK_PORT:	equ	PTS		;
+SCLK_DIR:	equ	DDRS		;
+					;
+CS_PORT:	equ	PTT		;
+CS_DIR:		equ	DDRT		;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

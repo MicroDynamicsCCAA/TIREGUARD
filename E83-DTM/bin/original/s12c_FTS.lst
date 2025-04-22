@@ -1,0 +1,530 @@
+s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_Switches.sfr"
+ 1015    3                      	title	"s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;Module:	s12c_FTS.asm
+ 1018    6                      ;
+ 1019    7                      ;Copyright:	(C) 2006-2009, micro dynamics GmbH
+ 1020    8                      ;Author(s):	Michael Frank
+ 1021    9                      ;Update:	19.06.2009
+ 1022   10                      ;
+ 1023   11                      ;Description:	Funktionen für den Schreibzugriff auf den prozessorinternen
+ 1024   12                      ;		FLASH-Speicher des Freescale MC9S12C128
+ 1025   13                      ;		Die Funktionen weisen weitgehend gleiche Parameterkonventionen
+ 1026   14                      ;		auf wie diejenigen der Module s12*_EETS.asm
+ 1027   15                      ;------------------------------------------------------------------------------
+ 1028   16                      ;Revision History:	Original Version  11.06
+ 1029   17                      ;
+ 1030   18                      ;19.06.2009	Korrektur in Funktion FTS_COPY
+ 1031   19                      ;24.05.2009	Korrekturen in PROGRAM_SECTOR und SUBMIT_COMMAND
+ 1032   20                      ;------------------------------------------------------------------------------
+ 1033   21                      					;
+ 1034   22                      ;------------------------------------------------------------------------------
+ 1035   23                      ;Externals
+ 1036   24                      ;------------------------------------------------------------------------------
+ 1037   25                      					;
+ 1038   26                      	xref	BUS_CLK			;Number
+ 1039   27                      	xref.b	C_FTS_FCLKDIV		;Number
+ 1040   28                      					;
+ 1041   29                      ;------------------------------------------------------------------------------
+ 1042   30                      ;Publics
+ 1043   31                      ;------------------------------------------------------------------------------
+ 1044   32                      					;
+ 1045   33                      	xdef	FTS_COPY		;Code
+ 1046   34                      	xdef	FTS_FLASH		;Code
+ 1047   35                      	xdef	FTS_RESET		;Code
+ 1048   36                      	xdef	FTS_WRITE8		;Code
+ 1049   37                      	xdef	FTS_WRITE16		;Code
+ 1050   38                      					;
+ 1051   39                      	xdef	E_FTS_BUSY		;Number
+ 1052   40                      	xdef	E_FTS_TIMEOUT		;Number
+ 1053   41                      	xdef	E_FTS_INVALID_ACCESS	;Number
+ 1054   42                      					;
+ 1055   43                      ;------------------------------------------------------------------------------
+ 1056   44                      ;Constants
+ 1057   45                      ;------------------------------------------------------------------------------
+ 1058   46                      					;
+ 1059   47          FFFF FFFF   E_FTS_BUSY:		equ	-1
+ 1060   48          FFFF FFFE   E_FTS_TIMEOUT:		equ	-2
+ 1061   49          FFFF FFFD   E_FTS_INVALID_ACCESS:	equ	-3
+ 1062   50                      					;
+ 1063   51          0000 0020   CMD_PROGRAM:		equ	20h
+ 1064   52          0000 0040   CMD_SECTOR_ERASE:	equ	40h
+ 1065   53                      
+ 1066   54                      ;------------------------------------------------------------------------------
+ 1067   55                      ;C_SECTOR_SIZE gibt die Größe eines zusammenhängend zu löschenden Speicher-
+ 1068   56                      ;sektors in Anzahl der Datenworte an.
+ 1069   57                      ;Zur Anpassung an andere Sektorgrößen ist dieser Wert entsprechend zu ändern.
+ 1070   58                      ;------------------------------------------------------------------------------
+ 1071   59                      					;
+ 1072   60          0000 0200   C_SECTOR_SIZE:	equ	512		;1024 Bytes Sektorgröße
+ 1073   61                      					;
+ 1074   62          0000 03FF   SECTOR_MASK:    equ	(2 * C_SECTOR_SIZE) - 1
+ 1075   63          0000 0010   I_BIT:		equ	bit4		;
+ 1076   64                      					;
+ 1077   65                      .text_C000:     section
+ 1078   66                      					;
+ 1079   67                      ;==============================================================================
+ 1080   68                      ;
+ 1081   69                      ;Beginn des im RAM auszuführenden Programmcodes
+ 1082   70                      ;
+ 1083   71                      ;==============================================================================
+ 1084   72                      					;
+ 1085   73                      RAM_CODE:
+ 1086   74                      					;
+ 1087   75                      ;------------------------------------------------------------------------------
+ 1088   76                      ;PROGRAM_SECTOR aktualisiert einen Sektor im internen FLASH-Speicher.
+ 1089   77                      ;
+ 1090   78                      ;Eingangsparameter:	X		Zeiger auf Quelle, bleibt unverändert
+ 1091   79                      ;			Y		Zeiger auf Ziel, bleibt unverändert
+ 1092   80                      ;Ausgangsparameter:	A		0 	= ok
+ 1093   81                      ;					<> 0	= Fehlercode
+ 1094   82                      ;veränderte Register:	CCR, B, R[8..13]
+ 1095   83                      ;------------------------------------------------------------------------------
+ 1096   84                      					;
+s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1097   85                      PROGRAM_SECTOR:
+ 1098   86   000000 1E01 0080   	BRSET	FCLKDIV,_FDIVLD,PROGRAM_SECTOR1
+             000004 05         
+ 1099   87   000005 180B xx01   	MOVB	#C_FTS_FCLKDIV,FCLKDIV	;ggf. Taktvorteiler setzen
+             000009 00         
+ 1100   88                      					;
+ 1101   89                      PROGRAM_SECTOR1:
+ 1102   90   00000A 1C01 0530   	BSET	FSTAT,_PVIOL | _ACCERR	;Fehlerflags zurücksetzen
+ 1103   91   00000E 1E01 05C0   	BRSET	FSTAT,_CBEIF | _CCIF,PROGRAM_SECTOR2
+             000012 06         
+ 1104   92   000013 86FF        	LDAA	#E_FTS_BUSY		;Fehler: Nicht bereit
+ 1105   93   000015 1820 004F   	LBRA	PROGRAM_SECTOR9		;
+ 1106   94                      					;
+ 1107   95                      PROGRAM_SECTOR2:
+ 1108   96   000019 7E10 08     	STX	R8			;
+ 1109   97   00001C 7D10 0A     	STY	R10			;
+ 1110   98                      					;
+ 1111   99   00001F CCFF FF     	LDD	#0FFFFh			;
+ 1112  100   000022 CE02 00     	LDX	#C_SECTOR_SIZE		;
+ 1113  101                      PROGRAM_SECTOR2a:
+ 1114  102   000025 AC71        	CPD	2,Y+			;
+ 1115  103   000027 2608        	BNE	PROGRAM_SECTOR3		;
+ 1116  104                      ;
+ 1117  105                      ;begin 24.05.2009
+ 1118  106   000029 0435 F9     	DBNE	X,PROGRAM_SECTOR2a	;
+ 1119  107                      ;end
+ 1120  108                      ;
+ 1121  109   00002C FD10 0A     	LDY	R10			;
+ 1122  110   00002F 270E        	BEQ	PROGRAM_SECTOR4		;wenn Sektor <> 0FFFFh.0FFFFh... ...0FFFFh.0FFFFh,
+ 1123  111                      					;
+ 1124  112                      PROGRAM_SECTOR3:
+ 1125  113   000031 FD10 0A     	LDY	R10
+ 1126  114   000034 1800 4008   	MOVW	#0815h,0,Y		;(Wert ohne Bedeutung)
+             000038 15         
+ 1127  115   000039 8640        	LDAA	#CMD_SECTOR_ERASE	;dann
+ 1128  116   00003B 0732        	BSR	SUBMIT_COMMAND		;  Sektor löschen
+ 1129  117   00003D 2629        	BNE	PROGRAM_SECTOR9		;
+ 1130  118                      					;
+ 1131  119                      PROGRAM_SECTOR4:
+ 1132  120   00003F FE10 08     	LDX	R8			;
+ 1133  121   000042 FD10 0A     	LDY	R10			;
+ 1134  122   000045 CC02 00     	LDD	#C_SECTOR_SIZE		;
+ 1135  123   000048 7C10 0C     	STD	R12			;
+ 1136  124                      PROGRAM_SECTOR41:
+ 1137  125   00004B EC31        	LDD	2,X+			;wenn Datenwort = 0FFFFh,
+ 1138  126   00004D 8CFF FF     	CPD	#0FFFFh			;dann
+ 1139  127   000050 2708        	BEQ	PROGRAM_SECTOR42	;  keine Programmierung erforderlich
+ 1140  128   000052 6C40        	STD	0,Y			;sonst
+ 1141  129   000054 8620        	LDAA	#CMD_PROGRAM		;  Datenwort in den FLASH-Speicher schreiben
+ 1142  130   000056 0717        	BSR	SUBMIT_COMMAND		;  Programmierung ausführen
+ 1143  131   000058 260E        	BNE	PROGRAM_SECTOR9		;
+ 1144  132                      PROGRAM_SECTOR42:
+ 1145  133   00005A 1942        	LEAY	2,Y			;
+ 1146  134   00005C FC10 0C     	LDD	R12			;
+ 1147  135   00005F 8300 01     	SUBD	#1			;
+ 1148  136   000062 7C10 0C     	STD	R12			;
+ 1149  137   000065 26E4        	BNE	PROGRAM_SECTOR41	;
+ 1150  138                      					;
+ 1151  139                      PROGRAM_SECTOR8:
+ 1152  140   000067 87          	CLRA				;ok, mit A = 0 zurück
+ 1153  141                      					;
+ 1154  142                      PROGRAM_SECTOR9:
+ 1155  143   000068 FE10 08     	LDX	R8			;
+ 1156  144   00006B FD10 0A     	LDY	R10			;
+ 1157  145   00006E 3D          	RTS				;
+ 1158  146                      					;
+ 1159  147                      ;------------------------------------------------------------------------------
+ 1160  148                      ;SUBMIT_COMMAND führt ein FLASH-Speicher-Kommando aus.
+ 1161  149                      ;
+ 1162  150                      ;Eingangsparameter:	A		Kommando
+ 1163  151                      ;Ausgangsparameter:	A		0 	= ok
+ 1164  152                      ;					<> 0	= Fehlercode
+ 1165  153                      ;veränderte Register:	CCR, B
+ 1166  154                      ;------------------------------------------------------------------------------
+ 1167  155                      					;
+ 1168  156                      SUBMIT_COMMAND:
+ 1169  157                      
+ 1170  158          0000 0000    ifeq fDebug
+ 1171  159   00006F 180B 5500   	MOVB	#55h,ARMCOP		;Watchdog-Timer neu starten
+             000073 3F         
+ 1172  160   000074 180B AA00   	MOVB	#0AAh,ARMCOP		;muss(!) hier zu Fuß gemacht werden
+             000078 3F         
+ 1173  161                       endif
+ 1174  162                      
+s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1175  163   000079 7A01 06     	STAA	FCMD			;Kommando schreiben
+ 1176  164   00007C 1C01 0580   	BSET	FSTAT,_CBEIF		;und Kommandoausführung starten
+ 1177  165   000080 CCxx xx     	LDD	#BUS_CLK		;Timeout auf Startwert : max 40 ms
+ 1178  166                      SUBMIT_COMMAND1:
+ 1179  167                      ;
+ 1180  168                      ;begin 24.05.2009
+ 1181  169   000083 1E01 0540   	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+             000087 30         
+ 1182  170   000088 A7          	NOP				;	 1
+ 1183  171   000089 A7          	NOP				;	 1
+ 1184  172   00008A 0434 F6     	DBNE	D,SUBMIT_COMMAND1	;	 3
+ 1185  173                      					;Summe	10 Zyklen : max 10 ms
+ 1186  174   00008D CCxx xx     	LDD	#BUS_CLK		;
+ 1187  175                      SUBMIT_COMMAND11:
+ 1188  176   000090 1E01 0540   	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+             000094 23         
+ 1189  177   000095 A7          	NOP				;	 1
+ 1190  178   000096 A7          	NOP				;	 1
+ 1191  179   000097 0434 F6     	DBNE	D,SUBMIT_COMMAND11	;	 3
+ 1192  180                      					;Summe	10 Zyklen : max 10 ms
+ 1193  181   00009A CCxx xx     	LDD	#BUS_CLK		;
+ 1194  182                      SUBMIT_COMMAND12:
+ 1195  183   00009D 1E01 0540   	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+             0000A1 16         
+ 1196  184   0000A2 A7          	NOP				;	 1
+ 1197  185   0000A3 A7          	NOP				;	 1
+ 1198  186   0000A4 0434 F6     	DBNE	D,SUBMIT_COMMAND12	;	 3
+ 1199  187                      					;Summe	10 Zyklen : max 10 ms
+ 1200  188   0000A7 CCxx xx     	LDD	#BUS_CLK		;
+ 1201  189                      SUBMIT_COMMAND13:
+ 1202  190   0000AA 1E01 0540   	BRSET	FSTAT,_CCIF,SUBMIT_COMMAND2 ;	 5
+             0000AE 09         
+ 1203  191   0000AF A7          	NOP				;	 1
+ 1204  192   0000B0 A7          	NOP				;	 1
+ 1205  193   0000B1 0434 F6     	DBNE	D,SUBMIT_COMMAND13	;	 3
+ 1206  194                      					;Summe	10 Zyklen : max 10 ms
+ 1207  195   0000B4 86FE        	LDAA	#E_FTS_TIMEOUT		;Fehler: Timeout
+ 1208  196                      ;end
+ 1209  197                      ;
+ 1210  198   0000B6 200A        	BRA	SUBMIT_COMMAND9		;
+ 1211  199                      					;
+ 1212  200                      SUBMIT_COMMAND2:
+ 1213  201   0000B8 1F01 0530   	BRCLR	FSTAT,_PVIOL | _ACCERR,SUBMIT_COMMAND8
+             0000BC 04         
+ 1214  202   0000BD 86FD        	LDAA	#E_FTS_INVALID_ACCESS	;Fehler: Unzulässiger Schreibzugriff
+ 1215  203   0000BF 2001        	BRA	SUBMIT_COMMAND9		;
+ 1216  204                      					;
+ 1217  205                      SUBMIT_COMMAND8:
+ 1218  206   0000C1 87          	CLRA				;ok, mit A = 0 zurück
+ 1219  207                      					;
+ 1220  208                      SUBMIT_COMMAND9:
+ 1221  209   0000C2 3D          	RTS				;
+ 1222  210                      					;
+ 1223  211          0000 00C3   RAM_CODE_CNT:	equ	(* - RAM_CODE)
+ 1224  212                      					;
+ 1225  213                      ;==============================================================================
+ 1226  214                      ;
+ 1227  215                      ;Ende des im RAM auszuführenden Programmcodes
+ 1228  216                      ;
+ 1229  217                      ;==============================================================================
+ 1230  218                      					;
+ 1231  219                      ;------------------------------------------------------------------------------
+ 1232  220                      ;Variables
+ 1233  221                      ;------------------------------------------------------------------------------
+ 1234  222                      					;
+ 1235  223                      .locals:	section
+ 1236  224                      					;
+ 1237  225                      BOV:
+ 1238  226   000000             FTS_FLAGS:	ds.b	1		;Flags
+ 1239  227          0000 0001   _LOADED:	equ	bit0		;1, wenn EEPROM-Sektor in Sektorbuffer eingelesen ist
+ 1240  228                      ;
+ 1241  229                      ;
+ 1242  230                      ;
+ 1243  231          0000 0010   _LAST_I_BIT:	equ	bit4		;1, wenn I-bit = 1 war
+ 1244  232                      ;
+ 1245  233                      ;
+ 1246  234          0000 0080   _DIRTY:		equ	bit7		;1, wenn Sektorbuffer gegenüber EEPROM-Sektor verändert wurde
+ 1247  235                      					;
+ 1248  236   000001             FTS_SECTOR_ADDR: ds.w	1		;Zeiger auf aktuellen Sektor im FLASH-Speicher,
+ 1249  237                      					;wenn _LOADED gesetzt
+ 1250  238   000003             FTS_SECTOR_BUF:	ds.w	C_SECTOR_SIZE	;Sektorbuffer
+ 1251  239                      					;
+ 1252  240   000403             FTS_CODE_BUF:	ds.b	RAM_CODE_CNT	;Codebuffer für Programmierfunktion
+ 1253  241                      					;
+s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1254  242                      TOV:
+ 1255  243                      					;
+ 1256  244                      .text:		section
+ 1257  245                      					;
+ 1258  246                      ;------------------------------------------------------------------------------
+ 1259  247                      ;Public: FTS_RESET fegt den FLASH-Sektorbuffer, schreibt einen
+ 1260  248                      ;Rücksprungbefehl in den FLASH-Codebuffer und setzt die Statusflags zurück.
+ 1261  249                      ;
+ 1262  250                      ;Eingangsparameter:	keine
+ 1263  251                      ;Ausgangsparameter:	keine
+ 1264  252                      ;veränderte Register:	CCR, A, B, X, Y
+ 1265  253                      ;------------------------------------------------------------------------------
+ 1266  254                      					;
+ 1267  255                      FTS_RESET:
+ 1268  256   000000 CDxx xx     	LDY	#FTS_SECTOR_BUF		;
+ 1269  257   000003 CE02 00     	LDX	#C_SECTOR_SIZE		;
+ 1270  258   000006 CCFF FF     	LDD	#0FFFFh			;
+ 1271  259                      FTS_RESET1:
+ 1272  260   000009 6C71        	STD	2,Y+			;Sektorbuffer fegen
+ 1273  261   00000B 0435 FB     	DBNE	X,FTS_RESET1		;
+ 1274  262                      					;
+ 1275  263   00000E CDxx xx     	LDY	#FTS_CODE_BUF		;
+ 1276  264   000011 8686        	LDAA	#86h			;
+ 1277  265   000013 6A70        	STAA	1,Y+			;
+ 1278  266   000015 86FD        	LDAA	#E_FTS_INVALID_ACCESS	;"LDAA	#E_INVALID_ACCESS"
+ 1279  267   000017 6A70        	STAA	1,Y+			;
+ 1280  268   000019 863D        	LDAA	#3Dh			;"RTS"
+ 1281  269   00001B 6A70        	STAA	1,Y+			;Rücksprungbefehl in Codebuffer eintragen
+ 1282  270                      					;
+ 1283  271   00001D 180B 00xx   	MOVB	#0,FTS_FLAGS		;Flags rücksetzen
+             000021 xx         
+ 1284  272   000022 3D          	RTS				;
+ 1285  273                      					;
+ 1286  274                      ;------------------------------------------------------------------------------
+ 1287  275                      ;Public: FTS_WRITE8 schreibt ein Byte in den internen FLASH-Sektorbuffer.
+ 1288  276                      ;
+ 1289  277                      ;Eingangsparameter:	R6/R7		Zieladresse
+ 1290  278                      ;			R0		Datenbyte
+ 1291  279                      ;Ausgangsparameter:	A		0 	= ok
+ 1292  280                      ;					<> 0	= Fehlercode
+ 1293  281                      ;veränderte Register:	CCR, B, X, Y, R[3..13]
+ 1294  282                      ;------------------------------------------------------------------------------
+ 1295  283                      					;
+ 1296  284                      FTS_WRITE8:
+ 1297  285   000023 1803 1000   	MOVW	#R0,R4			;Zeiger auf Quelle in R4/R5
+             000027 1004       
+ 1298  286   000029 180B 0110   	MOVB	#1,R3			;1 Byte
+             00002D 03         
+ 1299  287   00002E 16xx xx     	JSR	FTS_COPY		;
+ 1300  288   000031 3D          	RTS				;
+ 1301  289                      					;
+ 1302  290                      ;------------------------------------------------------------------------------
+ 1303  291                      ;Public: FTS_WRITE16 schreibt ein Wort in den internen FLASH-Sektorbuffer.
+ 1304  292                      ;
+ 1305  293                      ;Eingangsparameter:	R6/R7		Zieladresse
+ 1306  294                      ;			R0/R1		Datenwort
+ 1307  295                      ;Ausgangsparameter:	A		0	= ok
+ 1308  296                      ;					<> 0	= Fehlercode
+ 1309  297                      ;veränderte Register:	CCR, B, X, Y, R[3..13]
+ 1310  298                      ;------------------------------------------------------------------------------
+ 1311  299                      					;
+ 1312  300                      FTS_WRITE16:
+ 1313  301   000032 1803 1000   	MOVW	#R0,R4			;Zeiger auf Quelle in R4/R5
+             000036 1004       
+ 1314  302   000038 180B 0210   	MOVB	#2,R3			;2 Bytes
+             00003C 03         
+ 1315  303   00003D 16xx xx     	JSR	FTS_COPY		;
+ 1316  304   000040 3D          	RTS				;
+ 1317  305                      					;
+ 1318  306                      ;------------------------------------------------------------------------------
+ 1319  307                      ;Public: FTS_COPY schreibt n Bytes in den internen FLASH-Sektorbuffer.
+ 1320  308                      ;
+ 1321  309                      ;Eingangsparameter:     R4/R5		Quelladresse
+ 1322  310                      ;			R6/R7		Zieladresse
+ 1323  311                      ;			R3		Anzahl Bytes (0 == 256)
+ 1324  312                      ;			FTS_SECTOR_ADDR
+ 1325  313                      ;			FTS_SECTOR_BUF
+ 1326  314                      ;			FTS_FLAGS._LOADED
+ 1327  315                      ;			FTS_FLAGS._DIRTY
+ 1328  316                      ;Ausgangsparameter:	A		0 	= ok
+ 1329  317                      ;					<> 0	= Fehlercode
+ 1330  318                      ;	wenn A = 0:	R4/R5		nächste Quelladresse
+ 1331  319                      ;			R6/R7		nächste Zieladresse
+ 1332  320                      ;			FTS_SECTOR_ADDR
+s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1333  321                      ;			FTS_SECTOR_BUF
+ 1334  322                      ;			FTS_FLAGS._LOADED
+ 1335  323                      ;			FTS_FLAGS._DIRTY
+ 1336  324                      ;veränderte Register:	CCR, B, X, Y, R[3..17]
+ 1337  325                      ;------------------------------------------------------------------------------
+ 1338  326                      					;
+ 1339  327                      FTS_COPY:
+ 1340  328   000041 FC10 06     	LDD	R6			;Zieladresse aufbereiten
+ 1341  329   000044 C400        	ANDB	#LOW (~SECTOR_MASK)	;
+ 1342  330   000046 84FC        	ANDA	#HIGH (~SECTOR_MASK)	;
+ 1343  331   000048 7C10 0E     	STD	R14			;Sektor-Basisadresse in R14/R15
+ 1344  332   00004B FC10 06     	LDD	R6			;
+ 1345  333   00004E C4FF        	ANDB	#LOW (SECTOR_MASK)	;
+ 1346  334   000050 8403        	ANDA	#HIGH (SECTOR_MASK)	;
+ 1347  335   000052 7C10 10     	STD	R16			;Sektor-Offset in R16/R17
+ 1348  336                      					;
+ 1349  337                      FTS_COPY1:
+ 1350  338   000055 1Exx xx01   	BRSET	FTS_FLAGS,_LOADED,FTS_COPY3
+             000059 29         
+ 1351  339   00005A FE10 0E     	LDX	R14			;wenn kein Sektor geladen
+ 1352  340   00005D CDxx xx     	LDY	#FTS_SECTOR_BUF		;
+ 1353  341   000060 CC02 00     	LDD	#C_SECTOR_SIZE		;
+ 1354  342   000063 7C10 0C     	STD	R12			;
+ 1355  343                      FTS_COPY2:
+ 1356  344   000066 EC31        	LDD	2,X+			;dann
+ 1357  345   000068 6C71        	STD	2,Y+			;  Sektor in Sektorbuffer laden
+ 1358  346   00006A FC10 0C     	LDD	R12			;
+ 1359  347   00006D 8300 01     	SUBD	#1			;
+ 1360  348   000070 7C10 0C     	STD	R12			;
+ 1361  349   000073 26F1        	BNE	FTS_COPY2		;
+ 1362  350   000075 1804 100E   	MOVW	R14,FTS_SECTOR_ADDR	;  Sektor-Basisadresse merken
+             000079 xxxx       
+ 1363  351   00007B 1Dxx xx80   	BCLR	FTS_FLAGS,_DIRTY	;  _DIRTY-Flag rücksetzen
+ 1364  352   00007F 1Cxx xx01   	BSET	FTS_FLAGS,_LOADED	;  _LOADED-Flag setzen
+ 1365  353                      					;
+ 1366  354                      FTS_COPY3:
+ 1367  355   000083 FCxx xx     	LDD	FTS_SECTOR_ADDR		;
+ 1368  356   000086 BC10 0E     	CPD	R14			;wenn neuer Sektor <> alter Sektor
+ 1369  357   000089 270A        	BEQ	FTS_COPY4		;und alter Sektor verändert,
+ 1370  358   00008B 1Fxx xx80   	BRCLR	FTS_FLAGS,_DIRTY,FTS_COPY4
+             00008F 05         
+ 1371  359                      					;dann
+ 1372  360   000090 16xx xx     	JSR	FTS_FLASH		;  alten Sektor aktualisieren
+ 1373  361   000093 20C0        	BRA	FTS_COPY1		;
+ 1374  362                      					;
+ 1375  363                      FTS_COPY4:
+ 1376  364   000095 FE10 04     	LDX	R4			;Zeiger auf Quelle laden
+ 1377  365   000098 FD10 10     	LDY	R16			;Sektor-Offset
+ 1378  366   00009B 19EA xxxx   	LEAY	FTS_SECTOR_BUF,Y	;Zeiger in Sektorbuffer
+ 1379  367   00009F A630        	LDAA	1,X+			;Byte aus Quelle lesen
+ 1380  368   0000A1 A140        	CMPA	0,Y			;wenn Quellbyte von Byte im Sektorbuffer verschieden
+ 1381  369   0000A3 2706        	BEQ	FTS_COPY5		;dann
+ 1382  370   0000A5 6A40        	STAA	0,Y			;  Quellbyte in den Sektorbuffer schreiben
+ 1383  371   0000A7 1Cxx xx80   	BSET	FTS_FLAGS,_DIRTY	;  _DIRTY-Flag setzen
+ 1384  372                      FTS_COPY5:
+ 1385  373   0000AB 7E10 04     	STX	R4			;
+ 1386  374   0000AE FD10 06     	LDY	R6			;Zeiger verschieben
+ 1387  375   0000B1 02          	INY				;
+ 1388  376   0000B2 7D10 06     	STY	R6			;
+ 1389  377   0000B5 FD10 10     	LDY	R16			;
+ 1390  378   0000B8 02          	INY				;
+ 1391  379   0000B9 7D10 10     	STY	R16			;
+ 1392  380                      ;
+ 1393  381                      ;begin 19.06.2009
+ 1394  382   0000BC 7310 03     	DEC	R3			;
+ 1395  383   0000BF 8D03 FF     	CPY	#SECTOR_MASK		;wenn Sektor-Offset eine Sektor-Grenze erreicht hat,
+ 1396  384   0000C2 231D        	BLS	FTS_COPY6		;dann
+ 1397  385   0000C4 16xx xx     	JSR	FTS_FLASH		;  letzten Sektor zurückschreiben
+ 1398  386   0000C7 261E        	BNE	FTS_COPY9		;  nach Fehler abbrechen und mit Fehlercode zurück
+ 1399  387   0000C9 B610 03     	LDAA	R3			;  wenn noch nicht alle Bytes geschrieben,
+ 1400  388   0000CC 2718        	BEQ	FTS_COPY7		;  dann
+ 1401  389   0000CE FC10 0E     	LDD	R14			;    Sektor-Basisadresse zeigt auf nächsten Sektor
+ 1402  390   0000D1 C304 00     	ADDD	#(2*C_SECTOR_SIZE)	;
+ 1403  391   0000D4 7C10 0E     	STD	R14			;
+ 1404  392   0000D7 CC00 00     	LDD	#0			;    Sektor-Offset auf 0 setzen
+ 1405  393   0000DA 7C10 10     	STD	R16			;    nächsten Sektor in Sektorbuffer laden
+ 1406  394   0000DD 1820 FF74   	LBRA	FTS_COPY1		;    und Schreiben dann fortsetzen
+ 1407  395                      					;
+ 1408  396                      FTS_COPY6:
+ 1409  397   0000E1 B610 03     	LDAA	R3			;sonst weiter,
+ 1410  398   0000E4 26AF        	BNE	FTS_COPY4		;  bis alle Bytes in Sektorbuffer geschrieben
+ 1411  399                      					;
+ 1412  400                      FTS_COPY7:
+ 1413  401                      ;end
+s12c_FTS  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1414  402                      ;
+ 1415  403   0000E6 87          	CLRA				;danach mit A = 0 zurück
+ 1416  404                      					;
+ 1417  405                      FTS_COPY9:
+ 1418  406   0000E7 3D          	RTS				;
+ 1419  407                      					;
+ 1420  408                      ;------------------------------------------------------------------------------
+ 1421  409                      ;Public: FTS_FLASH löscht einen FLASH-Speicher-Sektor und programmiert ihn
+ 1422  410                      ;mit dem Inhalt des EEPROM-Buffers.
+ 1423  411                      ;
+ 1424  412                      ;Eingangsparameter:	FTS_SECTOR_ADDR
+ 1425  413                      ;			FTS_SECTOR_BUF
+ 1426  414                      ;			FTS_FLAGS._LOADED
+ 1427  415                      ;			FTS_FLAGS._DIRTY
+ 1428  416                      ;Ausgangsparameter:	A		0 	= ok
+ 1429  417                      ;					<> 0	= Fehlercode
+ 1430  418                      ;			FTS_SECTOR_ADDR
+ 1431  419                      ;			FTS_SECTOR_BUF
+ 1432  420                      ;			FTS_FLAGS._LOADED
+ 1433  421                      ;			FTS_FLAGS._DIRTY
+ 1434  422                      ;veränderte Register:	CCR, B, X, Y, R[8..13]
+ 1435  423                      ;------------------------------------------------------------------------------
+ 1436  424                      					;
+ 1437  425                      FTS_FLASH:
+ 1438  426   0000E8 1Fxx xx01   	BRCLR	FTS_FLAGS,_LOADED,FTS_FLASH8
+             0000EC 46         
+ 1439  427   0000ED 1Fxx xx80   	BRCLR	FTS_FLAGS,_DIRTY,FTS_FLASH8
+             0000F1 41         
+ 1440  428                      					;wenn Sektorbuffer geladen und verändert
+ 1441  429                      					;dann
+ 1442  430   0000F2 CExx xx     	LDX	#RAM_CODE		;
+ 1443  431   0000F5 CDxx xx     	LDY	#FTS_CODE_BUF		;
+ 1444  432   0000F8 CC00 C3     	LDD	#RAM_CODE_CNT		;
+ 1445  433   0000FB 7C10 0C     	STD	R12			;
+ 1446  434                      FTS_FLASH1:
+ 1447  435   0000FE A630        	LDAA	1,X+			;  Programmiercode ins RAM transferieren
+ 1448  436   000100 6A70        	STAA	1,Y+			;
+ 1449  437   000102 FC10 0C     	LDD	R12			;
+ 1450  438   000105 8300 01     	SUBD	#1			;
+ 1451  439   000108 7C10 0C     	STD	R12			;
+ 1452  440   00010B 26F1        	BNE	FTS_FLASH1		;
+ 1453  441   00010D CExx xx     	LDX	#FTS_SECTOR_BUF		;
+ 1454  442   000110 FDxx xx     	LDY	FTS_SECTOR_ADDR		;
+ 1455  443   000113 B720        	TFR	CCR,A			;
+ 1456  444   000115 8410        	ANDA	#I_BIT			;  wenn I-bit gesetzt,
+ 1457  445   000117 2706        	BEQ	FTS_FLASH2		;  dann
+ 1458  446   000119 1Cxx xx10   	BSET	FTS_FLAGS,_LAST_I_BIT	;    _LAST_I_BIT setzen
+ 1459  447   00011D 2004        	BRA	FTS_FLASH3		;  sonst
+ 1460  448                      FTS_FLASH2:
+ 1461  449   00011F 1Dxx xx10   	BCLR	FTS_FLAGS,_LAST_I_BIT	;    _LAST_I_BIT rücksetzen
+ 1462  450                      FTS_FLASH3:
+ 1463  451   000123 1410        	SEI				;  Interrupts sperren
+ 1464  452   000125 16xx xx     	JSR	FTS_CODE_BUF		;  Programmiercode im RAM ausführen
+ 1465  453   000128 1Exx xx10   	BRSET	FTS_FLAGS,_LAST_I_BIT,FTS_FLASH4
+             00012C 02         
+ 1466  454                      					;  wenn _LAST_I_BIT nicht gesetzt,
+ 1467  455                      					;  dann
+ 1468  456   00012D 10EF        	CLI				;    Interrupts freigeben
+ 1469  457                      FTS_FLASH4:
+ 1470  458   00012F 8100        	CMPA	#0			;  wenn Fehler passiert
+ 1471  459   000131 2604        	BNE	FTS_FLASH9		;  dann
+ 1472  460                      					;    mit Fehlercode zurück
+ 1473  461                      FTS_FLASH8:
+ 1474  462   000133 16xx xx     	JSR	FTS_RESET		;Sektorbuffer fegen und Flags rücksetzen
+ 1475  463   000136 87          	CLRA				;ok, mit A = 0 zurück
+ 1476  464                      					;
+ 1477  465                      FTS_FLASH9:
+ 1478  466   000137 3D          	RTS				;
+ 1479  467                      					;
+ 1480  468   000138 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00013C FFFF       
+ 1481  469   00013E 3F          	SWI				;
+ 1482  470                      					;
+ 1483  471                      ;------------------------------------------------------------------------------

@@ -1,0 +1,34 @@
+	nolist
+	title	"s12c_COMLINE.sfr  Copyright (C) 2011, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12c_COMLINE.sfr
+;
+;Copyright: 	(C) 2011, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	20.01.2011
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12c_COMLINE.asm
+;
+;		SingleChip-Version ohne MSB-Businterface
+;
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  01.11
+;
+;20.01.2011	Urfassung
+;------------------------------------------------------------------------------
+					;
+;/////////////////////////////////////////////////////////////////////////////
+;Assembly Condition Codes
+;/////////////////////////////////////////////////////////////////////////////
+					;
+_true:			equ	0FFh	;
+_false:			equ	0	;
+					;
+fBlockRead:		equ	_false	;kein blockweises Lesen
+fCalibration:		equ	_false	;keine Kalibrierungsdaten
+fE_CMD_CALLBACK:	equ	_false	;
+fV_CMD_CALLBACK:	equ	_false	;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

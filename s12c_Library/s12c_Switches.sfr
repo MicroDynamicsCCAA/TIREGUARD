@@ -1,0 +1,32 @@
+	nolist
+	title	"s12c_Switches  Copyright (C) 2005-2011, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12c_Switches.sfr
+;
+;Copyright: 	(C) 2005-2011, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	20.01.2011
+;
+;Description:	Direktiven für bedingte Assemblierung
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  11.05
+;
+;11.12.2005	Urfassung
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;Switches
+;------------------------------------------------------------------------------
+					;
+fDebug:		equ	0		;1 = Debug Mode
+					;0 = Normal Mode
+					;
+fMessages:	equ	0		;1 = Ausgabe von Meldungen an Online-Schnittstelle
+					;0 = keine Meldungen
+					;
+fUse_PLL:	equ	1		;1 = Bustakt mit PLL
+					;0 = ohne PLL
+					;
+;------------------------------------------------------------------------------
+	list
+	end

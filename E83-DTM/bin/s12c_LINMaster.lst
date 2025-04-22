@@ -1,0 +1,817 @@
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	include	"s12c_LINMaster.sfr"
+ 1015    3                      	title	"s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH"
+ 1016    4                      ;------------------------------------------------------------------------------
+ 1017    5                      ;Module:	s12c_LINMaster.asm
+ 1018    6                      ;
+ 1019    7                      ;Copyright:	(C) 2005-2006, micro dynamics GmbH
+ 1020    8                      ;Author(s):	Michael Frank
+ 1021    9                      ;Update:	24.11.2006
+ 1022   10                      ;
+ 1023   11                      ;Description:	Funktionen für einen LIN Master-Knoten über das prozessor-
+ 1024   12                      ;		interne SCI-Modul des Freescale MC9S12C128
+ 1025   13                      ;
+ 1026   14                      ;Folgende Bezeichner sind in s12c_LINMaster.sfr zu definieren:
+ 1027   15                      ;
+ 1028   16                      ;Ports:		LIN_BD		(SCIxBD)	Baudrate Register
+ 1029   17                      ;		LIN_CR1		(SCIxCR1)	Control Register 1
+ 1030   18                      ;		LIN_CR2		(SCIxCR2)	Control Register 2
+ 1031   19                      ;		LIN_SR1		(SCIxSR1)	Status Register 1
+ 1032   20                      ;		LIN_SR2		(SCIxSR2)	Status Register 2
+ 1033   21                      ;		LIN_DR		(SCIxDRL)	Data Register
+ 1034   22                      ;
+ 1035   23                      ;------------------------------------------------------------------------------
+ 1036   24                      ;Revision History:	Original Version  11.05
+ 1037   25                      ;
+ 1038   26                      ;24.11.2006
+ 1039   27                      ;08.11.2006	Anpassung an MC9S12C128
+ 1040   28                      ;------------------------------------------------------------------------------
+ 1041   29                      					;
+ 1042   30                      ;------------------------------------------------------------------------------
+ 1043   31                      ;Externals
+ 1044   32                      ;------------------------------------------------------------------------------
+ 1045   33                      					;
+ 1046   34                      	xref	BUS_CLK			;Number
+ 1047   35                      					;
+ 1048   36                      ;------------------------------------------------------------------------------
+ 1049   37                      ;Publics
+ 1050   38                      ;------------------------------------------------------------------------------
+ 1051   39                      					;
+ 1052   40                      	xdef	LIN_INT			;Code
+ 1053   41                      					;
+ 1054   42                      	xdef	LIN_CREATE_PARITY	;Code
+ 1055   43                      	xdef	LIN_READ		;Code
+ 1056   44                      	xdef	LIN_REQUEST		;Code
+ 1057   45                      	xdef	LIN_RESET		;Code
+ 1058   46                      	xdef	LIN_STATUS		;Code
+ 1059   47                      	xdef	LIN_WRITE		;Code
+ 1060   48                      					;
+ 1061   49                      	xdef.b	E_LIN_BUSY		;Number
+ 1062   50                      	xdef.b	E_LIN_INVALID_ID	;Number
+ 1063   51                      	xdef.b	E_LIN_LENGTH		;Number
+ 1064   52                      	xdef.b	E_LIN_NO_DATA		;Number
+ 1065   53                      	xdef.b	E_LIN_OVERRUN		;Number
+ 1066   54                      					;
+ 1067   55                      ;------------------------------------------------------------------------------
+ 1068   56                      ;Constants
+ 1069   57                      ;------------------------------------------------------------------------------
+ 1070   58                      					;
+ 1071   59          FFFF FFFF   E_LIN_BUSY:		equ	-1
+ 1072   60                      ;
+ 1073   61          FFFF FFFD   E_LIN_INVALID_ID:	equ	-3
+ 1074   62          FFFF FFFC   E_LIN_LENGTH:		equ	-4
+ 1075   63          FFFF FFFB   E_LIN_NO_DATA:		equ	-5
+ 1076   64          FFFF FFFA   E_LIN_OVERRUN:		equ	-6
+ 1077   65                      					;
+ 1078   66          0000 0000   C_SYNC_BREAK:		equ	00h
+ 1079   67          0000 0055   C_SYNC_FIELD:		equ	55h	;
+ 1080   68                      
+ 1081   69                      ;------------------------------------------------------------------------------
+ 1082   70                      ;Variables
+ 1083   71                      ;------------------------------------------------------------------------------
+ 1084   72                      					;
+ 1085   73                      .locals:	section
+ 1086   74                      					;
+ 1087   75                      BOV:
+ 1088   76                      					;
+ 1089   77   000000             LIN_FLAGS:	ds.b	1		;Flags
+ 1090   78          0000 0001   _E_OVERRUN:	equ	bit0		;1 bei LIN_REQUEST vor dem Abholen empfangener Daten
+ 1091   79          0000 0002   _E_BIT:		equ	bit1		;1 nach Bitfehler
+ 1092   80          0000 0004   _E_FRAME:	equ	bit2		;1 nach allgemeinem Übertragungsfehler
+ 1093   81          0000 0008   _E_CHKSUM:	equ	bit3		;1 nach Prüfsummenfehler
+ 1094   82          0000 0010   _E_BREAK:	equ	bit4		;1 nach Abbruch einer laufenden Frame-Übertragung
+ 1095   83          0000 0020   _NEWDAT:	equ	bit5		;1, wenn neue Daten abgeholt werden können
+ 1096   84          0000 0040   _RX:		equ	bit6		;1, wenn Daten empfangen werden
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1097   85          0000 0080   _BUSY:		equ	bit7		;1, während der Übertragung eines Datenobjektes
+ 1098   86                      					;
+ 1099   87   000001             FRAME_STATE:	ds.b	1		;Frame-Ablaufsteuerung
+ 1100   88          0000 0001   _BREAK:		equ	bit0		;1, wenn SyncBreak gesendet
+ 1101   89          0000 0002   _SYNC:		equ	bit1		;1, wenn SyncField gesendet
+ 1102   90          0000 0004   _MSG_ID:	equ	bit2		;1, wenn Message-ID gesendet
+ 1103   91          0000 0008   _DATA:		equ	bit3		;1, wenn Datensegment gesendet / empfangen
+ 1104   92          0000 0010   _CHKSUM:	equ	bit4		;1, wenn Prüfsumme gesendet / empfangen
+ 1105   93                      ;					;
+ 1106   94                      ;					;
+ 1107   95          0000 0080   _READBACK:	equ	bit7		;1, wenn Echo auf Bitfehler geprüft werden soll
+ 1108   96                      					;
+ 1109   97                      		even
+ 1110   98   000002             LIN_SYNCRATE:	ds.w	1		;DATA16: Baudraten Reloadwert für SyncBreak
+ 1111   99   000004             LIN_BAUDRATE:	ds.w	1		;DATA16: Standard Baudraten Reloadwert
+ 1112  100                      					;
+ 1113  101   000006             LIN_MESSAGE_ID:	ds.b	1		;DATA8: Identifier mit Prüfbits
+ 1114  102                      					;
+ 1115  103   000007             LIN_DATA_BUF:	ds.b	8		;8*DATA8: Datenbuffer
+ 1116  104                      LIN_DATA_CHKSUM:
+ 1117  105   00000F             		ds.b	1		;DATA8: Prüfsumme
+ 1118  106   000010             LIN_DATA_CTR:	ds.b	1		;DATA8: Bytezähler für Datenübertragung
+ 1119  107                      					;
+ 1120  108   000011             		even
+ 1121  109   000012             pLIN_DATA:	ds.w	1		;DATA16: Zeiger in Datenbuffer
+ 1122  110                      					;
+ 1123  111   000014             LIN_READ_CNT:	ds.b	1		;DATA8: Anzahl empfangener Datenbytes nach LIN_REQUEST
+ 1124  112   000015             LIN_READBACK:	ds.b	1		;DATA8: Datenbyte-Zwischenspeicher für Echoprüfung
+ 1125  113                      					;
+ 1126  114                      TOV:
+ 1127  115                      					;
+ 1128  116                      .text:		section
+ 1129  117                      					;
+ 1130  118                      ;------------------------------------------------------------------------------
+ 1131  119                      ;Public: LIN_INT	LIN-Interrupt Handler
+ 1132  120                      ;
+ 1133  121                      ;Priorität:		normal
+ 1134  122                      ;Interruptquelle:	LIN_SR1._RDRF
+ 1135  123                      ;Auslöser:		Daten wurden vom Empfangs-Schieberegister in das
+ 1136  124                      ;			Empfangs-Datenregister übertragen
+ 1137  125                      ;Initialisierung:	Module	's12_LINMaster'
+ 1138  126                      ;
+ 1139  127                      ;Eingangsparameter:	keine
+ 1140  128                      ;Ausgangsparameter:	keine
+ 1141  129                      ;veränderte Register:	keine
+ 1142  130                      ;Laufzeit:		ca. 18 µs	@ 8 MHz Bustakt
+ 1143  131                      ;------------------------------------------------------------------------------
+ 1144  132                      					;
+ 1145  133                      LIN_INT:
+ 1146  134   000000 4FCC 2012   	BRCLR	LIN_SR1,_RDRF,LIN_INT9	;nur RDRF-Ereignis behandeln
+ 1147  135                      					;
+ 1148  136   000004 16xx xx     	JSR	CHECK_READBACK		;gesendete mit zurückgelesenen Daten vergleichen
+ 1149  137   000007 16xx xx     	JSR	FRAME_HANDLE		;Frame-Übertragung fortsetzen
+ 1150  138                      					;
+ 1151  139   00000A 4FCC 2808   	BRCLR	LIN_SR1,_RDRF |_OR, LIN_INT9
+ 1152  140                      					;wenn jetzt _RDRF oder _OR gesetzt,
+ 1153  141   00000E 96CF        	LDAA	LIN_DR			;dann Datenregister lesen
+ 1154  142   000010 4FCC 0802   	BRCLR	LIN_SR1,_OR, LIN_INT9	;wenn jetzt _OR gesetzt,
+ 1155  143   000014 96CF        	LDAA	LIN_DR			;dann noch einmal Datenregister lesen
+ 1156  144                      					;
+ 1157  145                      LIN_INT9:
+ 1158  146   000016 0B          	RTI				;
+ 1159  147                      					;
+ 1160  148                      ;------------------------------------------------------------------------------
+ 1161  149                      ;CHECK_READBACK vergleicht zurückgelesene mit gesendeten Daten und setzt bei
+ 1162  150                      ;Ungleichheit ein Fehlerflag.
+ 1163  151                      ;
+ 1164  152                      ;Eingangsparameter:	LIN_READBACK
+ 1165  153                      ;			FRAME_STATE._READBACK
+ 1166  154                      ;			LIN_READBACK
+ 1167  155                      ;Ausgangsparameter:	LIN_FLAGS._E_BIT
+ 1168  156                      ;			FRAME_STATE._READBACK
+ 1169  157                      ;veränderte Register:	CCR, A
+ 1170  158                      ;------------------------------------------------------------------------------
+ 1171  159                      					;
+ 1172  160                      CHECK_READBACK:
+ 1173  161   000017 1Fxx xx80   	BRCLR	FRAME_STATE,_READBACK,CHECK_READBACK9
+             00001B 19         
+ 1174  162                      					;wenn FRAME_STATE._READBACK Flag gesetzt,
+ 1175  163   00001C 96CC        	LDAA	LIN_SR1			;dann
+ 1176  164   00001E 8407        	ANDA	#00000111b		;  wenn _NF, _FE oder _PF gesetzt ist,
+ 1177  165   000020 2704        	BEQ	CHECK_READBACK1		;  dann
+ 1178  166   000022 1Cxx xx02   	BSET	LIN_FLAGS,_E_BIT	;    _E_BIT setzen
+ 1179  167                      CHECK_READBACK1:
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1180  168   000026 96CF        	LDAA	LIN_DR			;
+ 1181  169   000028 B1xx xx     	CMPA	LIN_READBACK		;  wenn zurückgelesene nicht gleich gesendeten Daten,
+ 1182  170   00002B 2704        	BEQ	CHECK_READBACK2		;  dann
+ 1183  171   00002D 1Cxx xx02   	BSET	LIN_FLAGS,_E_BIT	;    _E_BIT setzen
+ 1184  172                      CHECK_READBACK2:
+ 1185  173   000031 1Dxx xx80   	BCLR	FRAME_STATE,_READBACK	;  FRAME_STATE._READBACK Flag rücksetzen
+ 1186  174                      					;
+ 1187  175                      CHECK_READBACK9:
+ 1188  176   000035 3D          	RTS				;
+ 1189  177                      					;
+ 1190  178                      ;------------------------------------------------------------------------------
+ 1191  179                      ;TRANSMIT_BYTE sendet ein Byte.
+ 1192  180                      ;
+ 1193  181                      ;Eingangsparameter:	A		Zeichen
+ 1194  182                      ;Ausgangsparameter:	LIN_READBACK
+ 1195  183                      ;			LIN_FLAGS._E_FRAME
+ 1196  184                      ;			FRAME_STATE._READBACK
+ 1197  185                      ;			A		Zeichen
+ 1198  186                      ;veränderte Register:	CCR, X
+ 1199  187                      ;------------------------------------------------------------------------------
+ 1200  188                      					;
+ 1201  189                      TRANSMIT_BYTE:
+ 1202  190   000036 CExx xx     	LDX	#BUS_CLK		;BUS_CLK / 4
+ 1203  191                      ;
+ 1204  192                      ;begin 13.11.2006
+ 1205  193   000039 B7D4        	EXG	X,D			;
+ 1206  194   00003B 49          	LSRD				;
+ 1207  195   00003C 49          	LSRD				;Timeout maximal ca. 2 ms
+ 1208  196   00003D B7C5        	EXG	D,X			;
+ 1209  197                      ;end
+ 1210  198                      ;
+ 1211  199                      TRANSMIT_BYTE1:
+ 1212  200   00003F 4ECC 8009   	BRSET	LIN_SR1,_TDRE,TRANSMIT_BYTE2
+ 1213  201   000043 0435 F9     	DBNE	X,TRANSMIT_BYTE1	;warten, bis Transmitter bereit
+ 1214  202   000046 1Cxx xx04   	BSET	LIN_FLAGS,_E_FRAME	;nach Timeout mit Fehler zurück
+ 1215  203   00004A 2009        	BRA	TRANSMIT_BYTE9		;
+ 1216  204                      					;
+ 1217  205                      TRANSMIT_BYTE2:
+ 1218  206   00004C 5ACF        	STAA	LIN_DR			;sonst Zeichen ausgeben
+ 1219  207   00004E 7Axx xx     	STAA	LIN_READBACK		;und für die Echoprüfung merken
+ 1220  208   000051 1Cxx xx80   	BSET	FRAME_STATE,_READBACK	;
+ 1221  209                      					;
+ 1222  210                      TRANSMIT_BYTE9:
+ 1223  211   000055 3D          	RTS				;
+ 1224  212                      					;
+ 1225  213                      ;------------------------------------------------------------------------------
+ 1226  214                      ;RECEIVE_BYTE empfängt ein Datenbyte.
+ 1227  215                      ;Sonderfall: Erster Interrupt zu Beginn des Empfanges eines Datenfeldes
+ 1228  216                      ;liefert Echo der Message-ID und noch kein Datenbyte.
+ 1229  217                      ;
+ 1230  218                      ;Eingangsparameter:	keine
+ 1231  219                      ;Ausgangsparameter:	A		Datenbyte
+ 1232  220                      ;			LIN_FLAGS._E_BIT
+ 1233  221                      ;			CCR.C		clr	= Datenbyte ist gültig
+ 1234  222                      ;					set	= noch kein gültiges Datenbyte empfangen
+ 1235  223                      ;veränderte Register:	CCR
+ 1236  224                      ;------------------------------------------------------------------------------
+ 1237  225                      					;
+ 1238  226                      RECEIVE_BYTE:
+ 1239  227   000056 4ECC 2004   	BRSET	LIN_SR1,_RDRF,RECEIVE_BYTE1
+ 1240  228   00005A 1401        	SEC				;kein Zeichen da,
+ 1241  229   00005C 200E        	BRA	RECEIVE_BYTE9		;mit CCR.C zurück
+ 1242  230                      					;
+ 1243  231                      RECEIVE_BYTE1:
+ 1244  232   00005E 96CC        	LDAA	LIN_SR1			;
+ 1245  233   000060 8407        	ANDA	#00000111b		;wenn _NF, _FE oder _PF gesetzt ist
+ 1246  234   000062 2704        	BEQ	RECEIVE_BYTE2		;dann
+ 1247  235   000064 1Cxx xx02   	BSET	LIN_FLAGS,_E_BIT	;  _E_BIT setzen
+ 1248  236                      					;
+ 1249  237                      RECEIVE_BYTE2:
+ 1250  238   000068 96CF        	LDAA	LIN_DR			;
+ 1251  239   00006A 10FE        	CLC				;ok, mit CCR.NC zurück
+ 1252  240                      					;
+ 1253  241                      RECEIVE_BYTE9:
+ 1254  242   00006C 3D          	RTS				;
+ 1255  243                      					;
+ 1256  244                      ;------------------------------------------------------------------------------
+ 1257  245                      ;TRANSMIT_DATA sendet das aus 1 - 8 Bytes bestehende Datenfeld und die
+ 1258  246                      ;abschließende Prüfsumme eines Frames des Slaves im LIN-Masterknoten.
+ 1259  247                      ;
+ 1260  248                      ;Eingangsparameter:	pLIN_DATA
+ 1261  249                      ;			LIN_DATA_CHKSUM
+ 1262  250                      ;			LIN_DATA_CTR
+ 1263  251                      ;			FRAME_STATE
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1264  252                      ;Ausgangsparameter:	pLIN_DATA
+ 1265  253                      ;			LIN_DATA_CHKSUM
+ 1266  254                      ;			LIN_DATA_CTR
+ 1267  255                      ;			LIN_FLAGS._BUSY
+ 1268  256                      ;			FRAME_STATE
+ 1269  257                      ;veränderte Register:	CCR, X
+ 1270  258                      ;------------------------------------------------------------------------------
+ 1271  259                      					;
+ 1272  260                      TRANSMIT_DATA:
+ 1273  261   00006D 1Exx xx08   	BRSET	FRAME_STATE,_DATA,TRANSMIT_DATA2
+             000071 1E         
+ 1274  262   000072 FExx xx     	LDX	pLIN_DATA		;
+ 1275  263   000075 A630        	LDAA	1,X+			;
+ 1276  264   000077 7Exx xx     	STX	pLIN_DATA		;Zeiger verschieben
+ 1277  265   00007A 16xx xx     	JSR	TRANSMIT_BYTE		;Datenbyte ausgeben
+ 1278  266   00007D BBxx xx     	ADDA	LIN_DATA_CHKSUM		;
+ 1279  267   000080 8900        	ADCA	#0			;Prüfsumme aktualisieren
+ 1280  268   000082 7Axx xx     	STAA	LIN_DATA_CHKSUM		;
+ 1281  269   000085 73xx xx     	DEC	LIN_DATA_CTR		;Zähler decrementieren
+ 1282  270   000088 2604        	BNE	TRANSMIT_DATA1		;
+ 1283  271   00008A 1Cxx xx08   	BSET	FRAME_STATE,_DATA	; > SEND DATA SEGMENT
+ 1284  272                      TRANSMIT_DATA1:
+ 1285  273   00008E 2016        	BRA	TRANSMIT_DATA9		;
+ 1286  274                      					;
+ 1287  275                      TRANSMIT_DATA2:
+ 1288  276   000090 1Exx xx10   	BRSET	FRAME_STATE,_CHKSUM,TRANSMIT_DATA3
+             000094 0D         
+ 1289  277   000095 B6xx xx     	LDAA	LIN_DATA_CHKSUM		;
+ 1290  278   000098 41          	COMA				;
+ 1291  279   000099 16xx xx     	JSR	TRANSMIT_BYTE		;Prüfsumme ergänzen
+ 1292  280   00009C 1Cxx xx10   	BSET	FRAME_STATE,_CHKSUM	; > SEND CHECKSUM
+ 1293  281   0000A0 2004        	BRA	TRANSMIT_DATA9		;
+ 1294  282                      					;
+ 1295  283                      TRANSMIT_DATA3:
+ 1296  284   0000A2 1Dxx xx80   	BCLR	LIN_FLAGS,_BUSY		; > FRAME COMPLETED
+ 1297  285                      					;
+ 1298  286                      TRANSMIT_DATA9:
+ 1299  287   0000A6 3D          	RTS				;
+ 1300  288                      					;
+ 1301  289                      ;------------------------------------------------------------------------------
+ 1302  290                      ;RECEIVE_DATA empfängt das aus 1 - 8 Bytes bestehende Datenfeld und die
+ 1303  291                      ;abschließende Prüfsumme von einem angeschlossenen LIN-Slave.
+ 1304  292                      ;
+ 1305  293                      ;Eingangsparameter:     pLIN_DATA
+ 1306  294                      ;			LIN_DATA_CHKSUM
+ 1307  295                      ;			LIN_DATA_CTR
+ 1308  296                      ;			LIN_READ_CNT
+ 1309  297                      ;Ausgangsparameter:	pLIN_DATA
+ 1310  298                      ;			LIN_DATA_CHKSUM
+ 1311  299                      ;			LIN_DATA_CTR
+ 1312  300                      ;			LIN_READ_CNT
+ 1313  301                      ;			LIN_FLAGS._E_CHKSUM
+ 1314  302                      ;			LIN_FLAGS,_BUSY
+ 1315  303                      ;			FRAME_STATE
+ 1316  304                      ;veränderte Register:	CCR, Y
+ 1317  305                      ;------------------------------------------------------------------------------
+ 1318  306                      					;
+ 1319  307                      RECEIVE_DATA:
+ 1320  308   0000A7 16xx xx     	JSR	RECEIVE_BYTE		;
+ 1321  309   0000AA 253E        	BCS     RECEIVE_DATA9		;
+ 1322  310                      					;
+ 1323  311   0000AC 1Exx xx08   	BRSET	FRAME_STATE,_DATA,RECEIVE_DATA2
+             0000B0 1E         
+ 1324  312   0000B1 FDxx xx     	LDY	pLIN_DATA		;
+ 1325  313   0000B4 6A70        	STAA	1,Y+			;Datenbyte speichern
+ 1326  314   0000B6 7Dxx xx     	STY	pLIN_DATA		;Zeiger verschieben
+ 1327  315   0000B9 BBxx xx     	ADDA	LIN_DATA_CHKSUM		;
+ 1328  316   0000BC 8900        	ADCA	#0			;Prüfsumme aktualisieren
+ 1329  317   0000BE 7Axx xx     	STAA	LIN_DATA_CHKSUM		;
+ 1330  318   0000C1 72xx xx     	INC	LIN_READ_CNT		;Zähler empfangener Datenbytes incrementieren
+ 1331  319   0000C4 73xx xx     	DEC	LIN_DATA_CTR		;Zähler decrementieren
+ 1332  320   0000C7 2604        	BNE	RECEIVE_DATA1		;
+ 1333  321   0000C9 1Cxx xx08   	BSET	FRAME_STATE,_DATA	; > RECEIVE DATA SEGMENT
+ 1334  322                      RECEIVE_DATA1:
+ 1335  323   0000CD 201B        	BRA	RECEIVE_DATA9		;
+ 1336  324                      					;
+ 1337  325                      RECEIVE_DATA2:
+ 1338  326   0000CF 1Exx xx10   	BRSET	FRAME_STATE,_CHKSUM,RECEIVE_DATA4
+             0000D3 12         
+ 1339  327   0000D4 41          	COMA				;
+ 1340  328   0000D5 B8xx xx     	EORA	LIN_DATA_CHKSUM		;Prüfsumme auswerten
+ 1341  329   0000D8 2704        	BEQ	RECEIVE_DATA3		;
+ 1342  330   0000DA 1Cxx xx08   	BSET	LIN_FLAGS,_E_CHKSUM	;
+ 1343  331                      RECEIVE_DATA3:
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1344  332   0000DE 1Cxx xx10   	BSET	FRAME_STATE,_CHKSUM	; > RECEIVE CHECKSUM
+ 1345  333   0000E2 1Cxx xx20   	BSET	LIN_FLAGS,_NEWDAT	;
+ 1346  334                      					;
+ 1347  335                      RECEIVE_DATA4:
+ 1348  336   0000E6 1Dxx xx80   	BCLR	LIN_FLAGS,_BUSY		; > FRAME COMPLETED
+ 1349  337                      					;
+ 1350  338                      RECEIVE_DATA9:
+ 1351  339   0000EA 3D          	RTS				;
+ 1352  340                      					;
+ 1353  341                      ;------------------------------------------------------------------------------
+ 1354  342                      ;FRAME_HANDLE sendet den Botschafts-Kopf und liefert bzw. empfängt das
+ 1355  343                      ;Botschafts-Datenfeld.
+ 1356  344                      ;
+ 1357  345                      ;Eingangsparameter:	FRAME_STATE
+ 1358  346                      ;Ausgangsparameter:	FRAME_STATE
+ 1359  347                      ;veränderte Register:	CCR, A, B, X, Y
+ 1360  348                      ;------------------------------------------------------------------------------
+ 1361  349                      					;
+ 1362  350                      FRAME_HANDLE:
+ 1363  351   0000EB 1Exx xx01   	BRSET	FRAME_STATE,_BREAK,FRAME_HANDLE1
+             0000EF 11         
+ 1364  352   0000F0 1804 xxxx   	MOVW	LIN_SYNCRATE,LIN_BD	;
+             0000F4 00C8       
+ 1365  353   0000F6 8600        	LDAA	#C_SYNC_BREAK		;
+ 1366  354   0000F8 16xx xx     	JSR	TRANSMIT_BYTE		;
+ 1367  355   0000FB 1Cxx xx01   	BSET	FRAME_STATE,_BREAK	; > SLOW BIT-RATE AND SEND 00h
+ 1368  356   0000FF 2034        	BRA	FRAME_HANDLE9		;
+ 1369  357                      					;
+ 1370  358                      FRAME_HANDLE1:
+ 1371  359   000101 1Exx xx02   	BRSET	FRAME_STATE,_SYNC,FRAME_HANDLE2
+             000105 11         
+ 1372  360   000106 1804 xxxx   	MOVW	LIN_BAUDRATE,LIN_BD	;
+             00010A 00C8       
+ 1373  361   00010C 8655        	LDAA	#C_SYNC_FIELD		;
+ 1374  362   00010E 16xx xx     	JSR	TRANSMIT_BYTE		;
+ 1375  363   000111 1Cxx xx02   	BSET	FRAME_STATE,_SYNC	; > RESET BIT_RATE AND SEND 55h
+ 1376  364   000115 201E        	BRA	FRAME_HANDLE9		;
+ 1377  365                      					;
+ 1378  366                      FRAME_HANDLE2:
+ 1379  367   000117 1Exx xx04   	BRSET	FRAME_STATE,_MSG_ID,FRAME_HANDLE3
+             00011B 0C         
+ 1380  368   00011C B6xx xx     	LDAA	LIN_MESSAGE_ID		;
+ 1381  369   00011F 16xx xx     	JSR	TRANSMIT_BYTE		;
+ 1382  370   000122 1Cxx xx04   	BSET	FRAME_STATE,_MSG_ID	; > SEND MESSAGE-ID
+ 1383  371   000126 200D        	BRA	FRAME_HANDLE9		;
+ 1384  372                      					;
+ 1385  373                      FRAME_HANDLE3:
+ 1386  374   000128 1Exx xx40   	BRSET	LIN_FLAGS,_RX,FRAME_HANDLE4
+             00012C 05         
+ 1387  375                      					;
+ 1388  376   00012D 16xx xx     	JSR	TRANSMIT_DATA		; > SEND DATA-FIELD
+ 1389  377   000130 2003        	BRA	FRAME_HANDLE9		;
+ 1390  378                      					;
+ 1391  379                      FRAME_HANDLE4:
+ 1392  380   000132 16xx xx     	JSR	RECEIVE_DATA		; > RECEIVE DATA FIELD
+ 1393  381                      					;
+ 1394  382                      FRAME_HANDLE9:
+ 1395  383   000135 3D          	RTS				;
+ 1396  384                      					;
+ 1397  385                      ;------------------------------------------------------------------------------
+ 1398  386                      ;Public: LIN_RESET bringt das LIN-Modul in Grundstellung und startet es.
+ 1399  387                      ;
+ 1400  388                      ;Eingangsparameter:	R0/R1		Baudraten-Einstellwert
+ 1401  389                      ;			R2		Anzahl Datenbits und Stoppbits, Parity
+ 1402  390                      ;Ausgangsparameter:	LIN_BAUDRATE
+ 1403  391                      ;			LIN_SYNCRATE
+ 1404  392                      ;			LIN_FLAGS
+ 1405  393                      ;			FRAME_STATE
+ 1406  394                      ;veränderte Register:	CCR, A, B, X, Y
+ 1407  395                      ;------------------------------------------------------------------------------
+ 1408  396                      					;
+ 1409  397                      LIN_RESET:
+ 1410  398   000136 CDxx xx     	LDY	#BOV			;Anfang der Systemvariablen
+ 1411  399   000139 CE00 16     	LDX	#(TOV - BOV)		;Anzahl Bytes
+ 1412  400   00013C 8600        	LDAA	#0			;Füllwert
+ 1413  401                      LIN_RESET1:
+ 1414  402   00013E 6A70        	STAA	1,Y+			;
+ 1415  403   000140 0435 FB     	DBNE	X,LIN_RESET1		;alle Variablen auf Füllwert setzen
+ 1416  404                      					;
+ 1417  405   000143 180B 0Fxx   	MOVB	#0001111b,FRAME_STATE	;
+             000147 xx         
+ 1418  406   000148 180B 00xx   	MOVB	#0,LIN_FLAGS		;
+             00014C xx         
+ 1419  407                      					;
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1420  408   00014D FC10 00     	LDD	R0			;
+ 1421  409   000150 7Cxx xx     	STD	LIN_BAUDRATE		;Baudrate merken
+ 1422  410   000153 59          	LSLD				;
+ 1423  411   000154 7Cxx xx     	STD	LIN_SYNCRATE		;SyncBreak Baudrate merken
+ 1424  412                      					;
+ 1425  413   000157 1804 1000   	MOVW	R0,LIN_BD		;Baudrate einstellen
+             00015B 00C8       
+ 1426  414   00015D 180C 1002   	MOVB	R2,LIN_CR1		;Datenbits, Stoppbits und Parity einstellen
+             000161 00CA       
+ 1427  415   000163 180B 0C00   	MOVB	#00001100b,LIN_CR2	;Senden und Empfangen aktiv
+             000167 CB         
+ 1428  416   000168 3D          	RTS				;
+ 1429  417                      					;
+ 1430  418                      ;------------------------------------------------------------------------------
+ 1431  419                      ;Public: LIN_STATUS liefert den Status des LIN-Modules.
+ 1432  420                      ;
+ 1433  421                      ;Eingangsparameter:	keine
+ 1434  422                      ;Ausgangsparameter:	A		LIN-Modul Status
+ 1435  423                      ;			LIN_STATE._E_OVERRUN
+ 1436  424                      ;			LIN_STATE._E_BIT
+ 1437  425                      ;			LIN_STATE._E_FRAME
+ 1438  426                      ;			LIN_STATE._E_CHKSUM
+ 1439  427                      ;			LIN_STATE._E_BREAK
+ 1440  428                      ;veränderte Register:	CCR, B
+ 1441  429                      ;------------------------------------------------------------------------------
+ 1442  430                      					;
+ 1443  431                      LIN_STATUS:
+ 1444  432   000169 B6xx xx     	LDAA	LIN_FLAGS		;LIN-Flags lesen
+ 1445  433   00016C 180E        	TAB				;
+ 1446  434   00016E C4E0        	ANDB	#11100000b		;Fehler-Flags rücksetzen
+ 1447  435   000170 7Bxx xx     	STAB	LIN_FLAGS		;
+ 1448  436   000173 3D          	RTS				;
+ 1449  437                      					;
+ 1450  438                      ;------------------------------------------------------------------------------
+ 1451  439                      ;Public: LIN_CREATE_PARITY berechnet die Paritätsbits des Message-Identifiers
+ 1452  440                      ;und fügt sie dort ein.
+ 1453  441                      ;
+ 1454  442                      ;Berechnungsvorschrift:
+ 1455  443                      ;
+ 1456  444                      ;P0 = bit0 XOR bit1 XOR bit2 XOR bit4	;gerade Parität
+ 1457  445                      ;P1# = bit1 XOR bit3 XOR bit4 XOR bit5	;ungerade Parität
+ 1458  446                      ;
+ 1459  447                      ;Eingangsparameter:	R1		Message-Identifier
+ 1460  448                      ;Ausgangsparameter:	R1		Message-Identifier mit ergänzten Pariätsbits
+ 1461  449                      ;veränderte Register:	CCR, A, B
+ 1462  450                      ;------------------------------------------------------------------------------
+ 1463  451                      					;
+ 1464  452                      LIN_CREATE_PARITY:
+ 1465  453   000174 B610 01     	LDAA	R1			;
+ 1466  454   000177 843F        	ANDA	#00111111b		;Paritybits rücksetzen
+ 1467  455   000179 7A10 01     	STAA	R1			;
+ 1468  456                      					;
+ 1469  457   00017C 49          	LSRD				;---
+ 1470  458   00017D 49          	LSRD				;
+ 1471  459   00017E 49          	LSRD				;
+ 1472  460   00017F 49          	LSRD				;SWAP A
+ 1473  461   000180 840F        	ANDA	#00001111b		;
+ 1474  462   000182 C4F0        	ANDB	#11110000b		;
+ 1475  463   000184 1806        	ABA				;---
+ 1476  464                      					;
+ 1477  465   000186 F610 01     	LDAB	R1			;bereinigter Identifier nach B
+ 1478  466                      					;
+ 1479  467   000189 B810 01     	EORA	R1			;get (ID0 xor ID4), (ID1 xor ID5)
+ 1480  468   00018C 7A10 01     	STAA	R1			;1. Teilergebnis nach R1
+ 1481  469                      					;
+ 1482  470   00018F 44          	LSRA				;
+ 1483  471   000190 44          	LSRA				;
+ 1484  472   000191 B810 01     	EORA	R1			;get (ID0 xor ID2 xor ID4), (ID1 xor ID3 xor ID5)
+ 1485  473   000194 7A10 01     	STAA	R1			;2. Teilergebnis nach R1
+ 1486  474                      					;
+ 1487  475   000197 180F        	TBA				;
+ 1488  476   000199 44          	LSRA				;
+ 1489  477   00019A B810 01     	EORA	R1			;get (ID0 xor ID1 xor ID2 xor ID4), (ID1 xor ID3 xor ID4 xor ID5)
+ 1490  478   00019D 7A10 01     	STAA	R1			;3. Teilergebnis nach R1
+ 1491  479                      					;
+ 1492  480   0001A0 180F        	TBA				;
+ 1493  481   0001A2 8A80        	ORAA	#10000000b		;
+ 1494  482   0001A4 1F10 0108   	BRCLR	R1,00001000b,LIN_CREATE_PARITY1
+             0001A8 02         
+ 1495  483   0001A9 847F        	ANDA	#01111111b		;set P1
+ 1496  484                      LIN_CREATE_PARITY1:
+ 1497  485   0001AB 1F10 0101   	BRCLR	R1,00000001b,LIN_CREATE_PARITY2
+             0001AF 02         
+ 1498  486   0001B0 8A40        	ORAA	#01000000b		;set P0
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1499  487                      					;
+ 1500  488                      LIN_CREATE_PARITY2:
+ 1501  489   0001B2 7A10 01     	STAA	R1			;
+ 1502  490   0001B5 3D          	RTS				;
+ 1503  491                      					;
+ 1504  492                      ;------------------------------------------------------------------------------
+ 1505  493                      ;BREAK bricht eine laufende Übertragung ab.
+ 1506  494                      ;
+ 1507  495                      ;Eingangsparameter:	LIN_FLAGS._RX
+ 1508  496                      ;			FRAME_STATE
+ 1509  497                      ;Ausgangsparameter:	FRAME_STATE
+ 1510  498                      ;veränderte Register:	CCR, A, X
+ 1511  499                      ;------------------------------------------------------------------------------
+ 1512  500                      					;
+ 1513  501                      BREAK:
+ 1514  502   0001B6 1Fxx xx40   	BRCLR	LIN_FLAGS,_RX,BREAK1	;
+             0001BA 09         
+ 1515  503   0001BB B6xx xx     	LDAA	FRAME_STATE		;
+ 1516  504   0001BE 8407        	ANDA	#00000111b		;
+ 1517  505   0001C0 8107        	CMPA	#00000111b		;
+ 1518  506   0001C2 2721        	BEQ	BREAK9			;wenn LIN-Master sendet
+ 1519  507                      					;
+ 1520  508                      BREAK1:
+ 1521  509   0001C4 B6xx xx     	LDAA	FRAME_STATE		;dann
+ 1522  510   0001C7 8A1F        	ORAA	#00011111b		;  evtl. laufende Übertragung abbrechen
+ 1523  511   0001C9 7Axx xx     	STAA	FRAME_STATE		;
+ 1524  512                      					;
+ 1525  513   0001CC CExx xx     	LDX	#BUS_CLK		;  BUS_CLK / 4
+ 1526  514                      ;
+ 1527  515                      ;begin 13.11.2006
+ 1528  516   0001CF B7D4        	EXG	X,D			;
+ 1529  517   0001D1 49          	LSRD				;
+ 1530  518   0001D2 49          	LSRD				;  Timeout maximal ca. 2 ms
+ 1531  519   0001D3 B7C5        	EXG	D,X			;
+ 1532  520                      ;end
+ 1533  521                      ;
+ 1534  522                      BREAK2:
+ 1535  523   0001D5 4FCC 4005   	BRCLR	LIN_SR1,_TC,BREAK3	;
+ 1536  524   0001D9 1Fxx xx80   	BRCLR	FRAME_STATE,_READBACK,BREAK9
+             0001DD 07         
+ 1537  525                      BREAK3:
+ 1538  526   0001DE 0435 F4     	DBNE	X,BREAK2		;  warten, bis LIN_SR1._TC gesetzt
+ 1539  527                      					;  und FRAME_STATE._READBACK rückgesetzt
+ 1540  528   0001E1 1Cxx xx04   	BSET	LIN_FLAGS,_E_FRAME	;  nach Timeout mit Fehler zurück
+ 1541  529                      					;
+ 1542  530                      BREAK9:
+ 1543  531   0001E5 3D          	RTS				;
+ 1544  532                      					;
+ 1545  533                      ;------------------------------------------------------------------------------
+ 1546  534                      ;PREPARE_FRAME bereitet einen Frame für die Übertragung vor.
+ 1547  535                      ;
+ 1548  536                      ;Eingangsparameter:	R1		Message-Identifier
+ 1549  537                      ;			R3		Anzahl Bytes des folgenden Datenobjektes
+ 1550  538                      ;			LIN_FLAGS._BUSY
+ 1551  539                      ;			LIN_FLAGS._NEWDAT
+ 1552  540                      ;Ausgangsparameter:	LIN_MESSAGE_ID
+ 1553  541                      ;			LIN_DATA_CHKSUM
+ 1554  542                      ;			LIN_DATA_CTR
+ 1555  543                      ;			LIN_STATE._E_BREAK
+ 1556  544                      ;			LIN_STATE._E_OVERRUN
+ 1557  545                      
+ 1558  546                      ;			LIN_FLAGS._BREAK
+ 1559  547                      ;			LIN_FLAGS._SYNC
+ 1560  548                      ;			LIN_FLAGS._MSG_ID
+ 1561  549                      ;			LIN_FLAGS._BUSY
+ 1562  550                      ;			A		0	= ok
+ 1563  551                      ;					<> 0	= Fehlercode
+ 1564  552                      ;veränderte Register:	CCR, B, X
+ 1565  553                      ;------------------------------------------------------------------------------
+ 1566  554                      					;
+ 1567  555                      PREPARE_FRAME:
+ 1568  556   0001E6 1Fxx xx80   	BRCLR	LIN_FLAGS,_BUSY,PREPARE_FRAME1
+             0001EA 07         
+ 1569  557   0001EB 1Cxx xx10   	BSET	LIN_FLAGS,_E_BREAK	;
+ 1570  558   0001EF 16xx xx     	JSR	BREAK			;
+ 1571  559                      					;
+ 1572  560                      PREPARE_FRAME1:
+ 1573  561   0001F2 1Fxx xx20   	BRCLR	LIN_FLAGS,_NEWDAT,PREPARE_FRAME2
+             0001F6 04         
+ 1574  562   0001F7 1Cxx xx01   	BSET	LIN_FLAGS,_E_OVERRUN	;
+ 1575  563                      					;
+ 1576  564                      PREPARE_FRAME2:
+ 1577  565   0001FB 1Dxx xxA0   	BCLR	LIN_FLAGS,_BUSY | _NEWDAT
+ 1578  566   0001FF 180B 00xx   	MOVB	#0,FRAME_STATE		;Flags rücksetzen
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+             000203 xx         
+ 1579  567                      					;
+ 1580  568   000204 B610 01     	LDAA	R1			;
+ 1581  569   000207 813F        	CMPA	#3Fh			;wenn Message-Identifier > 63,
+ 1582  570   000209 2304        	BLS	PREPARE_FRAME3		;dann
+ 1583  571   00020B 86FD        	LDAA	#E_LIN_INVALID_ID	;  Fehler: ungültiger Identifier
+ 1584  572   00020D 2033        	BRA	PREPARE_FRAME9		;
+ 1585  573                      					;
+ 1586  574                      PREPARE_FRAME3:
+ 1587  575   00020F B610 03     	LDAA	R3			;
+ 1588  576   000212 2704        	BEQ	PREPARE_FRAME4		;
+ 1589  577   000214 8108        	CMPA	#8			;wenn Message-Länge = 0 oder > 8,
+ 1590  578   000216 2304        	BLS	PREPARE_FRAME5		;dann
+ 1591  579                      PREPARE_FRAME4:
+ 1592  580   000218 86FC        	LDAA	#E_LIN_LENGTH		;  Fehler: ungültige Message-Länge
+ 1593  581   00021A 2026        	BRA	PREPARE_FRAME9		;
+ 1594  582                      					;
+ 1595  583                      PREPARE_FRAME5:
+ 1596  584   00021C 16xx xx     	JSR	LIN_CREATE_PARITY	;
+ 1597  585   00021F 180C 1001   	MOVB	R1,LIN_MESSAGE_ID	;Message-Identifier
+             000223 xxxx       
+ 1598  586   000225 1803 xxxx   	MOVW	#LIN_DATA_BUF,pLIN_DATA	;Zeiger auf Startwerte
+             000229 xxxx       
+ 1599  587   00022B 180B 00xx   	MOVB	#0,LIN_DATA_CHKSUM	;Prüfsumme auf Null
+             00022F xx         
+ 1600  588   000230 180B 00xx   	MOVB	#0,LIN_READ_CNT		;Anzahl empfangener Datenbytes
+             000234 xx         
+ 1601  589   000235 180C 1003   	MOVB	R3,LIN_DATA_CTR		;Anzahl zu übertragender Datenbytes
+             000239 xxxx       
+ 1602  590   00023B 4DCB D0     	BCLR	LIN_CR2,_TCIE | _TIE | _ILIE
+ 1603  591   00023E 4CCB 20     	BSET	LIN_CR2,_RIE		;nur RDRF-Interrupt freigeben
+ 1604  592   000241 87          	CLRA				;ok, mit A = 0 zurück
+ 1605  593                      					;
+ 1606  594                      PREPARE_FRAME9:
+ 1607  595   000242 3D          	RTS				;
+ 1608  596                      					;
+ 1609  597                      ;------------------------------------------------------------------------------
+ 1610  598                      ;Public: LIN_READ liest ein Datenobjekt aus dem Empfangsbuffer und legt es
+ 1611  599                      ;im Variablenspeicher ab.
+ 1612  600                      ;
+ 1613  601                      ;Eingangsparameter:	R4/R5		Zeiger auf Variablenspeicher
+ 1614  602                      ;			LIN_MESSAGE_ID
+ 1615  603                      ;			LIN_DATA_BUF
+ 1616  604                      ;			LIN_DATA_CTR
+ 1617  605                      ;			LIN_FLAGS._NEWDAT
+ 1618  606                      ;Ausgangsparameter:	R1		Message-Identifier
+ 1619  607                      ;			R3		Anzahl Bytes des empfangenen Datenobjektes
+ 1620  608                      ;			LIN_FLAGS._NEWDAT
+ 1621  609                      ;			A		0	= ok
+ 1622  610                      ;					<> 0	= Fehlercode
+ 1623  611                      ;veränderte Register:	CCR, A, B, X, Y
+ 1624  612                      ;------------------------------------------------------------------------------
+ 1625  613                      					;
+ 1626  614                      LIN_READ:
+ 1627  615   000243 1Exx xx20   	BRSET	LIN_FLAGS,_NEWDAT,LIN_READ1
+             000247 04         
+ 1628  616   000248 86FB        	LDAA	#E_LIN_NO_DATA		; > NEWDAT BIT SET ?
+ 1629  617   00024A 2037        	BRA	LIN_READ9		;
+ 1630  618                      					;
+ 1631  619                      LIN_READ1:
+ 1632  620   00024C CExx xx     	LDX	#LIN_DATA_BUF		;
+ 1633  621   00024F FD10 04     	LDY	R4			;
+ 1634  622   000252 B6xx xx     	LDAA	LIN_READ_CNT		;
+ 1635  623   000255 2704        	BEQ	LIN_READ2		;wenn Anzahl empfangener Bytes = 0 oder > 8,
+ 1636  624   000257 8108        	CMPA	#8			;
+ 1637  625   000259 2306        	BLS	LIN_READ3		;dann
+ 1638  626                      LIN_READ2:
+ 1639  627   00025B 1Cxx xx04   	BSET	LIN_FLAGS,_E_FRAME	;  Fehler: allgemeiner Übertragungsfehler
+ 1640  628   00025F 201D        	BRA	LIN_READ5		;
+ 1641  629                      					;
+ 1642  630                      LIN_READ3:
+ 1643  631   000261 180C xxxx   	MOVB	LIN_READ_CNT,R3		;
+             000265 1003       
+ 1644  632                      LIN_READ4:
+ 1645  633   000267 180A 3070   	MOVB	1,X+,1,Y+		; > READ DATA SEGMENT
+ 1646  634   00026B 7310 03     	DEC	R3			;
+ 1647  635   00026E 26F7        	BNE	LIN_READ4		;
+ 1648  636                      					;
+ 1649  637   000270 B6xx xx     	LDAA	LIN_MESSAGE_ID		;
+ 1650  638   000273 843F        	ANDA	#00111111b		;Parity-bits maskieren
+ 1651  639   000275 7A10 01     	STAA	R1			;
+ 1652  640   000278 180C xxxx   	MOVB	LIN_READ_CNT,R3		;
+             00027C 1003       
+ 1653  641                      					;
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1654  642                      LIN_READ5:
+ 1655  643   00027E 1Dxx xx20   	BCLR	LIN_FLAGS,_NEWDAT	; > RESET NEWDAT BIT
+ 1656  644   000282 87          	CLRA				;ok, mit A = 0 zurück
+ 1657  645                      					;
+ 1658  646                      LIN_READ9:
+ 1659  647   000283 3D          	RTS				;
+ 1660  648                      					;
+ 1661  649                      ;------------------------------------------------------------------------------
+ 1662  650                      ;Public: LIN_WRITE sendet ein Datenobjekt.
+ 1663  651                      ;
+ 1664  652                      ;Eingangsparameter:	R1		Message-Identifier
+ 1665  653                      ;			R3		Anzahl Bytes des Datenobjektes
+ 1666  654                      ;			R4/R5		Zeiger auf Variablenspeicher
+ 1667  655                      ;			LIN_FLAGS._BUSY
+ 1668  656                      ;			LIN_FLAGS,_NEWDAT
+ 1669  657                      ;Ausgangsparameter:	LIN_MESSAGE_ID
+ 1670  658                      ;			LIN_DATA_BUF
+ 1671  659                      ;			LIN_DATA_CHKSUM
+ 1672  660                      ;			LIN_DATA_CTR
+ 1673  661                      ;			LIN_FLAGS._E_BREAK
+ 1674  662                      ;			LIN_FLAGS._E_OVERRUN
+ 1675  663                      ;			LIN_FLAGS._BUSY
+ 1676  664                      ;			LIN_FLAGS._RX
+ 1677  665                      ;			FRAME_STATE
+ 1678  666                      ;			A		0	= ok
+ 1679  667                      ;					<> 0	= Fehlercode
+ 1680  668                      ;veränderte Register:	CCR, A, B, X, Y
+ 1681  669                      ;------------------------------------------------------------------------------
+ 1682  670                      					;
+ 1683  671                      LIN_WRITE:
+ 1684  672   000284 16xx xx     	JSR	PREPARE_FRAME		;Message vorbereiten
+ 1685  673   000287 261B        	BNE	LIN_WRITE9		;
+ 1686  674                      					;
+ 1687  675   000289 FE10 04     	LDX	R4			;
+ 1688  676   00028C CDxx xx     	LDY	#LIN_DATA_BUF		;
+ 1689  677                      LIN_WRITE1:
+ 1690  678   00028F 180A 3070   	MOVB	1,X+,1,Y+		;Daten in Sendbuffer eintragen
+ 1691  679   000293 7310 03     	DEC	R3			;
+ 1692  680   000296 26F7        	BNE	LIN_WRITE1		;
+ 1693  681                      					;
+ 1694  682   000298 1Dxx xx40   	BCLR	LIN_FLAGS,_RX		;
+ 1695  683   00029C 1Cxx xx80   	BSET	LIN_FLAGS,_BUSY		;
+ 1696  684   0002A0 16xx xx     	JSR	FRAME_HANDLE		;
+ 1697  685   0002A3 87          	CLRA				;ok, mit A = 0 zurück
+ 1698  686                      					;
+ 1699  687                      LIN_WRITE9:
+ 1700  688   0002A4 3D          	RTS				;
+ 1701  689                      					;
+ 1702  690                      ;------------------------------------------------------------------------------
+ 1703  691                      ;Public: LIN_REQUEST fordert ein Datenobjekt an.
+ 1704  692                      ;
+ 1705  693                      ;Eingangsparameter:	R1		Message-Identifier
+ 1706  694                      ;			R3		Anzahl Bytes des Datenobjektes
+ 1707  695                      ;			LIN_FLAGS._BUSY
+ 1708  696                      ;			LIN_FLAGS,_NEWDAT
+ 1709  697                      ;Ausgangsparameter:	LIN_MESSAGE_ID
+ 1710  698                      ;			LIN_DATA_CHKSUM
+ 1711  699                      ;			LIN_DATA_CTR
+ 1712  700                      ;			LIN_FLAGS._E_BREAK
+ 1713  701                      ;			LIN_FLAGS._E_OVERRUN
+ 1714  702                      ;			LIN_FLAGS._BUSY
+ 1715  703                      ;			LIN_FLAGS._RX
+ 1716  704                      ;			FRAME_STATE
+ 1717  705                      ;			A		0	= ok
+ 1718  706                      ;					<> 0	= Fehlercode
+ 1719  707                      ;veränderte Register:	CCR, A, B, Y
+ 1720  708                      ;------------------------------------------------------------------------------
+ 1721  709                      					;
+ 1722  710                      LIN_REQUEST:
+ 1723  711   0002A5 16xx xx     	JSR	PREPARE_FRAME		;Message vorbereiten
+ 1724  712   0002A8 260C        	BNE	LIN_REQUEST9		;
+ 1725  713                      					;
+ 1726  714   0002AA 1Cxx xx40   	BSET	LIN_FLAGS,_RX		;
+ 1727  715   0002AE 1Cxx xx80   	BSET	LIN_FLAGS,_BUSY		;
+ 1728  716   0002B2 16xx xx     	JSR	FRAME_HANDLE		;
+ 1729  717   0002B5 87          	CLRA				;ok, mit A = 0 zurück
+ 1730  718                      					;
+ 1731  719                      LIN_REQUEST9:
+ 1732  720   0002B6 3D          	RTS				;
+ 1733  721                      					;
+ 1734  722   0002B7 FFFF FFFF   	dcb.b	6, 0FFh			;
+             0002BB FFFF       
+ 1735  723   0002BD 3F          	SWI				;
+ 1736  724                      					;
+s12c_LINMaster  Copyright (C) 2005-2006, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1737  725                      ;------------------------------------------------------------------------------

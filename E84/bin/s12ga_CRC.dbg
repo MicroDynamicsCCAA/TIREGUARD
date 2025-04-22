@@ -1,0 +1,759 @@
+	include	"s12ga_240.sfr"
+	title	"s12ga_CRC  Copyright (C) 2006-2014, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_CRC.asm
+;
+;Copyright:	(C) 2006-2014, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	27.11.2014
+;
+;Description:	CRC16 Prüfcode-Berechnung
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  01.06
+;
+;27.11.2014	Anpassung an MC9S12GA240
+;
+;24.04.2010	Anpassung an MC9S12P128
+;
+;12.06.2009	CREATE_CRC und VERIFY_CRC entfernt
+;		CRC-8/Maxim-DOW neu hinzugefügt
+;09.06.2009	vier weitere CRC16-Berechnungsalgorithmen neu hinzugefügt
+;
+;08.11.2006	Anpassung an MC9S12C128
+;------------------------------------------------------------------------------
+					;
+;------------------------------------------------------------------------------
+;Publics
+;------------------------------------------------------------------------------
+					;
+	xdef	CRC8_DOW		;Code
+	xdef	CRC16_CCITT_FALSE	;Code
+ 	xdef	CRC16_KERMIT		;Code	METHOD_CRC_CCITT
+	xdef	CRC16_MAXIM		;Code
+	xdef	CRC16_XMODEM		;Code
+	xdef	CRC16_X25		;Code
+					;
+	xdef	CLEAR_DOW		;Code
+	xdef	CLEAR_CCITT_FALSE	;Code
+	xdef	CLEAR_KERMIT		;Code
+	xdef	CLEAR_MAXIM		;Code
+	xdef	CLEAR_XMODEM		;Code
+	xdef	CLEAR_X25		;Code
+					;
+	xdef	CREATE_DOW		;Code
+	xdef	CREATE_CCITT_FALSE	;Code
+	xdef	CREATE_KERMIT		;Code
+	xdef	CREATE_MAXIM		;Code
+	xdef	CREATE_XMODEM		;Code
+	xdef	CREATE_X25		;Code
+					;
+	xdef	VERIFY_DOW		;Code
+	xdef	VERIFY_CCITT_FALSE	;Code
+	xdef	VERIFY_KERMIT		;Code
+	xdef	VERIFY_MAXIM		;Code
+	xdef	VERIFY_XMODEM		;Code
+	xdef	VERIFY_X25		;Code
+					;
+.text:		section
+					;
+;------------------------------------------------------------------------------
+;SWAP_A tauscht High- und Low-Nibble des A-Registers.
+;
+;Eingangsparameter:	A
+;Ausgangsparameter:	A
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+SWAP_A:
+	LSRD				;
+	LSRD				;
+	LSRD				;
+	LSRD				;
+	ANDA	#00001111b		;
+	ANDB	#11110000b		;
+	ABA				;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;ROR_A rotiert den Inhalt des A-Registers einmal nach rechts.
+;
+;Eingangsparameter:	A
+;Ausgangsparameter:	A
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+ROR_A:
+	LSRD				;
+	ANDA	#01111111b		;
+	ANDB	#10000000b		;
+	ABA				;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;PARITY_A liefert die gerade Parität des A-Registers im Carry-Flag.
+;
+;Eingangsparameter:	A
+;Ausgangsparameter:	CCR.C
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+PARITY_A:
+	LDAB	R7			;Register retten
+	STAA	R7			;
+	LSRA				;
+	EORA	R7			;Q3 = P(7^6), Q2 = P(5^4), Q1 = P(3^2), Q0 = P(1^0)
+	STAA	R7			;
+	LSRA				;
+	LSRA				;
+	EORA	R7			;R1 = Q(3^2), R0 = Q(1^0)
+	STAA	R7			;
+	LSRA				;
+	LSRA				;
+	LSRA				;
+	LSRA				;
+	EORA	R7			;S = R(1^0)
+	LSRA				;Ergebnis ins Carry schieben
+	STAB	R7			;Register restaurieren
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CRC8_DOW bildet den CRC-8/Maxim Prüfcode, der in den Maxim 1-Wire 
+;Produkten verwendet wird.
+;
+;Width:		8
+;Polynom:	0x31
+;Init:		0x00
+;XorOut:	0x00
+;Check:		0xA1	('123456789')
+;Reminder:	0x00
+;
+;Eingangsparameter:	A		Datenbyte
+;			R5		CRC-Prüfcode
+;Ausgangsparameter:	R5		CRC-Prüfcode
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+CRC8_DOW:
+	EORA	R5			;
+	CLRB				;
+	BITA	#00000001b		;
+	BEQ	CRC8_DOW1		;
+	EORB	#5Eh			;
+CRC8_DOW1:
+	BITA	#00000010b		;
+	BEQ	CRC8_DOW2		;
+	EORB	#0BCh			;
+CRC8_DOW2:
+	BITA	#00000100b		;
+	BEQ	CRC8_DOW3		;
+	EORB	#61h			;
+CRC8_DOW3:
+	BITA	#00001000b		;
+	BEQ	CRC8_DOW4		;
+	EORB	#0C2h			;
+CRC8_DOW4:
+	BITA	#00010000b		;
+	BEQ	CRC8_DOW5		;
+	EORB	#9Dh			;
+CRC8_DOW5:
+	BITA	#00100000b		;
+	BEQ	CRC8_DOW6		;
+	EORB	#23h			;
+CRC8_DOW6:
+	BITA	#01000000b		;
+	BEQ	CRC8_DOW7		;
+	EORB	#46h			;
+CRC8_DOW7:
+	BITA	#10000000b		;
+	BEQ	CRC8_DOW8		;
+	EORB	#8Ch			;
+CRC8_DOW8:
+	STAB	R5			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CRC16_CCITT_FALSE bildet den CRC-16/CCITT-FALSE Prüfcode.
+;
+;Width:		16
+;Polynom:	0x1021
+;Init:		0xFFFF
+;XorOut:	0x0000
+;Check:		0x29B1	('123456789')
+;Reminder:	0x0000
+;
+;Eingangsparameter:	A		Datenbyte
+;			R4/R5		CRC-Prüfcode
+;Ausgangsparameter:	R4/R5		CRC-Prüfcode
+;veränderte Register:	CCR, B, R[6..7]
+;------------------------------------------------------------------------------
+					;
+CRC16_CCITT_FALSE:
+	EORA	R4			;
+	STAA	R6			;
+	ANDA	#0F0h			;
+	STAA	R7			;
+	LDAA	R6			;
+	JSR	SWAP_A			;
+	EORA	R7			;
+	STAA	R6			;
+					;High Byte
+	TAB				;
+	LSLD				;
+	ANDA	#01Fh			;
+	EORA	R5			;
+	STAA	R4			;
+	LDAA	R6			;
+	ANDA	#0F0h			;
+	TAB				;
+	EORA	R4			;
+	STAA	R4			;
+					;Low Byte
+	TBA				;
+	ABA				;
+	STAA	R5			;
+	LDAA	R6			;
+	JSR	SWAP_A			;
+	EORA	R5			;
+	STAA	R5			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CRC16_KERMIT bildet den CRC-16/CCITT Prüfcode.
+;Dieser Algorithmus entspricht dem des CodeWarrior-Linkers mit METHOD_CRC_CCITT
+;
+;Width:		16
+;Polynom:	0x1021
+;Init:		0x0000
+;XorOut:	0x0000
+;Check:		0x2189	('123456789')
+;Reminder:	0x0000
+;
+;Eingangsparameter:	A		Datenbyte
+;			R4/R5		CRC-Prüfcode
+;Ausgangsparameter:	R4/R5		CRC-Prüfcode
+;veränderte Register:	CCR, B, R6
+;------------------------------------------------------------------------------
+					;
+CRC16_KERMIT:
+	EORA	R5			;
+	STAA	R5			;
+	JSR	SWAP_A			;
+	ANDA	#0F0h			;
+	EORA	R5			;
+	STAA	R5			;
+	JSR	SWAP_A			;
+	STAA	R6			;
+	ANDA	#0Fh			;
+	EORA	R4			;
+	LDAB	R6			;
+	EXG	A,B			;
+	STAB	R6			;
+	JSR	ROR_A			;
+	STAA	R4			;
+	ANDA	#07h			;
+	EORA	R5			;
+	LDAB	R4			;
+	EXG	A,B			;
+	STAB	R4			;
+	ANDA	#0F8h			;
+	EORA	R6			;
+	STAA	R5			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CRC16_MAXIM bildet den CRC-16/Maxim Prüfcode.
+;
+;Width:		16
+;Polynom:	0x8005
+;Init:		0x0000
+;XorOut:	0xFFFF
+;Check:		0x44C2	('123456789')
+;Reminder:	0xB001	Magic Number
+;
+;Eingangsparameter:	A		Datenbyte
+;			R4/R5		CRC16		CRC-Prüfcode
+;Ausgangsparameter:	R4/R5		CRC16		CRC-Prüfcode
+;veränderte Register:	CCR, B, R6
+;------------------------------------------------------------------------------
+					;
+CRC16_MAXIM:
+	EORA	R5			;
+	MOVB	R4,R5			;
+	STAA	R4			;
+	STAA	R6			;
+	JSR	PARITY_A		;ACC.Parity --> CCR.C
+	BCC	CRC16_MAXIM0		;
+	LDAA	R5			;
+	EORA	#01h			;
+	STAA	R5			;
+CRC16_MAXIM0:
+	LDAA	R6			;
+	RORA				;
+	STAA	R6			;
+	BCC	CRC16_MAXIM1		;
+	LDAA	R5			;
+	EORA	#40h			;
+	STAA	R5			;
+CRC16_MAXIM1:
+	LDAA	R6			;
+	TAB				;
+	ROLB				;ACC.7 --> CCR.C
+	EORA	R4			;
+	RORA				;
+	STAA	R4			;
+	BCC	CRC16_MAXIM2		;
+	LDAA	R5			;
+	EORA	#80h			;
+	STAA	R5			;
+CRC16_MAXIM2:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CRC16_XMODEM bildet den CRC-16/Acorn Prüfcode.
+;
+;Width:		16
+;Polynom:	0x1021
+;Init:		0x0000
+;XorOut:	0x0000
+;Check:		0x31C3	('123456789')
+;Reminder:	0x0000
+;
+;Eingangsparameter:	A		Datenbyte
+;			CRC16		CRC-Prüfcode
+;Ausgangsparameter:	CRC16		CRC-Prüfcode
+;veränderte Register:	CCR, B, R[6..7]
+;------------------------------------------------------------------------------
+					;
+CRC16_XMODEM:
+	EORA	R4			;
+	STAA	R6			;
+	ANDA	#0F0h			;
+	STAA	R7			;
+	LDAA	R6			;
+	JSR	SWAP_A			;
+	EORA	R7			;
+	STAA	R6			;
+					;High Byte
+	TAB				;
+	LSLD				;
+	ANDA	#01Fh			;
+	EORA	R5			;
+	STAA	R4			;
+	LDAA	R6			;
+	ANDA	#0F0h			;
+	TAB				;
+	EORA	R4			;
+	STAA	R4			;
+					;Low Byte
+	TBA				;
+	ABA				;
+	STAA	R5			;
+	LDAA	R6			;
+	JSR	SWAP_A			;
+	EORA	R5			;
+	STAA	R5			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CRC16_X25 bildet den CRC-16/X-25 Prüfcode.
+;
+;Width:		16
+;Polynom:	0x1021
+;Init:		0xFFFF
+;XorOut:	0xFFFF
+;Check:		0x906E	('123456789')
+;Reminder:	0xF0B8	Magic Number
+;
+;Eingangsparameter:	A		Datenbyte
+;			R4/R5		CRC-Prüfcode
+;Ausgangsparameter:	R4/R5		CRC-Prüfcode
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+CRC16_X25:
+					; unsigned int CRC16_X25 (unsigned int crc, unsigned int c)
+	EORA	R5			; {
+	MOVB	R4,R5			;    crc = (unsigned char) (crc >> 8) | (crc << 8);
+	STAA	R4			;    crc ^= c;
+					;
+	LDAA	R4			;    crc ^= (crc & 0xFF00) << 4;
+	LSLA				;
+	LSLA				;
+	LSLA				;
+	LSLA				;
+	EORA	R4			;
+	STAA	R4			;
+					;
+	LDAB	R4			;    crc ^= (crc >> 8) >> 4;
+	LSRB				;
+	LSRB				;
+	LSRB				;
+	LSRB				;
+	EORB	R5			;
+	STAB	R5			;
+					;
+	CLRB				;    crc ^= (crc & 0xFF00) >> 5;
+	LDAA	R4			;
+	LSRD				;
+	LSRD				;
+	LSRD				;
+	LSRD				;
+	LSRD				;
+	EORA	R4			;
+	EORB	R5			;
+	STD	R4			;
+	RTS				; }
+					;
+;------------------------------------------------------------------------------
+;CLEAR_0x00 setzt den Prüfcode auf Startwert 0x00.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	R5		Prüfcode-Startwert
+;veränderte Register:	keine
+;------------------------------------------------------------------------------
+					;
+CLEAR_DOW:
+					;
+;------------------------------------------------------------------------------
+					;
+CLEAR_0x00:
+	MOVB	#0,R5			;Prüfcode auf Startwert
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;CLEAR_0x0000 setzt den Prüfcode auf Startwert 0x0000.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	R[4..5]		Prüfcode-Startwert
+;veränderte Register:	keine
+;------------------------------------------------------------------------------
+					;
+CLEAR_KERMIT:
+CLEAR_MAXIM:
+CLEAR_XMODEM:
+					;
+;------------------------------------------------------------------------------
+					;
+CLEAR_0x0000:
+	MOVW	#0,R4			;Prüfcode auf Startwert
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;CLEAR_0xFFFF setzt den Prüfcode auf Startwert 0xFFFF.
+;
+;Eingangsparameter:	keine
+;Ausgangsparameter:	R[4..5]		Prüfcode-Startwert
+;veränderte Register:	keine
+;------------------------------------------------------------------------------
+					;
+CLEAR_CCITT_FALSE:
+CLEAR_X25:
+					;
+;------------------------------------------------------------------------------
+					;
+CLEAR_0xFFFF:
+	MOVW	#0FFFFh,R4		;Prüfcode auf Startwert
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CREATE_DOW bildet den CRC-8/Maxim Prüfcode.
+;
+;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+;			R3		Anzahl Bytes des Speicherbereichs
+;Ausgangsparameter:	R1		CRC-8/Maxim Prüfcode
+;			R5		laufender Prüfcode
+;veränderte Register:	CCR, A, B, X
+;------------------------------------------------------------------------------
+					;
+CREATE_DOW:
+	JSR	CLEAR_0x00		;Prüfcode auf Startwert
+					;
+CREATE_DOW1:
+	LDAA	1,X+			;
+	JSR	CRC8_DOW		;
+	DEC	R3			;
+	BNE	CREATE_DOW1		;
+	MOVB	R5,R1			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: VERIFY_DOW bildet den CRC-8/Maxim Prüfcode und vergleicht
+;ihn mit dem als Parameter übergebenen Original.
+;
+;Eingangsparameter:	R1		CRC-8/Maxim Prüfcode
+;			R5		laufender Prüfcode
+;Ausgangsparameter:	R5		Prüfungsergebnis
+;			A		0	= ok
+;					<> 0	= Speicherbereich nicht konsistent
+;veränderte Register:	CCR, B, R7
+;------------------------------------------------------------------------------
+					;
+VERIFY_DOW:
+	LDAA	R1			;
+	JSR	CRC8_DOW		;
+	LDAA	R5			;wenn Ergebnis <> 0,
+	BEQ	VERIFY_DOW9		;dann
+	LDAA	#0FFh			;  mit Fehler passiert und mit A <> 0 zurück
+					;
+VERIFY_DOW9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CREATE_CCITT_FALSE liefert den CRC-16/CCITT-FALSE Prüfcode.
+;
+;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+;			R[2..3]		Anzahl Bytes des Speicherbereichs
+;Ausgangsparameter:	R[0..1]		CRC-16/CCITT-FALSE Prüfcode
+;			R[4..5]		laufender Prüfcode
+;veränderte Register:	CCR, A, B, X, R[6..7]
+;------------------------------------------------------------------------------
+					;
+CREATE_CCITT_FALSE:
+	JSR	CLEAR_0xFFFF		;Prüfcode auf Startwert
+					;
+CREATE_CCITT_FALSE1:
+	LDAA	1,X+			;
+	JSR	CRC16_CCITT_FALSE	;
+	LDD	R2			;
+	SUBD	#1			;
+	STD	R2			;
+	BNE	CREATE_CCITT_FALSE1	;
+	MOVW	R4,R0			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: VERIFY_CCITT_FALSE bildet den CRC-16/CCITT-FALSE Prüfcode und vergleicht
+;ihn mit dem als Parameter übergebenen Original.
+;
+;Eingangsparameter:	R[0..1]		CRC-16/CCITT-FALSE Prüfcode
+;			R[4..5]		laufender Prüfcode
+;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+;			A		0	= ok
+;					<> 0	= Speicherbereich nicht konsistent
+;veränderte Register:	CCR, B, R6
+;------------------------------------------------------------------------------
+					;
+VERIFY_CCITT_FALSE:
+	LDAA	R0			;
+	JSR	CRC16_CCITT_FALSE	;
+	LDAA	R1			;
+	JSR	CRC16_CCITT_FALSE	;
+	LDD	R4			;wenn Ergebnis <> 0,
+	BEQ	VERIFY_CCITT_FALSE8	;dann
+	LDAA	#0FFh			;  mit Fehler passiert
+	BRA	VERIFY_CCITT_FALSE9	;
+VERIFY_CCITT_FALSE8:
+	CLRA				;sonst ok
+					;
+VERIFY_CCITT_FALSE9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CREATE_KERMIT liefert den CRC-16/CCITT Prüfcode.
+;
+;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+;			R[2..3]		Anzahl Bytes des Speicherbereichs
+;Ausgangsparameter:	R[0..1]		CRC-16/CCITT Prüfcode
+;			R[4..5]		laufender Prüfcode
+;veränderte Register:	CCR, A, B, X, R6
+;------------------------------------------------------------------------------
+					;
+CREATE_KERMIT:
+	JSR	CLEAR_0x0000		;Prüfcode auf Startwert
+					;
+CREATE_KERMIT1:
+	LDAA	1,X+			;
+	JSR	CRC16_KERMIT		;
+	LDD	R2			;
+	SUBD	#1			;
+	STD	R2			;
+	BNE	CREATE_KERMIT1		;
+	MOVW	R4,R0			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: VERIFY_KERMIT bildet den CRC-16/CCITT Prüfcode und vergleicht ihn mit dem
+;als Parameter übergebenen Original.
+;
+;Eingangsparameter:	R[0..1]		CRC-16/CCITT Prüfcode
+;			R[4..5]		laufender Prüfcode
+;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+;			A		0	= ok
+;					<> 0	= Speicherbereich nicht konsistent
+;veränderte Register:	CCR, B, R6
+;------------------------------------------------------------------------------
+					;
+VERIFY_KERMIT:
+	LDAA	R1			;
+	JSR	CRC16_KERMIT		;
+	LDAA	R0			;
+	JSR	CRC16_KERMIT		;
+	LDD	R4			;wenn Ergebnis <> 0,
+	BEQ	VERIFY_KERMIT8		;dann
+	LDAA	#0FFh			;  mit Fehler passiert
+	BRA	VERIFY_KERMIT9		;
+VERIFY_KERMIT8:
+	CLRA				;sonst ok
+					;
+VERIFY_KERMIT9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CREATE_MAXIM liefert den CRC-16/Maxim Prüfcode.
+;
+;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+;			R[2..3]		Anzahl Bytes des Speicherbereichs
+;Ausgangsparameter:	R[0..1]		CRC-16/Maxim Prüfcode
+;			R[4..5]		laufender Prüfcode
+;veränderte Register:	CCR, A, B, X, R[4..7]
+;------------------------------------------------------------------------------
+					;
+CREATE_MAXIM:
+	JSR	CLEAR_0x0000		;Prüfcode auf Startwert
+					;
+CREATE_MAXIM1:
+	LDAA	1,X+			;
+	JSR	CRC16_MAXIM		;
+	LDD	R2			;
+	SUBD	#1			;
+	STD	R2			;
+	BNE	CREATE_MAXIM1		;
+	LDD	R4			;
+	EORA	#0FFh			;
+	EORB	#0FFh			;
+	STD	R0			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: VERIFY_MAXIM bildet den CRC-16/Maxim Prüfcode und vergleicht ihn mit dem
+;als Parameter übergebenen Original.
+;
+;Eingangsparameter:	R[0..1]		CRC-16/Maxim Prüfcode
+;			R[4..5]		laufender Prüfcode
+;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+;			A		0	= ok
+;					<> 0	= Speicherbereich nicht konsistent
+;veränderte Register:	CCR, B, X, R[6..7]
+;------------------------------------------------------------------------------
+					;
+VERIFY_MAXIM:
+	LDAA	R1			;
+	JSR	CRC16_MAXIM		;
+	LDAA	R0			;
+	JSR	CRC16_MAXIM		;
+	LDD	R4			;
+	CPD	#0B001h			;wenn Ergebnis <> 0xB001,
+	BEQ	VERIFY_MAXIM8		;dann
+	LDAA	#0FFh			;  mit Fehler passiert
+	BRA	VERIFY_MAXIM9		;
+VERIFY_MAXIM8:
+	CLRA				;sonst ok
+					;
+VERIFY_MAXIM9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CREATE_XMODEM liefert den CRC-16/Acorn Prüfcode.
+;
+;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+;			R[2..3]		Anzahl Bytes des Speicherbereichs
+;Ausgangsparameter:	R[0..1]		CRC-16/Acorn Prüfcode
+;			R[4..5]		laufender Prüfcode
+;veränderte Register:	CCR, A, B, X, R[4..7]
+;------------------------------------------------------------------------------
+					;
+CREATE_XMODEM:
+	JSR	CLEAR_0x0000		;Prüfcode auf Startwert
+					;
+CREATE_XMODEM1:
+	LDAA	1,X+			;
+	JSR	CRC16_XMODEM		;
+	LDD	R2			;
+	SUBD	#1			;
+	STD	R2			;
+	BNE	CREATE_XMODEM1		;
+	MOVW	R4,R0			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: VERIFY_XMODEM bildet den CRC-16/Acorn Prüfcode und vergleicht ihn mit dem
+;als Parameter übergebenen Original.
+;
+;Eingangsparameter:	R[0..1]		originaler CRC-16/Acorn Prüfcode
+;			R[4..5]		laufender Prüfcode
+;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+;			A		0	= ok
+;					<> 0	= Speicherbereich nicht konsistent
+;veränderte Register:	CCR, B, R[6..7]
+;------------------------------------------------------------------------------
+					;
+VERIFY_XMODEM:
+	LDAA	R0			;
+	JSR	CRC16_XMODEM		;
+	LDAA	R1			;
+	JSR	CRC16_XMODEM		;
+	LDD	R4			;wenn Ergebnis <> 0,
+	BEQ	VERIFY_XMODEM8		;dann
+	LDAA	#0FFh			;  mit Fehler passiert
+	BRA	VERIFY_XMODEM9		;
+VERIFY_XMODEM8:
+	CLRA				;sonst ok
+					;
+VERIFY_XMODEM9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: CREATE_X25 liefert den CRC-16/X-25 Prüfcode.
+;
+;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+;			R[2..3]		Anzahl Bytes des Speicherbereichs
+;Ausgangsparameter:	R[0..1]		CRC-16/X-25 Prüfcode
+;			R[4..5]		laufender Prüfcode
+;veränderte Register:	CCR, A, B, X, R[4..5]
+;------------------------------------------------------------------------------
+					;
+CREATE_X25:
+	JSR	CLEAR_0xFFFF		;Prüfcode auf Startwert
+					;
+CREATE_X25_1:
+	LDAA	1,X+			;
+	JSR	CRC16_X25		;
+	LDD	R2			;
+	SUBD	#1			;
+	STD	R2			;
+	BNE	CREATE_X25_1		;
+	LDD	R4			;
+	EORA	#0FFh			;
+	EORB	#0FFh			;
+	STD	R0			;
+	RTS				;
+					;
+;------------------------------------------------------------------------------
+;Public: VERIFY_X25 bildet den CRC-16/X-25 Prüfcode und vergleicht ihn mit dem
+;als Parameter übergebenen Original.
+;
+;Eingangsparameter:	R[0..1]		originaler CRC-16/Maxim Prüfcode
+;			R[4..5]		laufender Prüfcode
+;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+;			A		0	= ok
+;					<> 0	= Speicherbereich nicht konsistent
+;veränderte Register:	CCR, B
+;------------------------------------------------------------------------------
+					;
+VERIFY_X25:
+	LDAA	R1			;
+	JSR	CRC16_X25		;
+	LDAA	R0			;
+	JSR	CRC16_X25		;
+	LDD	R4			;
+	CPD	#0F0B8h			;wenn Ergebnis <> 0xF0B8,
+	BEQ	VERIFY_X25_8		;dann
+	LDAA	#0FFh			;  mit Fehler passiert
+	BRA	VERIFY_X25_9		;
+VERIFY_X25_8:
+	CLRA				;sonst ok
+					;
+VERIFY_X25_9:
+	RTS				;
+					;
+;------------------------------------------------------------------------------

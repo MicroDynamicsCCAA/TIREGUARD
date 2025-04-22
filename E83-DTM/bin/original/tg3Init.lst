@@ -1,0 +1,398 @@
+tg3Init  Copyright (C) 2005-2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	title	"tg3Init  Copyright (C) 2005-2007, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;TireGuard 3a	Betriebsprogramm
+  985    5                      ;------------------------------------------------------------------------------
+  986    6                      ;Module:	tg3Init.asm
+  987    7                      ;
+  988    8                      ;Copyright:	(C) 2005-2007, micro dynamics GmbH
+  989    9                      ;Author(s):	Michael Frank
+  990   10                      ;Update:	27.11.2007
+  991   11                      ;
+  992   12                      ;Description:	Das Programmmodul INIT fixiert die Betriebsweise der Peripherie
+  993   13                      ;		bei jedem Programmdurchlauf, soweit dadurch die laufende Funktion
+  994   14                      ;		nicht gestört wird.
+  995   15                      ;		Hierdurch soll verhindert werden, dass ein Peripherieelement
+  996   16                      ;		durch eine externe Störung in eine falsche Betriebsart
+  997   17                      ;		umgeschaltet wird und dann nur noch unbrauchbare oder gar keine
+  998   18                      ;		Resultate liefert.
+  999   19                      ;------------------------------------------------------------------------------
+ 1000   20                      ;Revision History:	Original Version  11.05
+ 1001   21                      ;
+ 1002   22                      ;27.11.2007	Version 2.00
+ 1003   23                      ;27.11.2007	Ergänzungen für LIN-Empfangsmultiplexer
+ 1004   24                      ;
+ 1005   25                      ;24.11.2006	Version 1.00
+ 1006   26                      ;08.11.2006	Anpassung an MC9S12C128
+ 1007   27                      ;------------------------------------------------------------------------------
+ 1008   28                      					;
+ 1009   29                      ;------------------------------------------------------------------------------
+ 1010   30                      ;Externals
+ 1011   31                      ;------------------------------------------------------------------------------
+ 1012   32                      					;
+ 1013   33                      	xref	CAN_RESET		;Code
+ 1014   34                      	xref	CAN_STATUS		;Code
+ 1015   35                      	xref	DISABLE_INTERRUPTS	;Code
+ 1016   36                      	xref	WATCHDOG_RESET		;Code
+ 1017   37                      					;
+ 1018   38                      	xref	CAN0_CONFIG_TBL		;roData
+ 1019   39                      					;
+ 1020   40                      	xref	CAN0_TIMEOUT_CTR	;Data
+ 1021   41                      	xref	LOOP_CTR		;Data
+ 1022   42                      	xref	LOOP_FLAGS		;Data
+ 1023   43                      	xref.b	_LOOP_TIMEOUT		;bitMask
+ 1024   44                      					;
+ 1025   45                      	xref.b	_CAN_RXOK		;bitMask
+ 1026   46                      	xref.b	_CAN_TXOK		;bitMask
+ 1027   47                      	xref.b	_CAN_RXSTAT		;bitMask
+ 1028   48                      	xref.b	_CAN_TXSTAT		;bitMask
+ 1029   49                      					;
+ 1030   50                      	xref.b	C_ATD_PRSC		;Number
+ 1031   51                      	xref.b	C_TSCR2			;Number
+ 1032   52                      	xref.b	LOOP_CT			;Number
+ 1033   53                      					;
+ 1034   54                      ;------------------------------------------------------------------------------
+ 1035   55                      ;Publics
+ 1036   56                      ;------------------------------------------------------------------------------
+ 1037   57                      					;
+ 1038   58                      	xdef	INIT			;Code
+ 1039   59                      					;
+ 1040   60                      .text:		section
+ 1041   61                      					;
+ 1042   62                      ;==============================================================================
+ 1043   63                      ;INIT Modul-Einsprung
+ 1044   64                      ;==============================================================================
+ 1045   65                      					;
+ 1046   66                      INIT:
+ 1047   67   000000 1D02 4080   	BCLR	PTT,bit7		;Begin der aktiven Zyklusphase
+ 1048   68                      					;
+ 1049   69   000004 16xx xx     	JSR	START_LOOP		;
+ 1050   70   000007 16xx xx     	JSR	INIT_PORTS		;
+ 1051   71   00000A 16xx xx     	JSR	INIT_COMLINES		;
+ 1052   72   00000D 16xx xx     	JSR	INIT_CAN		;
+ 1053   73   000010 16xx xx     	JSR	INIT_LIN		;
+ 1054   74   000013 16xx xx     	JSR	INIT_ANALOG		;
+ 1055   75   000016 16xx xx     	JSR	INIT_SENSORS		;
+ 1056   76   000019 16xx xx     	JSR	INIT_INT		;
+ 1057   77   00001C 16xx xx     	JSR	MISC_INIT		;
+ 1058   78   00001F 3D          	RTS				;
+ 1059   79                      					;
+ 1060   80   000020 FFFF FFFF   	dcb.b	6, 0FFh			;
+             000024 FFFF       
+ 1061   81   000026 3F          	SWI				;
+ 1062   82                      					;
+ 1063   83                      ;------------------------------------------------------------------------------
+tg3Init  Copyright (C) 2005-2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1064   84                      ;START_LOOP initialisiert die Zykluszeit.
+ 1065   85                      ;
+ 1066   86                      ;Eingangsparameter:	LOOP_CTR
+ 1067   87                      ;Ausgangsparameter:	LOOP_CTR
+ 1068   88                      ;			LOOP_FLAGS._LOOP_TIMEOUT
+ 1069   89                      ;veränderte Register:	CCR
+ 1070   90                      ;------------------------------------------------------------------------------
+ 1071   91                      					;
+ 1072   92                      START_LOOP:
+ 1073   93   000027 180B xx00   	MOVB	#C_TSCR2,TSCR2		;Zähltakt-Vorteiler
+             00002B 4D         
+ 1074   94   00002C 180B C000   	MOVB	#11000000b,TIOS		;Timer-Kanäle 6..7 im Output Compare Mode betreiben
+             000030 40         
+ 1075   95   000031 180B C000   	MOVB	#11000000b,TIE		;Compare Interrupts 6..7 Enable
+             000035 4C         
+ 1076   96   000036 180B 8000   	MOVB	#10000000b,TSCR1	;Timer starten
+             00003A 46         
+ 1077   97                      					;
+ 1078   98   00003B B6xx xx     	LDAA	LOOP_CTR		;
+ 1079   99   00003E 81xx        	CMPA	#LOOP_CT		;wenn LOOP_CTR > Startwert,
+ 1080  100   000040 2305        	BLS	START_LOOP1		;dann
+ 1081  101   000042 180B xxxx   	MOVB	#LOOP_CT,LOOP_CTR	;  LOOP_CTR auf Startwert setzen
+             000046 xx         
+ 1082  102                      START_LOOP1:
+ 1083  103   000047 1Dxx xxxx   	BCLR	LOOP_FLAGS,_LOOP_TIMEOUT;
+ 1084  104   00004B 3D          	RTS				;
+ 1085  105                      					;
+ 1086  106                      ;------------------------------------------------------------------------------
+ 1087  107                      ;INIT_PORTS sichert die Einstellungen der MCU-Ports.
+ 1088  108                      ;
+ 1089  109                      ;Eingangsparameter:	keine
+ 1090  110                      ;Ausgangsparameter:	keine
+ 1091  111                      ;veränderte Register:	CCR
+ 1092  112                      ;------------------------------------------------------------------------------
+ 1093  113                      					;
+ 1094  114                      INIT_PORTS:
+ 1095  115   00004C 180B FF00   	MOVB	#11111111b,PUCR		;
+             000050 0C         
+ 1096  116   000051 180B 0000   	MOVB	#00000000b,RDRIV	;
+             000055 0D         
+ 1097  117   000056 180B 0002   	MOVB	#00000000b,MODRR	;
+             00005A 47         
+ 1098  118                      					;Port A:
+ 1099  119   00005B 180B 0000   	MOVB	#00000000b,DDRA		;bit.[0]	In: - not connected -
+             00005F 02         
+ 1100  120                      	;				;bit.[1..7]	In: - unavailable -
+ 1101  121                      					;
+ 1102  122                      					;Port B:
+ 1103  123   000060 180B 0000   	MOVB	#00000000b,DDRB		;bit.[0..3]	In: - unavailable -
+             000064 03         
+ 1104  124                      	;				;bit.[4]	In: - not connected -
+ 1105  125                      	;				;bit.[5..7]	In: - unavailable -
+ 1106  126                      					;
+ 1107  127                      					;Port E:
+ 1108  128   000065 4C0A 10     	BSET	PEAR,#00010000b		;
+ 1109  129   000068 180B 0000   	MOVB	#00000000b,DDRE		;bit.[0..7]	In: - not connected -
+             00006C 09         
+ 1110  130                      					;
+ 1111  131                      					;Port K:
+ 1112  132   00006D 180B 0000   	MOVB	#00000000b,DDRK		;bit.[0..7]	In: - not connected -
+             000071 33         
+ 1113  133                      					;
+ 1114  134                      					;Port T
+ 1115  135                      ;
+ 1116  136                      ;begin 27.11.2007
+ 1117  137   000072 180B F202   	MOVB	#11110010b,DDRT		;bit.[0..1]	In: Soft-SCI1
+             000076 42         
+ 1118  138                      	;				;bit.[1]	Out: Warnlamp
+ 1119  139                      	;				;bit.[2..3]	In: - not connected -
+ 1120  140                      	;				;bit.[4]	Out: MC33879._CS
+ 1121  141                      	;				;bit.[5..6]	Out: LIN-RX-Multiplexer
+ 1122  142                      	;				;bit.[7]	Out: Working
+ 1123  143                      ;end
+ 1124  144                      ;
+ 1125  145   000077 180B 0002   	MOVB	#00000000b,RDRT		;
+             00007B 43         
+ 1126  146   00007C 180B FF02   	MOVB	#11111111b,PERT		;
+             000080 44         
+ 1127  147   000081 180B 0002   	MOVB	#00000000b,PPST		;
+             000085 45         
+ 1128  148                      					;Port S:
+ 1129  149   000086 180B 0202   	MOVB	#00000010b,DDRS		;bit.[0]	In: SCI0
+             00008A 4A         
+ 1130  150                      	;				;bit.[2..3]	In: - not connected -
+tg3Init  Copyright (C) 2005-2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1131  151                      	;				;bit.[4..7]	In: - unavailable -
+ 1132  152   00008B 180B 0002   	MOVB	#00000000b,RDRS		;
+             00008F 4B         
+ 1133  153   000090 180B FF02   	MOVB	#11111111b,PERS		;
+             000094 4C         
+ 1134  154   000095 180B 0002   	MOVB	#00000000b,PPSS		;
+             000099 4D         
+ 1135  155   00009A 180B 0002   	MOVB	#00000000b,WOMS		;
+             00009E 4E         
+ 1136  156                      					;Port M:
+ 1137  157   00009F 180B 3802   	MOVB	#00111000b,DDRM		;bit.[0..1]	I/O: MSCAN0
+             0000A3 52         
+ 1138  158                      	;				;bit.[2]	In: SPI0._MISO
+ 1139  159                      	;				;bit.[3]	Out: DS1722._CE
+ 1140  160                      	;				;bit.[4..5]	Out: SPI0._MOSI,_SCLK
+ 1141  161                      	;				;bit.[6..7]	In: - unavailable
+ 1142  162   0000A4 180B 0002   	MOVB	#00000000b,RDRM		;
+             0000A8 53         
+ 1143  163   0000A9 180B FF02   	MOVB	#11111111b,PERM		;
+             0000AD 54         
+ 1144  164   0000AE 180B 0002   	MOVB	#00000000b,PPSM		;
+             0000B2 55         
+ 1145  165   0000B3 180B 0002   	MOVB	#00000000b,WOMM		;
+             0000B7 56         
+ 1146  166                      					;Port P:
+ 1147  167   0000B8 180B 0002   	MOVB	#00000000b,DDRP		;bit.[0..4]	In: - unavailable -
+             0000BC 5A         
+ 1148  168                      	;				;bit.[5]	In: - not connected -
+ 1149  169                      	;				;bit.[6..7]	In: - unavailable -
+ 1150  170   0000BD 180B 0002   	MOVB	#00000000b,RDRP		;
+             0000C1 5B         
+ 1151  171   0000C2 180B FF02   	MOVB	#11111111b,PERP		;
+             0000C6 5C         
+ 1152  172   0000C7 180B 0002   	MOVB	#00000000b,PPSP		;
+             0000CB 5D         
+ 1153  173   0000CC 180B 0002   	MOVB	#00000000b,PIEP		;
+             0000D0 5E         
+ 1154  174   0000D1 180B FF02   	MOVB	#11111111b,PIFP		;
+             0000D5 5F         
+ 1155  175                      					;Port J:
+ 1156  176   0000D6 180B 0002   	MOVB	#00000000b,DDRJ		;bit.[0..5]	In: - unavailable -
+             0000DA 6A         
+ 1157  177                      	;				;bit.[6..7]	In: - not connected -
+ 1158  178   0000DB 180B 0002   	MOVB	#00000000b,RDRJ		;
+             0000DF 6B         
+ 1159  179   0000E0 180B FF02   	MOVB	#11111111b,PERJ		;
+             0000E4 6C         
+ 1160  180   0000E5 180B 0002   	MOVB	#00000000b,PPSJ		;
+             0000E9 6D         
+ 1161  181   0000EA 180B 0002   	MOVB	#00000000b,PIEJ		;
+             0000EE 6E         
+ 1162  182   0000EF 180B FF02   	MOVB	#11111111b,PIFJ		;
+             0000F3 6F         
+ 1163  183   0000F4 3D          	RTS				;
+ 1164  184                      					;
+ 1165  185                      ;------------------------------------------------------------------------------
+ 1166  186                      ;INIT_COMLINES sichert die Einstellungen der seriellen Schnittstellen.
+ 1167  187                      ;
+ 1168  188                      ;Eingangsparameter:	keine
+ 1169  189                      ;Ausgangsparameter:	keine
+ 1170  190                      ;veränderte Register:	CCR
+ 1171  191                      ;------------------------------------------------------------------------------
+ 1172  192                      					;
+ 1173  193                      INIT_COMLINES:
+ 1174  194                      
+ 1175  195   0000F5 3D          	RTS				;
+ 1176  196                      					;
+ 1177  197                      ;------------------------------------------------------------------------------
+ 1178  198                      ;INIT_CAN sichert die Einstellungen der CAN-Schnittstelle.
+ 1179  199                      ;
+ 1180  200                      ;Eingangsparameter:	keine
+ 1181  201                      ;Ausgangsparameter:	keine
+ 1182  202                      ;veränderte Register:	CCR, A, B, X, Y, R[0,4..5]
+ 1183  203                      ;------------------------------------------------------------------------------
+ 1184  204                      					;
+ 1185  205                      INIT_CAN:
+ 1186  206   0000F6 180B 0010   	MOVB	#0,R0			;
+             0000FA 00         
+ 1187  207   0000FB 16xx xx     	JSR	CAN_STATUS		;
+ 1188  208   0000FE 180E        	TAB				;
+ 1189  209   000100 84xx        	ANDA	#_CAN_RXSTAT		;
+ 1190  210   000102 81xx        	CMPA	#_CAN_RXSTAT		;wenn Receive-Error-Counter > 255
+ 1191  211   000104 2719        	BEQ	INIT_CAN1		;
+ 1192  212   000106 180F        	TBA				;
+tg3Init  Copyright (C) 2005-2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1193  213   000108 84xx        	ANDA	#_CAN_TXSTAT		;
+ 1194  214   00010A 81xx        	CMPA	#_CAN_TXSTAT		;oder Transmit-Error-Counter > 255
+ 1195  215   00010C 2711        	BEQ	INIT_CAN1		;( = BusOff )
+ 1196  216                      					;
+ 1197  217   00010E 180F        	TBA				;
+ 1198  218   000110 84xx        	ANDA	#_CAN_RXOK		;oder weder _CAN_RXOK noch _CAN_TXOK gesetzt
+ 1199  219   000112 2619        	BNE	INIT_CAN2		;
+ 1200  220   000114 180F        	TBA				;
+ 1201  221   000116 84xx        	ANDA	#_CAN_TXOK		;
+ 1202  222   000118 2613        	BNE	INIT_CAN2		;
+ 1203  223                      					;
+ 1204  224   00011A 73xx xx     	DEC	CAN0_TIMEOUT_CTR	;und Zeitgrenze erreicht,
+ 1205  225   00011D 2613        	BNE	INIT_CAN3		;
+ 1206  226                      					;
+ 1207  227                      INIT_CAN1:
+ 1208  228   00011F 180B 0010   	MOVB	#0,R0			;
+             000123 00         
+ 1209  229   000124 1803 xxxx   	MOVW	#CAN0_CONFIG_TBL,R4	;dann
+             000128 1004       
+ 1210  230   00012A 16xx xx     	JSR	CAN_RESET		;  MSCAN0 neu initialisieren
+ 1211  231                      					;
+ 1212  232                      INIT_CAN2:
+ 1213  233   00012D 180B 00xx   	MOVB	#0,CAN0_TIMEOUT_CTR	;Zeitgrenz-Zähler auf Startwert
+             000131 xx         
+ 1214  234                      					;
+ 1215  235                      INIT_CAN3:
+ 1216  236   000132 3D          	RTS				;
+ 1217  237                      					;
+ 1218  238                      ;------------------------------------------------------------------------------
+ 1219  239                      ;INIT_LIN sichert die Einstellungen des LIN-Masters.
+ 1220  240                      ;
+ 1221  241                      ;Eingangsparameter:	keine
+ 1222  242                      ;Ausgangsparameter:	keine
+ 1223  243                      ;veränderte Register:	CCR
+ 1224  244                      ;------------------------------------------------------------------------------
+ 1225  245                      					;
+ 1226  246                      INIT_LIN:
+ 1227  247                      
+ 1228  248   000133 3D          	RTS				;
+ 1229  249                      					;
+ 1230  250                      ;------------------------------------------------------------------------------
+ 1231  251                      ;INIT_ANALOG bereitet die Spannungsmessung der Analogeingänge vor.
+ 1232  252                      ;
+ 1233  253                      ;Eingangsparameter:	keine
+ 1234  254                      ;Ausgangsparameter:	keine
+ 1235  255                      ;veränderte Register:	CCR
+ 1236  256                      ;------------------------------------------------------------------------------
+ 1237  257                      					;
+ 1238  258                      INIT_ANALOG:
+ 1239  259   000134 180B 8000   	MOVB	#10000000b,ATD0CTL2	;Power on, int's and ext-triggger disable
+             000138 82         
+ 1240  260   000139 180B 4000   	MOVB	#01000000b,ATD0CTL3	;8 Kanäle, non-FIFO mode, non-FREEZE mode
+             00013D 83         
+ 1241  261   00013E 180B xx00   	MOVB	#C_ATD_PRSC,ATD0CTL4	;10-bit AD, 2 clock periods sample time
+             000142 84         
+ 1242  262   000143 180B 0000   	MOVB	#0,ATD0DIEN		;disable digital inputs
+             000147 8D         
+ 1243  263   000148 3D          	RTS				;
+ 1244  264                      					;
+ 1245  265                      ;------------------------------------------------------------------------------
+ 1246  266                      ;INIT_SENSORS sichert die Einstellungen der Sensor-Schnittstellen.
+ 1247  267                      ;
+ 1248  268                      ;Eingangsparameter:	keine
+ 1249  269                      ;Ausgangsparameter:	keine
+ 1250  270                      ;veränderte Register:	CCR
+ 1251  271                      ;------------------------------------------------------------------------------
+ 1252  272                      					;
+ 1253  273                      INIT_SENSORS:
+ 1254  274                      
+ 1255  275   000149 3D          	RTS				;
+ 1256  276                      					;
+ 1257  277                      ;------------------------------------------------------------------------------
+ 1258  278                      ;INIT_INT sichert die Einstellungen der Interruptfunktionen.
+ 1259  279                      ;
+ 1260  280                      ;Eingangsparameter:	keine
+ 1261  281                      ;Ausgangsparameter:	keine
+ 1262  282                      ;veränderte Register:	CCR, A, B, X, Y
+ 1263  283                      ;------------------------------------------------------------------------------
+ 1264  284                      					;
+ 1265  285                      INIT_INT:
+ 1266  286   00014A 1410        	SEI				;Interrupts global sperren
+ 1267  287   00014C 16xx xx     	JSR	DISABLE_INTERRUPTS	;nicht benutzte Interrupts sperren
+ 1268  288                      					;
+ 1269  289   00014F CExx xx     	LDX	#DEADLOCK		;
+tg3Init  Copyright (C) 2005-2007, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1270  290   000152 34          	PSHX				;Programmstartadresse,
+ 1271  291   000153 CE00 00     	LDX	#0000h			;
+ 1272  292   000156 34          	PSHX				;Y-Register,
+ 1273  293   000157 34          	PSHX				;X-Register,
+ 1274  294   000158 CC00 00     	LDD	#0000h			;
+ 1275  295   00015B 3B          	PSHD				;B:A-Register
+ 1276  296   00015C 39          	PSHC				;und Status auf Stack ablegen
+ 1277  297   00015D 0B          	RTI				;evtl. klemmenden Interrupt quittieren
+ 1278  298                      					;
+ 1279  299                      DEADLOCK:
+ 1280  300   00015E 10EF        	CLI				;globale Interruptfreigabe
+ 1281  301   000160 3D          	RTS				;
+ 1282  302                      					;
+ 1283  303                      ;------------------------------------------------------------------------------
+ 1284  304                      ;MISC_INIT nimmt weitere Fixierungen vor.
+ 1285  305                      ;
+ 1286  306                      ;Eingangsparameter:	keine
+ 1287  307                      ;Ausgangsparameter:	keine
+ 1288  308                      ;veränderte Register:	CCR
+ 1289  309                      ;------------------------------------------------------------------------------
+ 1290  310                      					;
+ 1291  311                      MISC_INIT:
+ 1292  312   000161 4D39 3F     	BCLR	CLKSEL,#00111111b	;Stromsparmodi ausschalten
+ 1293  313                      					;
+ 1294  314   000164 16xx xx     	JSR	WATCHDOG_RESET		;Watchdog rücksetzen
+ 1295  315   000167 3D          	RTS				;
+ 1296  316                      					;
+ 1297  317   000168 FFFF FFFF   	dcb.b	6, 0FFh			;
+             00016C FFFF       
+ 1298  318   00016E 3F          	SWI				;
+ 1299  319                      					;
+ 1300  320                      ;------------------------------------------------------------------------------

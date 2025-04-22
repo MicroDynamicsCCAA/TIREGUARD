@@ -1,0 +1,57 @@
+	nolist
+	title	"s12ga_DS1722.sfr  Copyright (C) 2005-2015, micro dynamics GmbH"
+;------------------------------------------------------------------------------
+;Module:	s12ga_DS1722.sfr
+;
+;Copyright: 	(C) 2005-2015, micro dynamics GmbH
+;Author(s):	Michael Frank
+;Update:	07.01.2015
+;
+;Description:	Hardwarespezifische Definitionen für Modul s12ga_DS1722.asm
+;------------------------------------------------------------------------------
+;Revision History:	Original Version  07.05
+;
+;07.01.2015	Angepasst für TIREGUARD 4
+;------------------------------------------------------------------------------
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Assembly Condition Codes
+;//////////////////////////////////////////////////////////////////////////////
+					;
+_low:		equ	0		;
+_high:		equ	1		;
+					;
+fEnabled:	equ	_high		;CE active level
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Definition der Bits
+;//////////////////////////////////////////////////////////////////////////////
+					;
+_MISO:		equ	bit4		;
+_MOSI:		equ	bit6		;
+_SCLK:		equ	bit7		;
+					;
+_CE:		equ	bit3		;
+					;
+_SERMODE:	equ	bit2		;
+					;
+;//////////////////////////////////////////////////////////////////////////////
+;Definition der Ports
+;//////////////////////////////////////////////////////////////////////////////
+					;
+MISO_PORT:	equ	PTS		;
+MISO_DIR:	equ	DDRS		;
+MOSI_PORT:	equ	PTS		;
+MOSI_DIR:	equ	DDRS		;
+SCLK_PORT:	equ	PTS		;
+SCLK_DIR:	equ	DDRS		;
+					;
+CE_PORT:	equ	PTP		;
+CE_DIR:		equ	DDRP		;
+					;
+SERMODE_PORT:	equ	PTP		;
+SERMODE_DIR:	equ	DDRP		;
+					;
+;------------------------------------------------------------------------------
+	list
+	end

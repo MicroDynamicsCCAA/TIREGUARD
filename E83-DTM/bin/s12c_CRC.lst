@@ -1,0 +1,824 @@
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+    1    1                      	include	"s12c_128.sfr"
+  982    2                      	title	"s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH"
+  983    3                      ;------------------------------------------------------------------------------
+  984    4                      ;Module:	s12c_CRC.asm
+  985    5                      ;
+  986    6                      ;Copyright:	(C) 2006-2009, micro dynamics GmbH
+  987    7                      ;Author(s):	Michael Frank
+  988    8                      ;Update:	15.06.2009
+  989    9                      ;
+  990   10                      ;Description:	CRC16 Prüfcode-Berechnung
+  991   11                      ;------------------------------------------------------------------------------
+  992   12                      ;Revision History:	Original Version  01.06
+  993   13                      ;
+  994   14                      ;12.06.2009	CREATE_CRC und VERIFY_CRC entfernt
+  995   15                      ;		CRC-8/Maxim-DOW neu hinzugefügt
+  996   16                      ;09.06.2009	vier weitere CRC16-Berechnungsalgorithmen neu hinzugefügt
+  997   17                      ;
+  998   18                      ;08.11.2006	Anpassung an MC9S12C128
+  999   19                      ;------------------------------------------------------------------------------
+ 1000   20                      					;
+ 1001   21                      ;------------------------------------------------------------------------------
+ 1002   22                      ;Publics
+ 1003   23                      ;------------------------------------------------------------------------------
+ 1004   24                      					;
+ 1005   25                      	xdef	CRC8_DOW		;Code
+ 1006   26                      	xdef	CRC16_CCITT_FALSE	;Code
+ 1007   27                       	xdef	CRC16_KERMIT		;Code	METHOD_CRC_CCITT
+ 1008   28                      	xdef	CRC16_MAXIM		;Code
+ 1009   29                      	xdef	CRC16_XMODEM		;Code
+ 1010   30                      	xdef	CRC16_X25		;Code
+ 1011   31                      					;
+ 1012   32                      	xdef	CLEAR_DOW		;Code
+ 1013   33                      	xdef	CLEAR_CCITT_FALSE	;Code
+ 1014   34                      	xdef	CLEAR_KERMIT		;Code
+ 1015   35                      	xdef	CLEAR_MAXIM		;Code
+ 1016   36                      	xdef	CLEAR_XMODEM		;Code
+ 1017   37                      	xdef	CLEAR_X25		;Code
+ 1018   38                      					;
+ 1019   39                      	xdef	CREATE_DOW		;Code
+ 1020   40                      	xdef	CREATE_CCITT_FALSE	;Code
+ 1021   41                      	xdef	CREATE_KERMIT		;Code
+ 1022   42                      	xdef	CREATE_MAXIM		;Code
+ 1023   43                      	xdef	CREATE_XMODEM		;Code
+ 1024   44                      	xdef	CREATE_X25		;Code
+ 1025   45                      					;
+ 1026   46                      	xdef	VERIFY_DOW		;Code
+ 1027   47                      	xdef	VERIFY_CCITT_FALSE	;Code
+ 1028   48                      	xdef	VERIFY_KERMIT		;Code
+ 1029   49                      	xdef	VERIFY_MAXIM		;Code
+ 1030   50                      	xdef	VERIFY_XMODEM		;Code
+ 1031   51                      	xdef	VERIFY_X25		;Code
+ 1032   52                      					;
+ 1033   53                      .text:		section
+ 1034   54                      					;
+ 1035   55                      ;------------------------------------------------------------------------------
+ 1036   56                      ;SWAP_A tauscht High- und Low-Nibble des A-Registers.
+ 1037   57                      ;
+ 1038   58                      ;Eingangsparameter:	A
+ 1039   59                      ;Ausgangsparameter:	A
+ 1040   60                      ;veränderte Register:	CCR, B
+ 1041   61                      ;------------------------------------------------------------------------------
+ 1042   62                      					;
+ 1043   63                      SWAP_A:
+ 1044   64   000000 49          	LSRD				;
+ 1045   65   000001 49          	LSRD				;
+ 1046   66   000002 49          	LSRD				;
+ 1047   67   000003 49          	LSRD				;
+ 1048   68   000004 840F        	ANDA	#00001111b		;
+ 1049   69   000006 C4F0        	ANDB	#11110000b		;
+ 1050   70   000008 1806        	ABA				;
+ 1051   71   00000A 3D          	RTS				;
+ 1052   72                      					;
+ 1053   73                      ;------------------------------------------------------------------------------
+ 1054   74                      ;ROR_A rotiert den Inhalt des A-Registers einmal nach rechts.
+ 1055   75                      ;
+ 1056   76                      ;Eingangsparameter:	A
+ 1057   77                      ;Ausgangsparameter:	A
+ 1058   78                      ;veränderte Register:	CCR, B
+ 1059   79                      ;------------------------------------------------------------------------------
+ 1060   80                      					;
+ 1061   81                      ROR_A:
+ 1062   82   00000B 49          	LSRD				;
+ 1063   83   00000C 847F        	ANDA	#01111111b		;
+ 1064   84   00000E C480        	ANDB	#10000000b		;
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1065   85   000010 1806        	ABA				;
+ 1066   86   000012 3D          	RTS				;
+ 1067   87                      					;
+ 1068   88                      ;------------------------------------------------------------------------------
+ 1069   89                      ;PARITY_A liefert die gerade Parität des A-Registers im Carry-Flag.
+ 1070   90                      ;
+ 1071   91                      ;Eingangsparameter:	A
+ 1072   92                      ;Ausgangsparameter:	CCR.C
+ 1073   93                      ;veränderte Register:	CCR, B
+ 1074   94                      ;------------------------------------------------------------------------------
+ 1075   95                      					;
+ 1076   96                      PARITY_A:
+ 1077   97   000013 F610 07     	LDAB	R7			;Register retten
+ 1078   98   000016 7A10 07     	STAA	R7			;
+ 1079   99   000019 44          	LSRA				;
+ 1080  100   00001A B810 07     	EORA	R7			;Q3 = P(7^6), Q2 = P(5^4), Q1 = P(3^2), Q0 = P(1^0)
+ 1081  101   00001D 7A10 07     	STAA	R7			;
+ 1082  102   000020 44          	LSRA				;
+ 1083  103   000021 44          	LSRA				;
+ 1084  104   000022 B810 07     	EORA	R7			;R1 = Q(3^2), R0 = Q(1^0)
+ 1085  105   000025 7A10 07     	STAA	R7			;
+ 1086  106   000028 44          	LSRA				;
+ 1087  107   000029 44          	LSRA				;
+ 1088  108   00002A 44          	LSRA				;
+ 1089  109   00002B 44          	LSRA				;
+ 1090  110   00002C B810 07     	EORA	R7			;S = R(1^0)
+ 1091  111   00002F 44          	LSRA				;Ergebnis ins Carry schieben
+ 1092  112   000030 7B10 07     	STAB	R7			;Register restaurieren
+ 1093  113   000033 3D          	RTS				;
+ 1094  114                      					;
+ 1095  115                      ;------------------------------------------------------------------------------
+ 1096  116                      ;Public: CRC8_DOW bildet den CRC-8/Maxim Prüfcode, der in den Maxim 1-Wire 
+ 1097  117                      ;Produkten verwendet wird.
+ 1098  118                      ;
+ 1099  119                      ;Width:		8
+ 1100  120                      ;Polynom:	0x31
+ 1101  121                      ;Init:		0x00
+ 1102  122                      ;XorOut:	0x00
+ 1103  123                      ;Check:		0xA1	('123456789')
+ 1104  124                      ;Reminder:	0x00
+ 1105  125                      ;
+ 1106  126                      ;Eingangsparameter:	A		Datenbyte
+ 1107  127                      ;			R5		CRC-Prüfcode
+ 1108  128                      ;Ausgangsparameter:	R5		CRC-Prüfcode
+ 1109  129                      ;veränderte Register:	CCR, B
+ 1110  130                      ;------------------------------------------------------------------------------
+ 1111  131                      					;
+ 1112  132                      CRC8_DOW:
+ 1113  133   000034 B810 05     	EORA	R5			;
+ 1114  134   000037 C7          	CLRB				;
+ 1115  135   000038 8501        	BITA	#00000001b		;
+ 1116  136   00003A 2702        	BEQ	CRC8_DOW1		;
+ 1117  137   00003C C85E        	EORB	#5Eh			;
+ 1118  138                      CRC8_DOW1:
+ 1119  139   00003E 8502        	BITA	#00000010b		;
+ 1120  140   000040 2702        	BEQ	CRC8_DOW2		;
+ 1121  141   000042 C8BC        	EORB	#0BCh			;
+ 1122  142                      CRC8_DOW2:
+ 1123  143   000044 8504        	BITA	#00000100b		;
+ 1124  144   000046 2702        	BEQ	CRC8_DOW3		;
+ 1125  145   000048 C861        	EORB	#61h			;
+ 1126  146                      CRC8_DOW3:
+ 1127  147   00004A 8508        	BITA	#00001000b		;
+ 1128  148   00004C 2702        	BEQ	CRC8_DOW4		;
+ 1129  149   00004E C8C2        	EORB	#0C2h			;
+ 1130  150                      CRC8_DOW4:
+ 1131  151   000050 8510        	BITA	#00010000b		;
+ 1132  152   000052 2702        	BEQ	CRC8_DOW5		;
+ 1133  153   000054 C89D        	EORB	#9Dh			;
+ 1134  154                      CRC8_DOW5:
+ 1135  155   000056 8520        	BITA	#00100000b		;
+ 1136  156   000058 2702        	BEQ	CRC8_DOW6		;
+ 1137  157   00005A C823        	EORB	#23h			;
+ 1138  158                      CRC8_DOW6:
+ 1139  159   00005C 8540        	BITA	#01000000b		;
+ 1140  160   00005E 2702        	BEQ	CRC8_DOW7		;
+ 1141  161   000060 C846        	EORB	#46h			;
+ 1142  162                      CRC8_DOW7:
+ 1143  163   000062 8580        	BITA	#10000000b		;
+ 1144  164   000064 2702        	BEQ	CRC8_DOW8		;
+ 1145  165   000066 C88C        	EORB	#8Ch			;
+ 1146  166                      CRC8_DOW8:
+ 1147  167   000068 7B10 05     	STAB	R5			;
+ 1148  168   00006B 3D          	RTS				;
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1149  169                      					;
+ 1150  170                      ;------------------------------------------------------------------------------
+ 1151  171                      ;Public: CRC16_CCITT_FALSE bildet den CRC-16/CCITT-FALSE Prüfcode.
+ 1152  172                      ;
+ 1153  173                      ;Width:		16
+ 1154  174                      ;Polynom:	0x1021
+ 1155  175                      ;Init:		0xFFFF
+ 1156  176                      ;XorOut:	0x0000
+ 1157  177                      ;Check:		0x29B1	('123456789')
+ 1158  178                      ;Reminder:	0x0000
+ 1159  179                      ;
+ 1160  180                      ;Eingangsparameter:	A		Datenbyte
+ 1161  181                      ;			R4/R5		CRC-Prüfcode
+ 1162  182                      ;Ausgangsparameter:	R4/R5		CRC-Prüfcode
+ 1163  183                      ;veränderte Register:	CCR, B, R[6..7]
+ 1164  184                      ;------------------------------------------------------------------------------
+ 1165  185                      					;
+ 1166  186                      CRC16_CCITT_FALSE:
+ 1167  187   00006C B810 04     	EORA	R4			;
+ 1168  188   00006F 7A10 06     	STAA	R6			;
+ 1169  189   000072 84F0        	ANDA	#0F0h			;
+ 1170  190   000074 7A10 07     	STAA	R7			;
+ 1171  191   000077 B610 06     	LDAA	R6			;
+ 1172  192   00007A 16xx xx     	JSR	SWAP_A			;
+ 1173  193   00007D B810 07     	EORA	R7			;
+ 1174  194   000080 7A10 06     	STAA	R6			;
+ 1175  195                      					;High Byte
+ 1176  196   000083 180E        	TAB				;
+ 1177  197   000085 59          	LSLD				;
+ 1178  198   000086 841F        	ANDA	#01Fh			;
+ 1179  199   000088 B810 05     	EORA	R5			;
+ 1180  200   00008B 7A10 04     	STAA	R4			;
+ 1181  201   00008E B610 06     	LDAA	R6			;
+ 1182  202   000091 84F0        	ANDA	#0F0h			;
+ 1183  203   000093 180E        	TAB				;
+ 1184  204   000095 B810 04     	EORA	R4			;
+ 1185  205   000098 7A10 04     	STAA	R4			;
+ 1186  206                      					;Low Byte
+ 1187  207   00009B 180F        	TBA				;
+ 1188  208   00009D 1806        	ABA				;
+ 1189  209   00009F 7A10 05     	STAA	R5			;
+ 1190  210   0000A2 B610 06     	LDAA	R6			;
+ 1191  211   0000A5 16xx xx     	JSR	SWAP_A			;
+ 1192  212   0000A8 B810 05     	EORA	R5			;
+ 1193  213   0000AB 7A10 05     	STAA	R5			;
+ 1194  214   0000AE 3D          	RTS				;
+ 1195  215                      					;
+ 1196  216                      ;------------------------------------------------------------------------------
+ 1197  217                      ;Public: CRC16_KERMIT bildet den CRC-16/CCITT Prüfcode.
+ 1198  218                      ;Dieser Algorithmus entspricht dem des CodeWarrior-Linkers mit METHOD_CRC_CCITT
+ 1199  219                      ;
+ 1200  220                      ;Width:		16
+ 1201  221                      ;Polynom:	0x1021
+ 1202  222                      ;Init:		0x0000
+ 1203  223                      ;XorOut:	0x0000
+ 1204  224                      ;Check:		0x2189	('123456789')
+ 1205  225                      ;Reminder:	0x0000
+ 1206  226                      ;
+ 1207  227                      ;Eingangsparameter:	A		Datenbyte
+ 1208  228                      ;			R4/R5		CRC-Prüfcode
+ 1209  229                      ;Ausgangsparameter:	R4/R5		CRC-Prüfcode
+ 1210  230                      ;veränderte Register:	CCR, B, R6
+ 1211  231                      ;------------------------------------------------------------------------------
+ 1212  232                      					;
+ 1213  233                      CRC16_KERMIT:
+ 1214  234   0000AF B810 05     	EORA	R5			;
+ 1215  235   0000B2 7A10 05     	STAA	R5			;
+ 1216  236   0000B5 16xx xx     	JSR	SWAP_A			;
+ 1217  237   0000B8 84F0        	ANDA	#0F0h			;
+ 1218  238   0000BA B810 05     	EORA	R5			;
+ 1219  239   0000BD 7A10 05     	STAA	R5			;
+ 1220  240   0000C0 16xx xx     	JSR	SWAP_A			;
+ 1221  241   0000C3 7A10 06     	STAA	R6			;
+ 1222  242   0000C6 840F        	ANDA	#0Fh			;
+ 1223  243   0000C8 B810 04     	EORA	R4			;
+ 1224  244   0000CB F610 06     	LDAB	R6			;
+ 1225  245   0000CE B781        	EXG	A,B			;
+ 1226  246   0000D0 7B10 06     	STAB	R6			;
+ 1227  247   0000D3 16xx xx     	JSR	ROR_A			;
+ 1228  248   0000D6 7A10 04     	STAA	R4			;
+ 1229  249   0000D9 8407        	ANDA	#07h			;
+ 1230  250   0000DB B810 05     	EORA	R5			;
+ 1231  251   0000DE F610 04     	LDAB	R4			;
+ 1232  252   0000E1 B781        	EXG	A,B			;
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1233  253   0000E3 7B10 04     	STAB	R4			;
+ 1234  254   0000E6 84F8        	ANDA	#0F8h			;
+ 1235  255   0000E8 B810 06     	EORA	R6			;
+ 1236  256   0000EB 7A10 05     	STAA	R5			;
+ 1237  257   0000EE 3D          	RTS				;
+ 1238  258                      					;
+ 1239  259                      ;------------------------------------------------------------------------------
+ 1240  260                      ;Public: CRC16_MAXIM bildet den CRC-16/Maxim Prüfcode.
+ 1241  261                      ;
+ 1242  262                      ;Width:		16
+ 1243  263                      ;Polynom:	0x8005
+ 1244  264                      ;Init:		0x0000
+ 1245  265                      ;XorOut:	0xFFFF
+ 1246  266                      ;Check:		0x44C2	('123456789')
+ 1247  267                      ;Reminder:	0xB001	Magic Number
+ 1248  268                      ;
+ 1249  269                      ;Eingangsparameter:	A		Datenbyte
+ 1250  270                      ;			R4/R5		CRC16		CRC-Prüfcode
+ 1251  271                      ;Ausgangsparameter:	R4/R5		CRC16		CRC-Prüfcode
+ 1252  272                      ;veränderte Register:	CCR, B, R6
+ 1253  273                      ;------------------------------------------------------------------------------
+ 1254  274                      					;
+ 1255  275                      CRC16_MAXIM:
+ 1256  276   0000EF B810 05     	EORA	R5			;
+ 1257  277   0000F2 180C 1004   	MOVB	R4,R5			;
+             0000F6 1005       
+ 1258  278   0000F8 7A10 04     	STAA	R4			;
+ 1259  279   0000FB 7A10 06     	STAA	R6			;
+ 1260  280   0000FE 16xx xx     	JSR	PARITY_A		;ACC.Parity --> CCR.C
+ 1261  281   000101 2408        	BCC	CRC16_MAXIM0		;
+ 1262  282   000103 B610 05     	LDAA	R5			;
+ 1263  283   000106 8801        	EORA	#01h			;
+ 1264  284   000108 7A10 05     	STAA	R5			;
+ 1265  285                      CRC16_MAXIM0:
+ 1266  286   00010B B610 06     	LDAA	R6			;
+ 1267  287   00010E 46          	RORA				;
+ 1268  288   00010F 7A10 06     	STAA	R6			;
+ 1269  289   000112 2408        	BCC	CRC16_MAXIM1		;
+ 1270  290   000114 B610 05     	LDAA	R5			;
+ 1271  291   000117 8840        	EORA	#40h			;
+ 1272  292   000119 7A10 05     	STAA	R5			;
+ 1273  293                      CRC16_MAXIM1:
+ 1274  294   00011C B610 06     	LDAA	R6			;
+ 1275  295   00011F 180E        	TAB				;
+ 1276  296   000121 55          	ROLB				;ACC.7 --> CCR.C
+ 1277  297   000122 B810 04     	EORA	R4			;
+ 1278  298   000125 46          	RORA				;
+ 1279  299   000126 7A10 04     	STAA	R4			;
+ 1280  300   000129 2408        	BCC	CRC16_MAXIM2		;
+ 1281  301   00012B B610 05     	LDAA	R5			;
+ 1282  302   00012E 8880        	EORA	#80h			;
+ 1283  303   000130 7A10 05     	STAA	R5			;
+ 1284  304                      CRC16_MAXIM2:
+ 1285  305   000133 3D          	RTS				;
+ 1286  306                      					;
+ 1287  307                      ;------------------------------------------------------------------------------
+ 1288  308                      ;Public: CRC16_XMODEM bildet den CRC-16/Acorn Prüfcode.
+ 1289  309                      ;
+ 1290  310                      ;Width:		16
+ 1291  311                      ;Polynom:	0x1021
+ 1292  312                      ;Init:		0x0000
+ 1293  313                      ;XorOut:	0x0000
+ 1294  314                      ;Check:		0x31C3	('123456789')
+ 1295  315                      ;Reminder:	0x0000
+ 1296  316                      ;
+ 1297  317                      ;Eingangsparameter:	A		Datenbyte
+ 1298  318                      ;			CRC16		CRC-Prüfcode
+ 1299  319                      ;Ausgangsparameter:	CRC16		CRC-Prüfcode
+ 1300  320                      ;veränderte Register:	CCR, B, R[6..7]
+ 1301  321                      ;------------------------------------------------------------------------------
+ 1302  322                      					;
+ 1303  323                      CRC16_XMODEM:
+ 1304  324   000134 B810 04     	EORA	R4			;
+ 1305  325   000137 7A10 06     	STAA	R6			;
+ 1306  326   00013A 84F0        	ANDA	#0F0h			;
+ 1307  327   00013C 7A10 07     	STAA	R7			;
+ 1308  328   00013F B610 06     	LDAA	R6			;
+ 1309  329   000142 16xx xx     	JSR	SWAP_A			;
+ 1310  330   000145 B810 07     	EORA	R7			;
+ 1311  331   000148 7A10 06     	STAA	R6			;
+ 1312  332                      					;High Byte
+ 1313  333   00014B 180E        	TAB				;
+ 1314  334   00014D 59          	LSLD				;
+ 1315  335   00014E 841F        	ANDA	#01Fh			;
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1316  336   000150 B810 05     	EORA	R5			;
+ 1317  337   000153 7A10 04     	STAA	R4			;
+ 1318  338   000156 B610 06     	LDAA	R6			;
+ 1319  339   000159 84F0        	ANDA	#0F0h			;
+ 1320  340   00015B 180E        	TAB				;
+ 1321  341   00015D B810 04     	EORA	R4			;
+ 1322  342   000160 7A10 04     	STAA	R4			;
+ 1323  343                      					;Low Byte
+ 1324  344   000163 180F        	TBA				;
+ 1325  345   000165 1806        	ABA				;
+ 1326  346   000167 7A10 05     	STAA	R5			;
+ 1327  347   00016A B610 06     	LDAA	R6			;
+ 1328  348   00016D 16xx xx     	JSR	SWAP_A			;
+ 1329  349   000170 B810 05     	EORA	R5			;
+ 1330  350   000173 7A10 05     	STAA	R5			;
+ 1331  351   000176 3D          	RTS				;
+ 1332  352                      					;
+ 1333  353                      ;------------------------------------------------------------------------------
+ 1334  354                      ;Public: CRC16_X25 bildet den CRC-16/X-25 Prüfcode.
+ 1335  355                      ;
+ 1336  356                      ;Width:		16
+ 1337  357                      ;Polynom:	0x1021
+ 1338  358                      ;Init:		0xFFFF
+ 1339  359                      ;XorOut:	0xFFFF
+ 1340  360                      ;Check:		0x906E	('123456789')
+ 1341  361                      ;Reminder:	0xF0B8	Magic Number
+ 1342  362                      ;
+ 1343  363                      ;Eingangsparameter:	A		Datenbyte
+ 1344  364                      ;			R4/R5		CRC-Prüfcode
+ 1345  365                      ;Ausgangsparameter:	R4/R5		CRC-Prüfcode
+ 1346  366                      ;veränderte Register:	CCR, B
+ 1347  367                      ;------------------------------------------------------------------------------
+ 1348  368                      					;
+ 1349  369                      CRC16_X25:
+ 1350  370                      					; unsigned int CRC16_X25 (unsigned int crc, unsigned int c)
+ 1351  371   000177 B810 05     	EORA	R5			; {
+ 1352  372   00017A 180C 1004   	MOVB	R4,R5			;    crc = (unsigned char) (crc >> 8) | (crc << 8);
+             00017E 1005       
+ 1353  373   000180 7A10 04     	STAA	R4			;    crc ^= c;
+ 1354  374                      					;
+ 1355  375   000183 B610 04     	LDAA	R4			;    crc ^= (crc & 0xFF00) << 4;
+ 1356  376   000186 48          	LSLA				;
+ 1357  377   000187 48          	LSLA				;
+ 1358  378   000188 48          	LSLA				;
+ 1359  379   000189 48          	LSLA				;
+ 1360  380   00018A B810 04     	EORA	R4			;
+ 1361  381   00018D 7A10 04     	STAA	R4			;
+ 1362  382                      					;
+ 1363  383   000190 F610 04     	LDAB	R4			;    crc ^= (crc >> 8) >> 4;
+ 1364  384   000193 54          	LSRB				;
+ 1365  385   000194 54          	LSRB				;
+ 1366  386   000195 54          	LSRB				;
+ 1367  387   000196 54          	LSRB				;
+ 1368  388   000197 F810 05     	EORB	R5			;
+ 1369  389   00019A 7B10 05     	STAB	R5			;
+ 1370  390                      					;
+ 1371  391   00019D C7          	CLRB				;    crc ^= (crc & 0xFF00) >> 5;
+ 1372  392   00019E B610 04     	LDAA	R4			;
+ 1373  393   0001A1 49          	LSRD				;
+ 1374  394   0001A2 49          	LSRD				;
+ 1375  395   0001A3 49          	LSRD				;
+ 1376  396   0001A4 49          	LSRD				;
+ 1377  397   0001A5 49          	LSRD				;
+ 1378  398   0001A6 B810 04     	EORA	R4			;
+ 1379  399   0001A9 F810 05     	EORB	R5			;
+ 1380  400   0001AC 7C10 04     	STD	R4			;
+ 1381  401   0001AF 3D          	RTS				; }
+ 1382  402                      					;
+ 1383  403                      ;------------------------------------------------------------------------------
+ 1384  404                      ;CLEAR_0x00 setzt den Prüfcode auf Startwert 0x00.
+ 1385  405                      ;
+ 1386  406                      ;Eingangsparameter:	keine
+ 1387  407                      ;Ausgangsparameter:	R5		Prüfcode-Startwert
+ 1388  408                      ;veränderte Register:	keine
+ 1389  409                      ;------------------------------------------------------------------------------
+ 1390  410                      					;
+ 1391  411                      CLEAR_DOW:
+ 1392  412                      					;
+ 1393  413                      ;------------------------------------------------------------------------------
+ 1394  414                      					;
+ 1395  415                      CLEAR_0x00:
+ 1396  416   0001B0 180B 0010   	MOVB	#0,R5			;Prüfcode auf Startwert
+             0001B4 05         
+ 1397  417   0001B5 3D          	RTS				;
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1398  418                      					;
+ 1399  419                      ;------------------------------------------------------------------------------
+ 1400  420                      ;CLEAR_0x0000 setzt den Prüfcode auf Startwert 0x0000.
+ 1401  421                      ;
+ 1402  422                      ;Eingangsparameter:	keine
+ 1403  423                      ;Ausgangsparameter:	R[4..5]		Prüfcode-Startwert
+ 1404  424                      ;veränderte Register:	keine
+ 1405  425                      ;------------------------------------------------------------------------------
+ 1406  426                      					;
+ 1407  427                      CLEAR_KERMIT:
+ 1408  428                      CLEAR_MAXIM:
+ 1409  429                      CLEAR_XMODEM:
+ 1410  430                      					;
+ 1411  431                      ;------------------------------------------------------------------------------
+ 1412  432                      					;
+ 1413  433                      CLEAR_0x0000:
+ 1414  434   0001B6 1803 0000   	MOVW	#0,R4			;Prüfcode auf Startwert
+             0001BA 1004       
+ 1415  435   0001BC 3D          	RTS				;
+ 1416  436                      					;
+ 1417  437                      ;------------------------------------------------------------------------------
+ 1418  438                      ;CLEAR_0xFFFF setzt den Prüfcode auf Startwert 0xFFFF.
+ 1419  439                      ;
+ 1420  440                      ;Eingangsparameter:	keine
+ 1421  441                      ;Ausgangsparameter:	R[4..5]		Prüfcode-Startwert
+ 1422  442                      ;veränderte Register:	keine
+ 1423  443                      ;------------------------------------------------------------------------------
+ 1424  444                      					;
+ 1425  445                      CLEAR_CCITT_FALSE:
+ 1426  446                      CLEAR_X25:
+ 1427  447                      					;
+ 1428  448                      ;------------------------------------------------------------------------------
+ 1429  449                      					;
+ 1430  450                      CLEAR_0xFFFF:
+ 1431  451   0001BD 1803 FFFF   	MOVW	#0FFFFh,R4		;Prüfcode auf Startwert
+             0001C1 1004       
+ 1432  452   0001C3 3D          	RTS				;
+ 1433  453                      					;
+ 1434  454                      ;------------------------------------------------------------------------------
+ 1435  455                      ;Public: CREATE_DOW bildet den CRC-8/Maxim Prüfcode.
+ 1436  456                      ;
+ 1437  457                      ;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+ 1438  458                      ;			R3		Anzahl Bytes des Speicherbereichs
+ 1439  459                      ;Ausgangsparameter:	R1		CRC-8/Maxim Prüfcode
+ 1440  460                      ;			R5		laufender Prüfcode
+ 1441  461                      ;veränderte Register:	CCR, A, B, X
+ 1442  462                      ;------------------------------------------------------------------------------
+ 1443  463                      					;
+ 1444  464                      CREATE_DOW:
+ 1445  465   0001C4 16xx xx     	JSR	CLEAR_0x00		;Prüfcode auf Startwert
+ 1446  466                      					;
+ 1447  467                      CREATE_DOW1:
+ 1448  468   0001C7 A630        	LDAA	1,X+			;
+ 1449  469   0001C9 16xx xx     	JSR	CRC8_DOW		;
+ 1450  470   0001CC 7310 03     	DEC	R3			;
+ 1451  471   0001CF 26F6        	BNE	CREATE_DOW1		;
+ 1452  472   0001D1 180C 1005   	MOVB	R5,R1			;
+             0001D5 1001       
+ 1453  473   0001D7 3D          	RTS				;
+ 1454  474                      					;
+ 1455  475                      ;------------------------------------------------------------------------------
+ 1456  476                      ;Public: VERIFY_DOW bildet den CRC-8/Maxim Prüfcode und vergleicht
+ 1457  477                      ;ihn mit dem als Parameter übergebenen Original.
+ 1458  478                      ;
+ 1459  479                      ;Eingangsparameter:	R1		CRC-8/Maxim Prüfcode
+ 1460  480                      ;			R5		laufender Prüfcode
+ 1461  481                      ;Ausgangsparameter:	R5		Prüfungsergebnis
+ 1462  482                      ;			A		0	= ok
+ 1463  483                      ;					<> 0	= Speicherbereich nicht konsistent
+ 1464  484                      ;veränderte Register:	CCR, B, R7
+ 1465  485                      ;------------------------------------------------------------------------------
+ 1466  486                      					;
+ 1467  487                      VERIFY_DOW:
+ 1468  488   0001D8 B610 01     	LDAA	R1			;
+ 1469  489   0001DB 16xx xx     	JSR	CRC8_DOW		;
+ 1470  490   0001DE B610 05     	LDAA	R5			;wenn Ergebnis <> 0,
+ 1471  491   0001E1 2702        	BEQ	VERIFY_DOW9		;dann
+ 1472  492   0001E3 86FF        	LDAA	#0FFh			;  mit Fehler passiert und mit A <> 0 zurück
+ 1473  493                      					;
+ 1474  494                      VERIFY_DOW9:
+ 1475  495   0001E5 3D          	RTS				;
+ 1476  496                      					;
+ 1477  497                      ;------------------------------------------------------------------------------
+ 1478  498                      ;Public: CREATE_CCITT_FALSE liefert den CRC-16/CCITT-FALSE Prüfcode.
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1479  499                      ;
+ 1480  500                      ;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+ 1481  501                      ;			R[2..3]		Anzahl Bytes des Speicherbereichs
+ 1482  502                      ;Ausgangsparameter:	R[0..1]		CRC-16/CCITT-FALSE Prüfcode
+ 1483  503                      ;			R[4..5]		laufender Prüfcode
+ 1484  504                      ;veränderte Register:	CCR, A, B, X, R[6..7]
+ 1485  505                      ;------------------------------------------------------------------------------
+ 1486  506                      					;
+ 1487  507                      CREATE_CCITT_FALSE:
+ 1488  508   0001E6 16xx xx     	JSR	CLEAR_0xFFFF		;Prüfcode auf Startwert
+ 1489  509                      					;
+ 1490  510                      CREATE_CCITT_FALSE1:
+ 1491  511   0001E9 A630        	LDAA	1,X+			;
+ 1492  512   0001EB 16xx xx     	JSR	CRC16_CCITT_FALSE	;
+ 1493  513   0001EE FC10 02     	LDD	R2			;
+ 1494  514   0001F1 8300 01     	SUBD	#1			;
+ 1495  515   0001F4 7C10 02     	STD	R2			;
+ 1496  516   0001F7 26F0        	BNE	CREATE_CCITT_FALSE1	;
+ 1497  517   0001F9 1804 1004   	MOVW	R4,R0			;
+             0001FD 1000       
+ 1498  518   0001FF 3D          	RTS				;
+ 1499  519                      					;
+ 1500  520                      ;------------------------------------------------------------------------------
+ 1501  521                      ;Public: VERIFY_CCITT_FALSE bildet den CRC-16/CCITT-FALSE Prüfcode und vergleicht
+ 1502  522                      ;ihn mit dem als Parameter übergebenen Original.
+ 1503  523                      ;
+ 1504  524                      ;Eingangsparameter:	R[0..1]		CRC-16/CCITT-FALSE Prüfcode
+ 1505  525                      ;			R[4..5]		laufender Prüfcode
+ 1506  526                      ;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+ 1507  527                      ;			A		0	= ok
+ 1508  528                      ;					<> 0	= Speicherbereich nicht konsistent
+ 1509  529                      ;veränderte Register:	CCR, B, R6
+ 1510  530                      ;------------------------------------------------------------------------------
+ 1511  531                      					;
+ 1512  532                      VERIFY_CCITT_FALSE:
+ 1513  533   000200 B610 00     	LDAA	R0			;
+ 1514  534   000203 16xx xx     	JSR	CRC16_CCITT_FALSE	;
+ 1515  535   000206 B610 01     	LDAA	R1			;
+ 1516  536   000209 16xx xx     	JSR	CRC16_CCITT_FALSE	;
+ 1517  537   00020C FC10 04     	LDD	R4			;wenn Ergebnis <> 0,
+ 1518  538   00020F 2704        	BEQ	VERIFY_CCITT_FALSE8	;dann
+ 1519  539   000211 86FF        	LDAA	#0FFh			;  mit Fehler passiert
+ 1520  540   000213 2001        	BRA	VERIFY_CCITT_FALSE9	;
+ 1521  541                      VERIFY_CCITT_FALSE8:
+ 1522  542   000215 87          	CLRA				;sonst ok
+ 1523  543                      					;
+ 1524  544                      VERIFY_CCITT_FALSE9:
+ 1525  545   000216 3D          	RTS				;
+ 1526  546                      					;
+ 1527  547                      ;------------------------------------------------------------------------------
+ 1528  548                      ;Public: CREATE_KERMIT liefert den CRC-16/CCITT Prüfcode.
+ 1529  549                      ;
+ 1530  550                      ;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+ 1531  551                      ;			R[2..3]		Anzahl Bytes des Speicherbereichs
+ 1532  552                      ;Ausgangsparameter:	R[0..1]		CRC-16/CCITT Prüfcode
+ 1533  553                      ;			R[4..5]		laufender Prüfcode
+ 1534  554                      ;veränderte Register:	CCR, A, B, X, R6
+ 1535  555                      ;------------------------------------------------------------------------------
+ 1536  556                      					;
+ 1537  557                      CREATE_KERMIT:
+ 1538  558   000217 16xx xx     	JSR	CLEAR_0x0000		;Prüfcode auf Startwert
+ 1539  559                      					;
+ 1540  560                      CREATE_KERMIT1:
+ 1541  561   00021A A630        	LDAA	1,X+			;
+ 1542  562   00021C 16xx xx     	JSR	CRC16_KERMIT		;
+ 1543  563   00021F FC10 02     	LDD	R2			;
+ 1544  564   000222 8300 01     	SUBD	#1			;
+ 1545  565   000225 7C10 02     	STD	R2			;
+ 1546  566   000228 26F0        	BNE	CREATE_KERMIT1		;
+ 1547  567   00022A 1804 1004   	MOVW	R4,R0			;
+             00022E 1000       
+ 1548  568   000230 3D          	RTS				;
+ 1549  569                      					;
+ 1550  570                      ;------------------------------------------------------------------------------
+ 1551  571                      ;Public: VERIFY_KERMIT bildet den CRC-16/CCITT Prüfcode und vergleicht ihn mit dem
+ 1552  572                      ;als Parameter übergebenen Original.
+ 1553  573                      ;
+ 1554  574                      ;Eingangsparameter:	R[0..1]		CRC-16/CCITT Prüfcode
+ 1555  575                      ;			R[4..5]		laufender Prüfcode
+ 1556  576                      ;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+ 1557  577                      ;			A		0	= ok
+ 1558  578                      ;					<> 0	= Speicherbereich nicht konsistent
+ 1559  579                      ;veränderte Register:	CCR, B, R6
+ 1560  580                      ;------------------------------------------------------------------------------
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1561  581                      					;
+ 1562  582                      VERIFY_KERMIT:
+ 1563  583   000231 B610 01     	LDAA	R1			;
+ 1564  584   000234 16xx xx     	JSR	CRC16_KERMIT		;
+ 1565  585   000237 B610 00     	LDAA	R0			;
+ 1566  586   00023A 16xx xx     	JSR	CRC16_KERMIT		;
+ 1567  587   00023D FC10 04     	LDD	R4			;wenn Ergebnis <> 0,
+ 1568  588   000240 2704        	BEQ	VERIFY_KERMIT8		;dann
+ 1569  589   000242 86FF        	LDAA	#0FFh			;  mit Fehler passiert
+ 1570  590   000244 2001        	BRA	VERIFY_KERMIT9		;
+ 1571  591                      VERIFY_KERMIT8:
+ 1572  592   000246 87          	CLRA				;sonst ok
+ 1573  593                      					;
+ 1574  594                      VERIFY_KERMIT9:
+ 1575  595   000247 3D          	RTS				;
+ 1576  596                      					;
+ 1577  597                      ;------------------------------------------------------------------------------
+ 1578  598                      ;Public: CREATE_MAXIM liefert den CRC-16/Maxim Prüfcode.
+ 1579  599                      ;
+ 1580  600                      ;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+ 1581  601                      ;			R[2..3]		Anzahl Bytes des Speicherbereichs
+ 1582  602                      ;Ausgangsparameter:	R[0..1]		CRC-16/Maxim Prüfcode
+ 1583  603                      ;			R[4..5]		laufender Prüfcode
+ 1584  604                      ;veränderte Register:	CCR, A, B, X, R[4..7]
+ 1585  605                      ;------------------------------------------------------------------------------
+ 1586  606                      					;
+ 1587  607                      CREATE_MAXIM:
+ 1588  608   000248 16xx xx     	JSR	CLEAR_0x0000		;Prüfcode auf Startwert
+ 1589  609                      					;
+ 1590  610                      CREATE_MAXIM1:
+ 1591  611   00024B A630        	LDAA	1,X+			;
+ 1592  612   00024D 16xx xx     	JSR	CRC16_MAXIM		;
+ 1593  613   000250 FC10 02     	LDD	R2			;
+ 1594  614   000253 8300 01     	SUBD	#1			;
+ 1595  615   000256 7C10 02     	STD	R2			;
+ 1596  616   000259 26F0        	BNE	CREATE_MAXIM1		;
+ 1597  617   00025B FC10 04     	LDD	R4			;
+ 1598  618   00025E 88FF        	EORA	#0FFh			;
+ 1599  619   000260 C8FF        	EORB	#0FFh			;
+ 1600  620   000262 7C10 00     	STD	R0			;
+ 1601  621   000265 3D          	RTS				;
+ 1602  622                      					;
+ 1603  623                      ;------------------------------------------------------------------------------
+ 1604  624                      ;Public: VERIFY_MAXIM bildet den CRC-16/Maxim Prüfcode und vergleicht ihn mit dem
+ 1605  625                      ;als Parameter übergebenen Original.
+ 1606  626                      ;
+ 1607  627                      ;Eingangsparameter:	R[0..1]		CRC-16/Maxim Prüfcode
+ 1608  628                      ;			R[4..5]		laufender Prüfcode
+ 1609  629                      ;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+ 1610  630                      ;			A		0	= ok
+ 1611  631                      ;					<> 0	= Speicherbereich nicht konsistent
+ 1612  632                      ;veränderte Register:	CCR, B, X, R[6..7]
+ 1613  633                      ;------------------------------------------------------------------------------
+ 1614  634                      					;
+ 1615  635                      VERIFY_MAXIM:
+ 1616  636   000266 B610 01     	LDAA	R1			;
+ 1617  637   000269 16xx xx     	JSR	CRC16_MAXIM		;
+ 1618  638   00026C B610 00     	LDAA	R0			;
+ 1619  639   00026F 16xx xx     	JSR	CRC16_MAXIM		;
+ 1620  640   000272 FC10 04     	LDD	R4			;
+ 1621  641   000275 8CB0 01     	CPD	#0B001h			;wenn Ergebnis <> 0xB001,
+ 1622  642   000278 2704        	BEQ	VERIFY_MAXIM8		;dann
+ 1623  643   00027A 86FF        	LDAA	#0FFh			;  mit Fehler passiert
+ 1624  644   00027C 2001        	BRA	VERIFY_MAXIM9		;
+ 1625  645                      VERIFY_MAXIM8:
+ 1626  646   00027E 87          	CLRA				;sonst ok
+ 1627  647                      					;
+ 1628  648                      VERIFY_MAXIM9:
+ 1629  649   00027F 3D          	RTS				;
+ 1630  650                      					;
+ 1631  651                      ;------------------------------------------------------------------------------
+ 1632  652                      ;Public: CREATE_XMODEM liefert den CRC-16/Acorn Prüfcode.
+ 1633  653                      ;
+ 1634  654                      ;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+ 1635  655                      ;			R[2..3]		Anzahl Bytes des Speicherbereichs
+ 1636  656                      ;Ausgangsparameter:	R[0..1]		CRC-16/Acorn Prüfcode
+ 1637  657                      ;			R[4..5]		laufender Prüfcode
+ 1638  658                      ;veränderte Register:	CCR, A, B, X, R[4..7]
+ 1639  659                      ;------------------------------------------------------------------------------
+ 1640  660                      					;
+ 1641  661                      CREATE_XMODEM:
+ 1642  662   000280 16xx xx     	JSR	CLEAR_0x0000		;Prüfcode auf Startwert
+ 1643  663                      					;
+ 1644  664                      CREATE_XMODEM1:
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1645  665   000283 A630        	LDAA	1,X+			;
+ 1646  666   000285 16xx xx     	JSR	CRC16_XMODEM		;
+ 1647  667   000288 FC10 02     	LDD	R2			;
+ 1648  668   00028B 8300 01     	SUBD	#1			;
+ 1649  669   00028E 7C10 02     	STD	R2			;
+ 1650  670   000291 26F0        	BNE	CREATE_XMODEM1		;
+ 1651  671   000293 1804 1004   	MOVW	R4,R0			;
+             000297 1000       
+ 1652  672   000299 3D          	RTS				;
+ 1653  673                      					;
+ 1654  674                      ;------------------------------------------------------------------------------
+ 1655  675                      ;Public: VERIFY_XMODEM bildet den CRC-16/Acorn Prüfcode und vergleicht ihn mit dem
+ 1656  676                      ;als Parameter übergebenen Original.
+ 1657  677                      ;
+ 1658  678                      ;Eingangsparameter:	R[0..1]		originaler CRC-16/Acorn Prüfcode
+ 1659  679                      ;			R[4..5]		laufender Prüfcode
+ 1660  680                      ;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+ 1661  681                      ;			A		0	= ok
+ 1662  682                      ;					<> 0	= Speicherbereich nicht konsistent
+ 1663  683                      ;veränderte Register:	CCR, B, R[6..7]
+ 1664  684                      ;------------------------------------------------------------------------------
+ 1665  685                      					;
+ 1666  686                      VERIFY_XMODEM:
+ 1667  687   00029A B610 00     	LDAA	R0			;
+ 1668  688   00029D 16xx xx     	JSR	CRC16_XMODEM		;
+ 1669  689   0002A0 B610 01     	LDAA	R1			;
+ 1670  690   0002A3 16xx xx     	JSR	CRC16_XMODEM		;
+ 1671  691   0002A6 FC10 04     	LDD	R4			;wenn Ergebnis <> 0,
+ 1672  692   0002A9 2704        	BEQ	VERIFY_XMODEM8		;dann
+ 1673  693   0002AB 86FF        	LDAA	#0FFh			;  mit Fehler passiert
+ 1674  694   0002AD 2001        	BRA	VERIFY_XMODEM9		;
+ 1675  695                      VERIFY_XMODEM8:
+ 1676  696   0002AF 87          	CLRA				;sonst ok
+ 1677  697                      					;
+ 1678  698                      VERIFY_XMODEM9:
+ 1679  699   0002B0 3D          	RTS				;
+ 1680  700                      					;
+ 1681  701                      ;------------------------------------------------------------------------------
+ 1682  702                      ;Public: CREATE_X25 liefert den CRC-16/X-25 Prüfcode.
+ 1683  703                      ;
+ 1684  704                      ;Eingangsparameter:	X		Anfangsadresse des Speicherbereichs
+ 1685  705                      ;			R[2..3]		Anzahl Bytes des Speicherbereichs
+ 1686  706                      ;Ausgangsparameter:	R[0..1]		CRC-16/X-25 Prüfcode
+ 1687  707                      ;			R[4..5]		laufender Prüfcode
+ 1688  708                      ;veränderte Register:	CCR, A, B, X, R[4..5]
+ 1689  709                      ;------------------------------------------------------------------------------
+ 1690  710                      					;
+ 1691  711                      CREATE_X25:
+ 1692  712   0002B1 16xx xx     	JSR	CLEAR_0xFFFF		;Prüfcode auf Startwert
+ 1693  713                      					;
+ 1694  714                      CREATE_X25_1:
+ 1695  715   0002B4 A630        	LDAA	1,X+			;
+ 1696  716   0002B6 16xx xx     	JSR	CRC16_X25		;
+ 1697  717   0002B9 FC10 02     	LDD	R2			;
+ 1698  718   0002BC 8300 01     	SUBD	#1			;
+ 1699  719   0002BF 7C10 02     	STD	R2			;
+ 1700  720   0002C2 26F0        	BNE	CREATE_X25_1		;
+ 1701  721   0002C4 FC10 04     	LDD	R4			;
+ 1702  722   0002C7 88FF        	EORA	#0FFh			;
+ 1703  723   0002C9 C8FF        	EORB	#0FFh			;
+ 1704  724   0002CB 7C10 00     	STD	R0			;
+ 1705  725   0002CE 3D          	RTS				;
+ 1706  726                      					;
+ 1707  727                      ;------------------------------------------------------------------------------
+ 1708  728                      ;Public: VERIFY_X25 bildet den CRC-16/X-25 Prüfcode und vergleicht ihn mit dem
+ 1709  729                      ;als Parameter übergebenen Original.
+ 1710  730                      ;
+ 1711  731                      ;Eingangsparameter:	R[0..1]		originaler CRC-16/Maxim Prüfcode
+ 1712  732                      ;			R[4..5]		laufender Prüfcode
+ 1713  733                      ;Ausgangsparameter:	R[4..5]		Prüfungsergebnis
+ 1714  734                      ;			A		0	= ok
+ 1715  735                      ;					<> 0	= Speicherbereich nicht konsistent
+ 1716  736                      ;veränderte Register:	CCR, B
+ 1717  737                      ;------------------------------------------------------------------------------
+ 1718  738                      					;
+ 1719  739                      VERIFY_X25:
+ 1720  740   0002CF B610 01     	LDAA	R1			;
+ 1721  741   0002D2 16xx xx     	JSR	CRC16_X25		;
+ 1722  742   0002D5 B610 00     	LDAA	R0			;
+ 1723  743   0002D8 16xx xx     	JSR	CRC16_X25		;
+ 1724  744   0002DB FC10 04     	LDD	R4			;
+ 1725  745   0002DE 8CF0 B8     	CPD	#0F0B8h			;wenn Ergebnis <> 0xF0B8,
+ 1726  746   0002E1 2704        	BEQ	VERIFY_X25_8		;dann
+ 1727  747   0002E3 86FF        	LDAA	#0FFh			;  mit Fehler passiert
+s12c_CRC  Copyright (C) 2006-2009, micro dynamics GmbH
+Freescale HC12-Assembler 
+(c) Copyright Freescale 1987-2009
+
+ Abs. Rel.   Loc    Obj. code   Source line
+ ---- ----   ------ ---------   -----------
+ 1728  748   0002E5 2001        	BRA	VERIFY_X25_9		;
+ 1729  749                      VERIFY_X25_8:
+ 1730  750   0002E7 87          	CLRA				;sonst ok
+ 1731  751                      					;
+ 1732  752                      VERIFY_X25_9:
+ 1733  753   0002E8 3D          	RTS				;
+ 1734  754                      					;
+ 1735  755                      ;------------------------------------------------------------------------------
